@@ -1,0 +1,1130 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "返回进程与 SQLite 探活结果（统一封装）。",
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/HealthDataDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "健康检查",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/oauth/availability": {
+      "get": {
+        "description": "M0 恒返回 available=true，用于启动器连通性冒烟。",
+        "operationId": "OAuthController_getAvailability",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAvailabilityResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "授权页可用性检查",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      }
+    },
+    "/api/oauth/entry": {
+      "get": {
+        "description": "A3：正式实现在 NestJS 侧直接渲染，与网站登录态同源。",
+        "operationId": "OAuthController_getEntry",
+        "parameters": [
+          {
+            "name": "client_id",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "response_type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge_method",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "S256",
+                "plain"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML 授权页",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "启动器跳转的授权确认页（M0 占位 HTML）",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      }
+    },
+    "/api/oauth/authenticate": {
+      "post": {
+        "description": "M0 返回 501；M1 实现后返回 OAuthTokenResponse。",
+        "operationId": "OAuthController_authenticate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthAuthenticateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "M1 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthTokenResponseDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "授权码/令牌换取访问令牌（M0 stub）",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      }
+    },
+    "/api/oauth/refresh": {
+      "post": {
+        "description": "M0 返回 501；M1 实现后返回 OAuthTokenResponse。",
+        "operationId": "OAuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthRefreshRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "M1 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthTokenResponseDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "刷新访问令牌（M0 stub）",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      }
+    },
+    "/api/user/profiles/me": {
+      "get": {
+        "description": "M0 返回 501；M1 接入启动器令牌后返回当前账号与 player 摘要。",
+        "operationId": "UserProfilesController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "M1 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfilesMeResponseDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "获取当前用户档案（M0 stub）",
+        "tags": [
+          "Commons-Designs / User"
+        ]
+      }
+    },
+    "/api/session/joinServer": {
+      "post": {
+        "description": "M0 返回 501；M1 校验令牌与服务器白名单后写入会话。",
+        "operationId": "SessionController_joinServer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinServerRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Yggdrasil 目标语义（M1 实现）"
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "记录客户端会话（M0 stub）",
+        "tags": [
+          "Commons-Designs / Session"
+        ]
+      }
+    },
+    "/api/session/hasJoined": {
+      "post": {
+        "description": "M0 返回 501；M1 校验 server_entry 与 player.banned。",
+        "operationId": "SessionController_hasJoinedByPost",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HasJoinedQueryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Yggdrasil 目标响应（M1）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询某玩家最近会话（POST 变体，M0 stub）",
+        "tags": [
+          "Commons-Designs / Session"
+        ]
+      },
+      "get": {
+        "description": "authlib-injector 生态惯用 GET；与 POST 变体共用协议核对项。",
+        "operationId": "SessionController_hasJoinedByGet",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serverId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ip",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serverId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "required": false,
+            "name": "ip",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Yggdrasil 目标响应（M1）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询某玩家最近会话（GET 兼容变体，M0 stub）",
+        "tags": [
+          "Commons-Designs / Session"
+        ]
+      }
+    },
+    "/api/profiles/minecraft/{name}": {
+      "get": {
+        "description": "M0 返回 501；M2 返回 GameProfile。",
+        "operationId": "ProfilesController_getByName",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "Notch",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "M2 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "按昵称查询档案（M0 stub）",
+        "tags": [
+          "Commons-Designs / Profiles"
+        ]
+      }
+    },
+    "/api/profiles/minecraft": {
+      "post": {
+        "description": "M0 返回 501；M2 最多返回 10 个 GameProfile。",
+        "operationId": "ProfilesController_getBatch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilesBatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "M2 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GameProfileDto"
+                  }
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "批量按昵称查询档案（M0 stub）",
+        "tags": [
+          "Commons-Designs / Profiles"
+        ]
+      }
+    },
+    "/api/profiles/{uuid}": {
+      "get": {
+        "description": "M0 返回 501；M2 返回 GameProfile（含 textures 属性）。",
+        "operationId": "ProfilesController_getByUuid",
+        "parameters": [
+          {
+            "name": "uuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "069a79f444e94726a5befca90e38aaf5",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "M2 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "按 UUID 查询档案（M0 stub）",
+        "tags": [
+          "Commons-Designs / Profiles"
+        ]
+      }
+    },
+    "/api/minecraft/profile/skins": {
+      "get": {
+        "description": "M0 返回 501；M2 返回 MinecraftProfileResponse。",
+        "operationId": "MinecraftProfileController_getSkins",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "M2 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinecraftProfileResponseDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询当前皮肤（M0 stub）",
+        "tags": [
+          "Commons-Designs / Textures"
+        ]
+      },
+      "post": {
+        "description": "M0 返回 501；M2 用 sharp 校验 64×32 / 64×64 后进入审核队列。",
+        "operationId": "MinecraftProfileController_uploadSkin",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "variant",
+                  "file"
+                ],
+                "properties": {
+                  "variant": {
+                    "type": "string",
+                    "enum": [
+                      "classic",
+                      "slim"
+                    ]
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "上传/设置皮肤（M0 stub）",
+        "tags": [
+          "Commons-Designs / Textures"
+        ]
+      }
+    },
+    "/api/minecraft/profile/capes": {
+      "get": {
+        "description": "M0 返回 501；M2 返回 MinecraftProfileResponse。",
+        "operationId": "MinecraftProfileController_getCapes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "M2 目标响应（M0 不返回）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinecraftProfileResponseDto"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询当前披风（M0 stub）",
+        "tags": [
+          "Commons-Designs / Textures"
+        ]
+      },
+      "post": {
+        "description": "M0 返回 501；M2 用 sharp 校验 64×32 后进入审核队列。",
+        "operationId": "MinecraftProfileController_uploadCape",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "上传/设置披风（M0 stub）",
+        "tags": [
+          "Commons-Designs / Textures"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "MCSerAuth API",
+    "description": "MCSerAuth 后端 API（M0 底座）。\n\n**统一响应**：非协议端点成功返回 `{ code: 0, data }`，失败返回 `{ code, message }`（错误码见 packages/shared）。\n\n**例外**：`Commons-Designs` 协议端点（OAuth / Session / Profiles / Textures）返回协议原生结构，失败为 `{ error, errorMessage }`，不套统一封装。\n\n**M0 状态**：协议端点均为 stub；标有 “M1/M2 目标响应” 的结构是待实现契约，正与官方协议文档逐条核对（docs/protocol-checklist.md）。",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "ops",
+      "description": "运维与健康检查"
+    },
+    {
+      "name": "Commons-Designs / OAuth",
+      "description": "账户与授权（协议原生响应）"
+    },
+    {
+      "name": "Commons-Designs / Session",
+      "description": "MC 会话服务（协议原生响应）"
+    },
+    {
+      "name": "Commons-Designs / User",
+      "description": "用户档案（协议原生响应）"
+    },
+    {
+      "name": "Commons-Designs / Profiles",
+      "description": "玩家档案查询（协议原生响应）"
+    },
+    {
+      "name": "Commons-Designs / Textures",
+      "description": "皮肤/披风（协议原生响应）"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "当前认证服务地址"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "网站会话（better-auth，M1 前端登录后由浏览器携带）"
+      },
+      "launcher-token": {
+        "scheme": "bearer",
+        "bearerFormat": "AccessToken",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "OAuthAvailabilityResponseDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "example": true,
+            "description": "M0: 服务可达即为 true"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "OAuthAuthenticateRequestDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "redirect_uri": {
+            "type": "string"
+          },
+          "code_verifier": {
+            "type": "string"
+          }
+        }
+      },
+      "OAuthUserSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "mod",
+              "admin"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role"
+        ]
+      },
+      "OAuthTokenResponseDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ],
+            "example": "Bearer"
+          },
+          "expires_in": {
+            "type": "number",
+            "example": 2592000
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/OAuthUserSummaryDto"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token"
+        ]
+      },
+      "ProtocolErrorDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "NotImplementedException"
+          },
+          "errorMessage": {
+            "type": "string",
+            "example": "M0 stub"
+          },
+          "cause": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "errorMessage"
+        ]
+      },
+      "OAuthRefreshRequestDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
+      },
+      "UserPlayerSummaryDto": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "banned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "uuid",
+          "nickname",
+          "banned"
+        ]
+      },
+      "UserProfilesMeResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/OAuthUserSummaryDto"
+          },
+          "player": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserPlayerSummaryDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "player"
+        ]
+      },
+      "JoinServerRequestDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "启动器访问令牌"
+          },
+          "selectedProfile": {
+            "type": "string",
+            "description": "玩家 UUID（小写、无连字符）"
+          },
+          "serverId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "selectedProfile",
+          "serverId"
+        ]
+      },
+      "HasJoinedQueryDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "serverId": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "serverId"
+        ]
+      },
+      "GameProfilePropertyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "textures"
+          },
+          "value": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      },
+      "GameProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "069a79f444e94726a5befca90e38aaf5"
+          },
+          "name": {
+            "type": "string",
+            "example": "Notch"
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameProfilePropertyDto"
+            }
+          },
+          "profileActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ProfilesBatchRequestDto": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "example": [
+              "Notch",
+              "jeb_"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "names"
+        ]
+      },
+      "SkinTextureDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "CLASSIC",
+              "SLIM"
+            ]
+          },
+          "alias": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "url",
+          "variant"
+        ]
+      },
+      "CapeTextureDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "url"
+        ]
+      },
+      "MinecraftProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "skins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkinTextureDto"
+            }
+          },
+          "capes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapeTextureDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "skins",
+          "capes"
+        ]
+      }
+    }
+  }
+}
