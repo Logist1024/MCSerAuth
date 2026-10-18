@@ -1,0 +1,73 @@
+import 'reflect-metadata';
+import { RequestMethod } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
+import {
+  json,
+  urlencoded,
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express';
+import { AppModule } from './app.module.js';
+import { AppConfigService } from './config/app-config.service.js';
+import { AuthService } from './modules/auth/auth.service.js';
+import { setupSwagger } from './swagger.js';
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule, { bodyParser: false, bufferLogs: true });
+
+  const config = app.get(AppConfigService);
+  const auth = app.get(AuthService);
+
+  app.useLogger(app.get(Logger));
+
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  expressApp.set('trust proxy', 1);
+
+  app.enableCors({ origin: [config.appUrl, config.authUrl], credentials: true });
+
+  // better-auth owns /api/auth/*. It must run before the JSON parser because it
+  // consumes the raw request stream itself.
+  const authHandler = auth.handler;
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path === '/api/auth' || req.path.startsWith('/api/auth/')) {
+      authHandler(req, res).catch((error: unknown) => {
+        next(error);
+      });
+      return;
+    }
+    next();
+  });
+
+  // Nest's built-in body parser is disabled so the mount above can win; every
+  // other route gets the parsers here, before Nest's router runs.
+  const jsonParser = json({ limit: '1mb' });
+  const urlencodedParser = urlencoded({ extended: true, limit: '1mb' });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    jsonParser(req, res, (error?: unknown) => {
+      if (error) {
+        next(error);
+        return;
+      }
+      urlencodedParser(req, res, next);
+    });
+  });
+
+  app.setGlobalPrefix('api', { exclude: [{ path: 'health', method: RequestMethod.GET }] });
+  setupSwagger(app);
+  app.enableShutdownHooks();
+
+  await app.listen(config.port);
+
+  app
+    .get(Logger)
+    .log(`MCSerAuth server ready at ${config.authUrl} — API under /api, OpenAPI at /docs`);
+}
+
+bootstrap().catch((error: unknown) => {
+  // Bootstrap failures may happen before the pino logger exists.
+  console.error(error);
+  process.exitCode = 1;
+});
