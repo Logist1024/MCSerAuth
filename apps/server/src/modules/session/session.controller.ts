@@ -1,5 +1,5 @@
 import { Body, Controller, Get, NotImplementedException, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProtocolApi } from '../../common/decorators/protocol-api.decorator.js';
 import { ProtocolErrorDto } from '../../common/dto/protocol-error.dto.js';
 import { GameProfileDto } from '../profiles/dto/game-profile.dto.js';
@@ -48,7 +48,6 @@ export class SessionController {
     summary: '查询某玩家最近会话（GET 兼容变体，M0 stub）',
     description: 'authlib-injector 生态惯用 GET；与 POST 变体共用协议核对项。',
   })
-  @ApiQuery({ type: HasJoinedQueryDto })
   @ApiResponse({ status: 200, type: GameProfileDto, description: 'Yggdrasil 目标响应（M1）' })
   @ApiResponse({ status: 501, type: ProtocolErrorDto })
   hasJoinedByGet(@Query() _query: HasJoinedQueryDto): never {
