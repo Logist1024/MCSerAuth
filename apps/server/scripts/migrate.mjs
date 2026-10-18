@@ -3,7 +3,7 @@
  *
  * Unlike `drizzle-kit migrate`, this creates the parent directory first, so a
  * fresh clone can run `pnpm db:migrate` before the server ever started. WAL is
- * enabled here as well to match the runtime connection (guide §5).
+ * enabled here as well to match the runtime connection.
  */
 import 'dotenv/config';
 import Database from 'better-sqlite3';

@@ -10,7 +10,7 @@ const STUB_MESSAGE = 'M0 stub: session service is implemented in M1';
 /**
  * Minecraft session service used by game servers (M0 stubs).
  *
- * `POST /api/session/hasJoined` follows the temporary guide's endpoint list;
+ * `POST /api/session/hasJoined` follows the M0 endpoint list;
  * a GET variant is registered as well because authlib-injector deployments
  * traditionally query hasJoined over GET. Both are recorded in the protocol
  * checklist for verification.

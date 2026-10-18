@@ -1,5 +1,5 @@
 /**
- * Partially masks an IP address before it reaches the logs (guide §4.4).
+ * Partially masks an IP address before it reaches the logs.
  * IPv4 keeps the first two octets, IPv6 keeps the first four groups — enough
  * for abuse triage without retaining a full address.
  */

@@ -7,7 +7,7 @@
 
 > **当前阶段：M0 底座（脚手架/基建/数据层/契约 stub）**
 > 业务链路（OAuth 授权、会话签发、皮肤上传、论坛）尚未实现，协议端点以 stub 形式登记，
-> 详见 [`docs/临时开发指南.md`](docs/临时开发指南.md) 与 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)。
+> 详见 [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md) 与 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)。
 
 ## 技术栈
 
@@ -131,11 +131,12 @@ web 侧仅一个变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8
 
 ## 里程碑与文档
 
-| 文档                                                       | 内容                                       |
-| ---------------------------------------------------------- | ------------------------------------------ |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                 | 产品范围、架构与全部已定稿决策（S1–S6 等） |
-| [`docs/临时开发指南.md`](docs/临时开发指南.md)             | M0 交付物、工程约定、退出标准              |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md) | 协议字段对照、启动器联调记录               |
+| 文档                                                           | 内容                                       |
+| -------------------------------------------------------------- | ------------------------------------------ |
+| [`docs/项目策划案.md`](docs/项目策划案.md)                     | 产品范围、架构与全部已定稿决策（S1–S6 等） |
+| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md) | M0 交付物、验收结论与遗留事项              |
+| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)     | 协议字段对照、启动器联调记录               |
+| [`docs/openapi.json`](docs/openapi.json)                       | OpenAPI 契约产物（`pnpm openapi:export`）  |
 
 M0（当前）之后：M1 认证核心（OAuth 链路 + session 签发）→ M2 皮肤披风 → M3 论坛 →
 M5 生产部署；Paper 插件与启动器修改**永不**实施。

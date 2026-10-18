@@ -9,7 +9,7 @@ import * as schema from './schema/index.js';
 /**
  * Single SQLite connection for the whole process.
  *
- * WAL is enabled explicitly on the connection (guide §5), foreign keys are
+ * WAL is enabled explicitly on the connection, foreign keys are
  * enforced, and a busy timeout avoids immediate SQLITE_BUSY under short
  * concurrent writes. Schema changes only ever happen through drizzle-kit
  * migrations — never at runtime.
