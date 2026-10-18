@@ -1,0 +1,48 @@
+{
+  "name": "mcserauth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCSerAuth — integrated forum and external login authentication system for third-party Minecraft: Java Edition servers",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @mcserauth/shared build && concurrently -k -n server,web -c cyan,magenta \"pnpm --filter @mcserauth/server dev\" \"pnpm --filter @mcserauth/web dev\"",
+    "dev:shared": "pnpm --filter @mcserauth/shared dev",
+    "build": "pnpm --filter @mcserauth/shared build && pnpm --filter @mcserauth/server build && pnpm --filter @mcserauth/web build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm --filter @mcserauth/shared build && pnpm -r --parallel typecheck",
+    "db:generate": "pnpm --filter @mcserauth/server db:generate",
+    "db:migrate": "pnpm --filter @mcserauth/server db:migrate",
+    "db:studio": "pnpm --filter @mcserauth/server db:studio",
+    "openapi:export": "pnpm --filter @mcserauth/server openapi:export",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.71.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  }
+}

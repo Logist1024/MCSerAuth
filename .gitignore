@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# local data (SQLite database, uploads)
+data/
+apps/server/data/
+*.db
+*.db-shm
+*.db-wal
+
+# logs / coverage / tooling
+*.log
+coverage/
+.turbo/
+.vscode/
+.idea/
+.DS_Store
