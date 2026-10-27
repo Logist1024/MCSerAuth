@@ -18,13 +18,13 @@ describe('OriginGuard', () => {
   let ctx: TestContext;
   let guard: OriginGuard;
 
-  beforeEach(() => {
-    ctx = createTestContext();
+  beforeEach(async () => {
+    ctx = await createTestContext();
     guard = new OriginGuard(new Reflector(), ctx.config);
   });
 
-  afterEach(() => {
-    ctx.cleanup();
+  afterEach(async () => {
+    await ctx.cleanup();
   });
 
   it('rejects untrusted origins on unsafe methods', () => {

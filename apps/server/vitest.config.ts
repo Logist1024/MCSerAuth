@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Keep the cache inside this workspace package: `pnpm -r test` runs server
+  // and web in parallel, and a shared cache directory races (ENOTEMPTY).
+  cacheDir: fileURLToPath(new URL('./node_modules/.vitest-cache', import.meta.url)),
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],

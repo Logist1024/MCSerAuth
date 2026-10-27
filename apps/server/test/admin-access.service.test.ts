@@ -9,14 +9,11 @@ import type {
 } from '../src/modules/auth/account-access.service.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
 const STAFF_ID = 'staff-1';
-
 interface StubOptions {
   role: UserRole;
   banned?: boolean;
 }
-
 /**
  * The capability matrix lives entirely inside AdminAccessService; the session
  * lookup is stubbed so the test pins the delegation rules only.
@@ -39,35 +36,26 @@ function makeAccess(
   } as unknown as AccountAccessService;
   return new AdminAccessService(accounts, db);
 }
-
 const request = {} as never;
-
 describe('AdminAccessService capability delegation', () => {
   let ctx: TestContext;
-
-  beforeEach(() => {
-    ctx = createTestContext();
-    ctx.db.db
-      .insert(userTable)
-      .values([
-        { id: STAFF_ID, email: 'staff@example.com', name: 'Staff' },
-        { id: 'boss', email: 'boss@example.com', name: 'Boss' },
-        { id: 'boss2', email: 'boss2@example.com', name: 'Boss Two' },
-        { id: 'boss3', email: 'boss3@example.com', name: 'Boss Three' },
-        { id: 'someone-else', email: 'else@example.com', name: 'Someone Else' },
-      ])
-      .run();
+  beforeEach(async () => {
+    ctx = await createTestContext();
+    await ctx.db.db.insert(userTable).values([
+      { id: STAFF_ID, email: 'staff@example.com', name: 'Staff' },
+      { id: 'boss', email: 'boss@example.com', name: 'Boss' },
+      { id: 'boss2', email: 'boss2@example.com', name: 'Boss Two' },
+      { id: 'boss3', email: 'boss3@example.com', name: 'Boss Three' },
+      { id: 'someone-else', email: 'else@example.com', name: 'Someone Else' },
+    ]);
   });
-
-  afterEach(() => {
-    ctx.cleanup();
+  afterEach(async () => {
+    await ctx.cleanup();
   });
-
-  it('starts with no delegated capabilities', () => {
+  it('starts with no delegated capabilities', async () => {
     const access = makeAccess(ctx.db, { role: 'admin' });
-    expect(access.permissionsFor(STAFF_ID)).toEqual([]);
+    expect(await access.permissionsFor(STAFF_ID)).toEqual([]);
   });
-
   it('grants every capability implicitly to a superadmin', async () => {
     const access = makeAccess(ctx.db, { role: 'superadmin' });
     for (const permission of ADMIN_PERMISSIONS) {
@@ -76,7 +64,6 @@ describe('AdminAccessService capability delegation', () => {
       });
     }
   });
-
   it('refuses a staff member with no grant', async () => {
     const access = makeAccess(ctx.db, { role: 'reviewer' });
     await expect(access.requireCapability(request, 'titles.manage')).rejects.toBeInstanceOf(
@@ -86,10 +73,9 @@ describe('AdminAccessService capability delegation', () => {
       '该操作需要超级管理员授权',
     );
   });
-
   it('admits a reviewer holding the exact capability', async () => {
     const access = makeAccess(ctx.db, { role: 'reviewer' });
-    access.replacePermissions(STAFF_ID, ['forum.categories'], 'boss');
+    await access.replacePermissions(STAFF_ID, ['forum.categories'], 'boss');
     await expect(access.requireCapability(request, 'forum.categories')).resolves.toMatchObject({
       userId: STAFF_ID,
     });
@@ -97,76 +83,69 @@ describe('AdminAccessService capability delegation', () => {
       ForbiddenException,
     );
   });
-
   it('keeps the role floor above the capability check', async () => {
     const access = makeAccess(ctx.db, { role: 'reviewer' });
-    access.replacePermissions(STAFF_ID, ['site.manage'], 'boss');
+    await access.replacePermissions(STAFF_ID, ['site.manage'], 'boss');
     await expect(access.requireCapability(request, 'site.manage', 'admin')).rejects.toThrow(
       '没有权限执行此操作',
     );
   });
-
   it('requires an explicit grant even from an admin, unlike a superadmin', async () => {
     const access = makeAccess(ctx.db, { role: 'admin' });
     await expect(access.requireCapability(request, 'servers.manage', 'admin')).rejects.toThrow(
       '该操作需要超级管理员授权',
     );
-    access.replacePermissions(STAFF_ID, ['servers.manage'], 'boss');
+    await access.replacePermissions(STAFF_ID, ['servers.manage'], 'boss');
     await expect(
       access.requireCapability(request, 'servers.manage', 'admin'),
     ).resolves.toMatchObject({ role: 'admin', permissions: ['servers.manage'] });
   });
-
   it('accepts either the role shortcut or a delegated capability', async () => {
     const byRole = makeAccess(ctx.db, { role: 'admin' });
     await expect(
       byRole.requireCapabilityOrRole(request, 'users.ban', 'admin'),
     ).resolves.toBeTruthy();
-
     const byGrant = makeAccess(ctx.db, { role: 'reviewer' });
-    byGrant.replacePermissions(STAFF_ID, ['users.ban'], 'boss');
+    await byGrant.replacePermissions(STAFF_ID, ['users.ban'], 'boss');
     await expect(
       byGrant.requireCapabilityOrRole(request, 'users.ban', 'admin'),
     ).resolves.toBeTruthy();
-
     const plain = makeAccess(ctx.db, { role: 'user' });
-    plain.replacePermissions(STAFF_ID, ['users.ban'], 'boss');
+    await plain.replacePermissions(STAFF_ID, ['users.ban'], 'boss');
     await expect(
       plain.requireCapabilityOrRole(request, 'users.ban', 'admin'),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
-
   it('locks banned staff out of every path', async () => {
     const access = makeAccess(ctx.db, { role: 'superadmin', banned: true });
-    access.replacePermissions(STAFF_ID, ['site.manage'], 'boss');
+    await access.replacePermissions(STAFF_ID, ['site.manage'], 'boss');
     await expect(access.requireCapability(request, 'site.manage')).rejects.toThrow(
       '该账号已被封禁',
     );
   });
-
-  it('replaces the whole grant set and de-duplicates entries', () => {
+  it('replaces the whole grant set and de-duplicates entries', async () => {
     const access = makeAccess(ctx.db, { role: 'admin' });
     const permissions: AdminPermission[] = ['forum.announce', 'forum.announce', 'banners.manage'];
-    expect(access.replacePermissions(STAFF_ID, permissions, 'boss')).toEqual([
+    expect(await access.replacePermissions(STAFF_ID, permissions, 'boss')).toEqual([
       'forum.announce',
       'banners.manage',
     ]);
-    expect(access.permissionsFor(STAFF_ID).sort()).toEqual(['banners.manage', 'forum.announce']);
-
-    expect(access.replacePermissions(STAFF_ID, ['points.adjust'], 'boss2')).toEqual([
+    expect((await access.permissionsFor(STAFF_ID)).sort()).toEqual([
+      'banners.manage',
+      'forum.announce',
+    ]);
+    expect(await access.replacePermissions(STAFF_ID, ['points.adjust'], 'boss2')).toEqual([
       'points.adjust',
     ]);
-    expect(access.permissionsFor(STAFF_ID)).toEqual(['points.adjust']);
-
-    expect(access.replacePermissions(STAFF_ID, [], 'boss3')).toEqual([]);
-    expect(access.permissionsFor(STAFF_ID)).toEqual([]);
+    expect(await access.permissionsFor(STAFF_ID)).toEqual(['points.adjust']);
+    expect(await access.replacePermissions(STAFF_ID, [], 'boss3')).toEqual([]);
+    expect(await access.permissionsFor(STAFF_ID)).toEqual([]);
   });
-
-  it('scopes grants to one user', () => {
+  it('scopes grants to one user', async () => {
     const access = makeAccess(ctx.db, { role: 'admin' });
-    access.replacePermissions('someone-else', ['titles.manage'], 'boss');
-    access.replacePermissions(STAFF_ID, ['banners.manage'], 'boss');
-    expect(access.permissionsFor('someone-else')).toEqual(['titles.manage']);
-    expect(access.permissionsFor(STAFF_ID)).toEqual(['banners.manage']);
+    await access.replacePermissions('someone-else', ['titles.manage'], 'boss');
+    await access.replacePermissions(STAFF_ID, ['banners.manage'], 'boss');
+    expect(await access.permissionsFor('someone-else')).toEqual(['titles.manage']);
+    expect(await access.permissionsFor(STAFF_ID)).toEqual(['banners.manage']);
   });
 });
