@@ -22,6 +22,7 @@
     "db:generate": "pnpm --filter @mcserauth/server db:generate:all",
     "db:generate:sqlite": "pnpm --filter @mcserauth/server db:generate",
     "db:generate:schemas": "pnpm --filter @mcserauth/server db:generate:schemas",
+    "db:check": "pnpm db:generate && git diff --exit-code -- apps/server/src/db/schema apps/server/drizzle",
     "db:migrate": "pnpm --filter @mcserauth/server db:migrate",
     "db:copy-data": "pnpm --filter @mcserauth/server db:copy-data",
     "db:backup": "pnpm --filter @mcserauth/server db:backup",

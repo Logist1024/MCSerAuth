@@ -39,6 +39,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Fails when model.ts changed without committing the regenerated schema
+      # and migrations (or when generated files were edited by hand).
+      - name: Schema generation check
+        run: pnpm db:check
+
       - name: Build
         run: pnpm build
 

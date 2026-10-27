@@ -50,6 +50,9 @@ pnpm db:generate:schemas
 
 # 只生成 SQLite 迁移（历史习惯）
 pnpm db:generate:sqlite
+
+# 校验生成物与 model.ts 同步（CI 会跑；有差异时以非零码退出）
+pnpm db:check
 ```
 
 生成物：

@@ -232,6 +232,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                 |
 | `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移 |
 | `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                     |
+| `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）     |
 | `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移     |
 | `pnpm db:copy-data`                 | SQLite → MySQL/PostgreSQL 一次性复制   |
 | `pnpm db:backup`                    | 迁移前备份 SQLite（含 WAL checkpoint） |
