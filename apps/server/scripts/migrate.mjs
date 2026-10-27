@@ -110,11 +110,23 @@ async function migratePostgres(databaseUrl) {
 }
 
 function detectDialect(databaseUrl, override) {
-  const fromUrl = /^mysql2?:\/\//i.test(databaseUrl)
-    ? 'mysql'
-    : /^postgres(?:ql)?:\/\//i.test(databaseUrl)
-      ? 'postgres'
-      : 'sqlite';
+  const value = databaseUrl.trim();
+  if (value === '') {
+    throw new Error('DATABASE_URL must not be empty.');
+  }
+  const scheme = value.includes('://') ? value.slice(0, value.indexOf('://')).toLowerCase() : null;
+  let fromUrl;
+  if (scheme === 'mysql' || scheme === 'mysql2') {
+    fromUrl = 'mysql';
+  } else if (scheme === 'postgres' || scheme === 'postgresql') {
+    fromUrl = 'postgres';
+  } else if (scheme === null || scheme === 'sqlite' || scheme === 'file' || value === ':memory:') {
+    fromUrl = 'sqlite';
+  } else {
+    throw new Error(
+      `Unsupported DATABASE_URL scheme "${scheme}://". Use sqlite, mysql or postgres.`,
+    );
+  }
   const explicit = override?.trim().toLowerCase();
   if (explicit === undefined || explicit === '') {
     return fromUrl;
