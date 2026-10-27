@@ -7,6 +7,8 @@ export default defineConfig({
   cacheDir: fileURLToPath(new URL('./node_modules/.vitest-cache', import.meta.url)),
   test: {
     environment: 'node',
+    // Match the server: timestamps are stored and parsed as UTC.
+    env: { TZ: 'UTC' },
     include: ['test/**/*.test.ts'],
     // better-sqlite3 is a native module; forks keep each test file isolated.
     pool: 'forks',

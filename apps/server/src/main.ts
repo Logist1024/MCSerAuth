@@ -16,6 +16,12 @@ import { AppModule } from './app.module.js';
 import { AppConfigService } from './config/app-config.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
 import { setupSwagger } from './swagger.js';
+
+// Timestamps are stored as UTC wall-clock values in every dialect. Pinning the
+// process time zone keeps node-postgres from interpreting `timestamp` columns
+// in the host's local zone.
+process.env.TZ = 'UTC';
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false, bufferLogs: true });
   const config = app.get(AppConfigService);
