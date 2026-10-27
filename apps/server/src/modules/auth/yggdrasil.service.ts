@@ -21,15 +21,12 @@ import {
 import { verifyAccountPassword } from './account-password.js';
 import { OAuthService, type RequestMeta } from './oauth.service.js';
 import { generateOpaqueToken, sha256 } from './oauth.util.js';
-
 type UserRow = typeof userTable.$inferSelect;
 type PlayerRow = typeof playerTable.$inferSelect;
 type TokenRow = typeof tokenTable.$inferSelect;
-
 /** Yggdrasil-compatible messages; launchers surface these verbatim. */
 const INVALID_CREDENTIALS = 'Invalid credentials. Invalid username or password.';
 const INVALID_TOKEN = 'Invalid token.';
-
 /**
  * authlib-injector / Yggdrasil compatibility layer (HMCL, PCL2, XMCL…).
  *
@@ -43,7 +40,6 @@ function safeEqualHash(expected: string, actual: string): boolean {
   const right = Buffer.from(actual, 'hex');
   return left.length === right.length && timingSafeEqual(left, right);
 }
-
 @Injectable()
 export class YggdrasilService {
   constructor(
@@ -51,7 +47,6 @@ export class YggdrasilService {
     private readonly db: DbService,
     private readonly oauth: OAuthService,
   ) {}
-
   /**
    * GET <root> — metadata read by launchers before anything else.
    *
@@ -68,7 +63,6 @@ export class YggdrasilService {
         // Misconfiguration is already rejected by env validation.
       }
     }
-
     return {
       meta: {
         serverName: 'MCSerAuth',
@@ -79,33 +73,29 @@ export class YggdrasilService {
       skinDomains: [...skinDomains],
     };
   }
-
   async authenticate(
     input: YggdrasilAuthenticateRequest,
     meta: RequestMeta,
   ): Promise<YggdrasilAuthenticateResponse> {
-    const userRow = this.db.db
-      .select()
-      .from(userTable)
-      .where(sql`lower(${userTable.email}) = ${input.username.trim().toLowerCase()}`)
-      .get();
-
+    const userRow = (
+      await this.db.db
+        .select()
+        .from(userTable)
+        .where(sql`lower(${userTable.email}) = ${input.username.trim().toLowerCase()}`)
+    )[0];
     if (!userRow || !(await this.verifyPassword(userRow.id, input.password))) {
       throw new ForbiddenException(INVALID_CREDENTIALS);
     }
     if (userRow.banned) {
       throw new ForbiddenException('该玩家已被封禁');
     }
-
-    const playerRow = this.oauth.ensurePlayerForUser(userRow.id, userRow.name);
+    const playerRow = await this.oauth.ensurePlayerForUser(userRow.id, userRow.name);
     if (playerRow.banned) {
       throw new ForbiddenException('该玩家已被封禁');
     }
-
     const clientToken = input.clientToken ?? generateOpaqueToken('mcs_ct_');
-    const tokens = this.oauth.issueTokens(playerRow, userRow, meta, sha256(clientToken));
+    const tokens = await this.oauth.issueTokens(playerRow, userRow, meta, sha256(clientToken));
     const profile = this.toProfile(playerRow);
-
     return {
       accessToken: tokens.access_token,
       clientToken,
@@ -114,10 +104,12 @@ export class YggdrasilService {
       ...(input.requestUser === true ? { user: { id: userRow.id } } : {}),
     };
   }
-
   /** Rotates the access token in place; the previous one stops working. */
-  refresh(input: YggdrasilRefreshRequest, meta: RequestMeta): YggdrasilRefreshResponse {
-    const row = this.findActiveToken(input.accessToken);
+  async refresh(
+    input: YggdrasilRefreshRequest,
+    meta: RequestMeta,
+  ): Promise<YggdrasilRefreshResponse> {
+    const row = await this.findActiveToken(input.accessToken);
     if (!row) {
       throw new ForbiddenException(INVALID_TOKEN);
     }
@@ -129,31 +121,29 @@ export class YggdrasilService {
         throw new ForbiddenException('Invalid client token.');
       }
     }
-
     const accessToken = generateOpaqueToken('mcs_at_');
     const now = new Date();
-    const updated = this.db.db
-      .update(tokenTable)
-      .set({
-        accessTokenHash: sha256(accessToken),
-        deviceName: this.deviceName(meta),
-        ip: meta.ip ?? null,
-        expiresAt: new Date(now.getTime() + this.config.oauthAccessTokenTtlSeconds * 1000),
-      })
-      .where(
-        and(
-          eq(tokenTable.id, row.token.id),
-          isNull(tokenTable.revokedAt),
-          eq(tokenTable.accessTokenHash, sha256(input.accessToken)),
-        ),
-      )
-      .returning({ id: tokenTable.id })
-      .get();
-
+    const updated = (
+      await this.db.db
+        .update(tokenTable)
+        .set({
+          accessTokenHash: sha256(accessToken),
+          deviceName: this.deviceName(meta),
+          ip: meta.ip ?? null,
+          expiresAt: new Date(now.getTime() + this.config.oauthAccessTokenTtlSeconds * 1000),
+        })
+        .where(
+          and(
+            eq(tokenTable.id, row.token.id),
+            isNull(tokenTable.revokedAt),
+            eq(tokenTable.accessTokenHash, sha256(input.accessToken)),
+          ),
+        )
+        .returning({ id: tokenTable.id })
+    )[0];
     if (!updated) {
       throw new ForbiddenException(INVALID_TOKEN);
     }
-
     return {
       accessToken,
       clientToken: input.clientToken ?? generateOpaqueToken('mcs_ct_'),
@@ -161,18 +151,16 @@ export class YggdrasilService {
       ...(input.requestUser === true ? { user: { id: row.user.id } } : {}),
     };
   }
-
   /** 204 on success; unknown/expired/revoked/banned → 403. */
-  validate(accessToken: string): void {
-    const row = this.findActiveToken(accessToken);
+  async validate(accessToken: string): Promise<void> {
+    const row = await this.findActiveToken(accessToken);
     if (!row) {
       throw new ForbiddenException(INVALID_TOKEN);
     }
   }
-
   /** Idempotent: an unknown or already revoked token still answers 204. */
-  invalidate(input: YggdrasilInvalidateRequest): void {
-    this.db.db
+  async invalidate(input: YggdrasilInvalidateRequest): Promise<void> {
+    await this.db.db
       .update(tokenTable)
       .set({ revokedAt: new Date() })
       .where(
@@ -180,25 +168,24 @@ export class YggdrasilService {
           eq(tokenTable.accessTokenHash, sha256(input.accessToken)),
           isNull(tokenTable.revokedAt),
         ),
-      )
-      .run();
+      );
   }
-
   private async verifyPassword(userId: string, password: string): Promise<boolean> {
-    return verifyAccountPassword(this.db, userId, password);
+    return await verifyAccountPassword(this.db, userId, password);
   }
-
-  private findActiveToken(
-    accessToken: string,
-  ): { token: TokenRow; player: PlayerRow; user: UserRow } | null {
-    const row = this.db.db
-      .select({ token: tokenTable, player: playerTable, user: userTable })
-      .from(tokenTable)
-      .innerJoin(playerTable, eq(tokenTable.playerUuid, playerTable.uuid))
-      .innerJoin(userTable, eq(playerTable.userId, userTable.id))
-      .where(eq(tokenTable.accessTokenHash, sha256(accessToken)))
-      .get();
-
+  private async findActiveToken(accessToken: string): Promise<{
+    token: TokenRow;
+    player: PlayerRow;
+    user: UserRow;
+  } | null> {
+    const row = (
+      await this.db.db
+        .select({ token: tokenTable, player: playerTable, user: userTable })
+        .from(tokenTable)
+        .innerJoin(playerTable, eq(tokenTable.playerUuid, playerTable.uuid))
+        .innerJoin(userTable, eq(playerTable.userId, userTable.id))
+        .where(eq(tokenTable.accessTokenHash, sha256(accessToken)))
+    )[0];
     if (!row || row.token.revokedAt !== null) {
       return null;
     }
@@ -210,11 +197,9 @@ export class YggdrasilService {
     }
     return row;
   }
-
   private toProfile(playerRow: PlayerRow): YggdrasilProfile {
     return { id: playerRow.uuid, name: playerRow.nickname };
   }
-
   private deviceName(meta: RequestMeta): string | null {
     const userAgent = meta.userAgent?.trim();
     return userAgent ? userAgent.slice(0, 255) : null;

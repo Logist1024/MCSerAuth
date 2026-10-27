@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { detectDialect } from '../db/dialect.js';
 
 /**
  * Environment contract for the server process.
@@ -46,8 +47,26 @@ export const envSchema = z.object({
   /** Lifetime of signed texture URLs handed to launchers/game servers. */
   TEXTURE_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
 
-  /** SQLite file; relative paths resolve from apps/server. */
+  /**
+   * Database connection.
+   *
+   *   ./data/mcserauth.db           SQLite (default, zero-config local dev)
+   *   sqlite:./data/mcserauth.db    SQLite (explicit)
+   *   mysql://user:pass@host/db     MySQL 8.0+
+   *   postgres://user:pass@host/db  PostgreSQL 16+
+   *
+   * Relative SQLite paths resolve from apps/server.
+   */
   DATABASE_URL: z.string().min(1).default('./data/mcserauth.db'),
+  /** Optional explicit dialect; must agree with the DATABASE_URL scheme when both are set. */
+  DB_DIALECT: z.enum(['sqlite', 'mysql', 'postgres']).optional(),
+  /** Server-database connection pool bounds (ignored by SQLite). */
+  DB_POOL_MIN: z.coerce.number().int().min(0).max(100).default(0),
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(500).default(10_000),
+  DB_IDLE_TIMEOUT_MS: z.coerce.number().int().min(500).default(30_000),
+  /** Require TLS for MySQL/PostgreSQL connections. */
+  DB_SSL: booleanFromEnv.default(false),
   /** Local texture/attachment directory (M2); relative paths resolve from apps/server. */
   UPLOAD_DIR: z.string().min(1).default('./data/uploads'),
 
@@ -90,6 +109,19 @@ export function validateEnv(input: Record<string, unknown>): AppEnv {
   }
 
   const env = result.data;
+
+  if (env.DB_POOL_MIN > env.DB_POOL_MAX) {
+    throw new Error('DB_POOL_MIN must be less than or equal to DB_POOL_MAX.');
+  }
+  try {
+    detectDialect(env.DATABASE_URL, env.DB_DIALECT);
+  } catch (error) {
+    throw new Error(
+      `Invalid database configuration: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+
   const secret =
     env.BETTER_AUTH_SECRET ?? (env.NODE_ENV === 'production' ? undefined : DEV_AUTH_SECRET);
 

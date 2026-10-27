@@ -31,7 +31,6 @@ import {
   YggdrasilJoinRequestDto,
 } from './dto/yggdrasil-session.dto.js';
 import { SessionService } from './session.service.js';
-
 /**
  * authlib-injector session server.
  *
@@ -47,7 +46,6 @@ export class YggdrasilSessionController {
     private readonly sessions: SessionService,
     private readonly profiles: ProfilesService,
   ) {}
-
   @Post('join')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -59,10 +57,14 @@ export class YggdrasilSessionController {
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  join(@Body() body: YggdrasilJoinRequestDto, @Req() request: Request): void {
-    this.sessions.joinServer(body, { ip: request.ip }, { enforceServerWhitelist: false });
+  async join(
+    @Body()
+    body: YggdrasilJoinRequestDto,
+    @Req()
+    request: Request,
+  ): Promise<void> {
+    await this.sessions.joinServer(body, { ip: request.ip }, { enforceServerWhitelist: false });
   }
-
   @Get('hasJoined')
   @ApiOperation({
     summary: '查询某玩家最近会话（authlib-injector）',
@@ -72,18 +74,19 @@ export class YggdrasilSessionController {
   @ApiOkResponse({ type: GameProfileDto })
   @ApiNoContentResponse({ description: '无有效会话' })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  hasJoined(
-    @Query() query: YggdrasilHasJoinedQueryDto,
-    @Res({ passthrough: true }) response: Response,
-  ): GameProfile | undefined {
-    const profile = this.sessions.hasJoined(query, { enforceServerWhitelist: false });
+  async hasJoined(
+    @Query()
+    query: YggdrasilHasJoinedQueryDto,
+    @Res({ passthrough: true })
+    response: Response,
+  ): Promise<GameProfile | undefined> {
+    const profile = await this.sessions.hasJoined(query, { enforceServerWhitelist: false });
     if (profile === null) {
       response.status(HttpStatus.NO_CONTENT);
       return undefined;
     }
     return profile;
   }
-
   @Get('profile/:uuid')
   @ApiOperation({
     summary: '按 UUID 查询档案（authlib-injector）',
@@ -92,16 +95,17 @@ export class YggdrasilSessionController {
   @ApiParam({ name: 'uuid', example: '85cbb85205d944eea137574bd7afe854' })
   @ApiOkResponse({ type: GameProfileDto })
   @ApiNoContentResponse({ description: '玩家不存在' })
-  profile(
-    @Param('uuid') uuid: string,
-    @Res({ passthrough: true }) response: Response,
-  ): GameProfile | undefined {
+  async profile(
+    @Param('uuid')
+    uuid: string,
+    @Res({ passthrough: true })
+    response: Response,
+  ): Promise<GameProfile | undefined> {
     const normalized = normalizeProtocolUuid(uuid);
     if (normalized === null) {
       throw new BadRequestException('UUID 必须是 32 位十六进制（可带连字符）');
     }
-
-    const profile = this.profiles.getByUuid(normalized);
+    const profile = await this.profiles.getByUuid(normalized);
     if (profile === null) {
       response.status(HttpStatus.NO_CONTENT);
       return undefined;

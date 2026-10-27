@@ -15,7 +15,6 @@ import {
 } from '../../db/schema/index.js';
 import type { CaptchaService } from '../captcha/captcha.service.js';
 import type { MailService } from '../mail/mail.service.js';
-
 /**
  * better-auth integration (T3: wired on the NestJS side).
  *
@@ -41,7 +40,7 @@ export function createAuth(
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(db.db, {
-      provider: 'sqlite',
+      provider: db.dialect === 'postgres' ? 'pg' : db.dialect,
       schema: { user, session, account, verification },
     }),
     emailAndPassword: {
@@ -51,7 +50,16 @@ export function createAuth(
       // better-auth version: better-auth builds
       // `${baseURL}/reset-password/:token?callbackURL=<redirectTo>` and our
       // web `/reset-password` page picks the token from the redirect query.
-      sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
+      sendResetPassword: async ({
+        user,
+        url,
+      }: {
+        user: {
+          email: string;
+          name: string;
+        };
+        url: string;
+      }) => {
         try {
           await mailer.sendPasswordResetEmail({ email: user.email, name: user.name, url });
         } catch (error) {
@@ -65,9 +73,9 @@ export function createAuth(
       // in `token` and are untouched, per the three-layer identity rule.
       revokeSessionsOnPasswordReset: true,
       password: {
-        hash: (password: string) => argon2.hash(password, { type: argon2.argon2id }),
-        verify: ({ hash, password }: { hash: string; password: string }) =>
-          argon2.verify(hash, password),
+        hash: async (password: string) => await argon2.hash(password, { type: argon2.argon2id }),
+        verify: async ({ hash, password }: { hash: string; password: string }) =>
+          await argon2.verify(hash, password),
       },
     },
     emailVerification: {
@@ -106,7 +114,9 @@ export function createAuth(
         // before requesting a reset mail (SMTP pivots are otherwise a cheap
         // mail-bomb vector). Launcher (Yggdrasil) auth never hits these paths.
         if (ctx.path === '/request-password-reset') {
-          const result = captcha.consumeToken(ctx.headers?.get('x-captcha-token') ?? undefined);
+          const result = await captcha.consumeToken(
+            ctx.headers?.get('x-captcha-token') ?? undefined,
+          );
           if (!result.ok) {
             throw new APIError('BAD_REQUEST', {
               message: result.reason ?? '请先完成人机验证',
@@ -116,27 +126,23 @@ export function createAuth(
         }
         if (ctx.path !== '/sign-in/email' && ctx.path !== '/sign-up/email') {
           if (ctx.path === '/update-user') {
-            const nameError = forbidNameUpdate(
-              (ctx.body ?? {}) as Record<string, unknown>,
-            );
+            const nameError = forbidNameUpdate((ctx.body ?? {}) as Record<string, unknown>);
             if (nameError !== null) {
               throw new APIError('BAD_REQUEST', { message: nameError });
             }
           }
           return;
         }
-
-        const result = captcha.consumeToken(ctx.headers?.get('x-captcha-token') ?? undefined);
+        const result = await captcha.consumeToken(ctx.headers?.get('x-captcha-token') ?? undefined);
         if (!result.ok) {
           throw new APIError('BAD_REQUEST', {
             message: result.reason ?? '请先完成人机验证',
           });
         }
-
         if (ctx.path === '/sign-up/email') {
           const body = (ctx.body ?? {}) as Record<string, unknown>;
           const name = typeof body.name === 'string' ? body.name : '';
-          const nameError = assertDisplayNameAvailable(db, name);
+          const nameError = await assertDisplayNameAvailable(db, name);
           if (nameError !== '') {
             throw new APIError('BAD_REQUEST', { message: nameError });
           }
@@ -153,60 +159,50 @@ export function createAuth(
     },
   });
 }
-
 export type Auth = ReturnType<typeof createAuth>;
-
 /** Same rule as the registration form: 2–32 characters after trimming. */
 export const NAME_MIN_LENGTH = 2;
 export const NAME_MAX_LENGTH = 32;
-
 /**
  * Display names must be unique across the platform: no other account (`user`
  * rows, case-insensitive), no existing game nickname and no active 30-day
  * reservation may claim the same name. Returns a reusable error message.
  */
-function assertDisplayNameAvailable(
-  db: DbService,
-  rawName: string,
-): string {
+async function assertDisplayNameAvailable(db: DbService, rawName: string): Promise<string> {
   const name = rawName.trim();
   const lowered = name.toLowerCase();
-
   if (name.length < NAME_MIN_LENGTH || name.length > NAME_MAX_LENGTH) {
     return `昵称需要 ${NAME_MIN_LENGTH}–${NAME_MAX_LENGTH} 个字符`;
   }
-
-  const userTaken =
-    db.db
+  const userTaken = (
+    await db.db
       .select({ id: user.id })
       .from(user)
       .where(sql`lower(${user.name}) = ${lowered}`)
-      .get();
+  )[0];
   if (userTaken) {
     return '该昵称已被其他账号使用';
   }
-
-  const playerTaken = db.db
-    .select({ uuid: player.uuid })
-    .from(player)
-    .where(sql`lower(${player.nickname}) = ${lowered}`)
-    .get();
+  const playerTaken = (
+    await db.db
+      .select({ uuid: player.uuid })
+      .from(player)
+      .where(sql`lower(${player.nickname}) = ${lowered}`)
+  )[0];
   if (playerTaken) {
     return '该昵称已被游戏角色使用';
   }
-
-  const reserved = db.db
-    .select({ nickname: nicknameReservation.nickname })
-    .from(nicknameReservation)
-    .where(sql`lower(${nicknameReservation.nickname}) = ${lowered}`)
-    .get();
+  const reserved = (
+    await db.db
+      .select({ nickname: nicknameReservation.nickname })
+      .from(nicknameReservation)
+      .where(sql`lower(${nicknameReservation.nickname}) = ${lowered}`)
+  )[0];
   if (reserved) {
     return '该昵称处于保留期，暂不可用';
   }
-
   return '';
 }
-
 /**
  * Registration-side mirror of the rename rule: the DB enforces `user.name`
  * uniqueness, so profile updates must not smuggle a name change. Names live

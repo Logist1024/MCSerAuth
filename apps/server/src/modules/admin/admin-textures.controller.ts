@@ -24,7 +24,6 @@ import { apiSuccessArraySchema, apiSuccessSchema } from '../../common/swagger/ap
 import { TextureService, type TextureReviewView } from '../profiles/texture.service.js';
 import { AdminAccessService } from './admin-access.service.js';
 import { AdminTextureDto, ListTexturesQueryDto, ReviewTextureDto } from './dto/admin.dto.js';
-
 /** Texture review queue — moderators and admins. */
 @ApiTags('Admin')
 @ApiCookieAuth('better-auth.session_token')
@@ -35,7 +34,6 @@ export class AdminTexturesController {
     private readonly access: AdminAccessService,
     private readonly textures: TextureService,
   ) {}
-
   @Get()
   @ApiOperation({
     summary: '列出纹理（reviewer 起）',
@@ -43,13 +41,16 @@ export class AdminTexturesController {
   })
   @ApiOkResponse({ schema: apiSuccessArraySchema(AdminTextureDto) })
   async list(
-    @Req() request: Request,
-    @Query() query: ListTexturesQueryDto,
+    @Req()
+    request: Request,
+    @Query()
+    query: ListTexturesQueryDto,
   ): Promise<AdminTextureDto[]> {
     await this.access.requireAtLeast(request, 'reviewer');
-    return this.textures.listForReview(query.status, query.kind).map((view) => this.toDto(view));
+    return (await this.textures.listForReview(query.status, query.kind)).map((view) =>
+      this.toDto(view),
+    );
   }
-
   @Post(':id/approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -60,14 +61,16 @@ export class AdminTexturesController {
   @ApiBody({ type: ReviewTextureDto, required: false })
   @ApiOkResponse({ schema: apiSuccessSchema(AdminTextureDto) })
   async approve(
-    @Req() request: Request,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: ReviewTextureDto,
+    @Req()
+    request: Request,
+    @Param('id', ParseIntPipe)
+    id: number,
+    @Body()
+    body: ReviewTextureDto,
   ): Promise<AdminTextureDto> {
     const actor = await this.access.requireAtLeast(request, 'reviewer');
-    return this.toDto(this.textures.approve(id, actor.userId, body?.reason));
+    return this.toDto(await this.textures.approve(id, actor.userId, body?.reason));
   }
-
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '下架纹理（reviewer 起）' })
@@ -75,14 +78,16 @@ export class AdminTexturesController {
   @ApiBody({ type: ReviewTextureDto, required: false })
   @ApiOkResponse({ schema: apiSuccessSchema(AdminTextureDto) })
   async reject(
-    @Req() request: Request,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: ReviewTextureDto,
+    @Req()
+    request: Request,
+    @Param('id', ParseIntPipe)
+    id: number,
+    @Body()
+    body: ReviewTextureDto,
   ): Promise<AdminTextureDto> {
     const actor = await this.access.requireAtLeast(request, 'reviewer');
-    return this.toDto(this.textures.reject(id, actor.userId, body?.reason));
+    return this.toDto(await this.textures.reject(id, actor.userId, body?.reason));
   }
-
   private toDto(view: TextureReviewView): AdminTextureDto {
     return {
       id: view.id,

@@ -27,7 +27,6 @@ import type { ForumUploadResponse } from '@mcserauth/shared';
 import type { Request, Response } from 'express';
 import { AccountAccessService } from '../auth/account-access.service.js';
 import { ForumUploadService, MAX_FORUM_UPLOAD_BYTES } from './forum-upload.service.js';
-
 /** Markdown image upload + public content-addressed delivery. */
 @ApiTags('Forum')
 @UseGuards(ThrottlerGuard)
@@ -37,10 +36,9 @@ export class ForumUploadsController {
     private readonly accounts: AccountAccessService,
     private readonly uploads: ForumUploadService,
   ) {}
-
   @Post()
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_FORUM_UPLOAD_BYTES, files: 1 } }),
   )
@@ -55,20 +53,26 @@ export class ForumUploadsController {
     },
   })
   async upload(
-    @Req() request: Request,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req()
+    request: Request,
+    @UploadedFile()
+    file: Express.Multer.File | undefined,
   ): Promise<ForumUploadResponse> {
     const user = await this.accounts.requireWritableUser(request);
-    return this.uploads.upload(file, user.id);
+    return await this.uploads.upload(file, user.id);
   }
-
   @Get(':filename')
   @SkipThrottle()
   @ApiProduces('image/png', 'image/jpeg', 'image/webp', 'image/gif')
   @ApiOperation({ summary: '读取已上传的帖子图片' })
   @ApiParam({ name: 'filename', example: '<sha256>.png' })
   @ApiResponse({ status: 200, description: '图片' })
-  get(@Param('filename') filename: string, @Res() response: Response): void {
+  get(
+    @Param('filename')
+    filename: string,
+    @Res()
+    response: Response,
+  ): void {
     const file = this.uploads.read(filename);
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

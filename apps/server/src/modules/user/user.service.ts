@@ -33,9 +33,7 @@ import { verifyAccountPassword } from '../auth/account-password.js';
 import { OAuthService } from '../auth/oauth.service.js';
 import type { ChangeEmailRequest } from '@mcserauth/shared';
 import { TextureService } from '../profiles/texture.service.js';
-
 const RENAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
-
 /** Website account settings, player rename and texture switching. */
 @Injectable()
 export class UserService {
@@ -47,7 +45,6 @@ export class UserService {
     private readonly reservations: NicknameReservationService,
     private readonly progress: ProgressService,
   ) {}
-
   /**
    * Changes the account email after re-proving the password.
    *
@@ -57,32 +54,29 @@ export class UserService {
    * runs in a transaction so a concurrent sign-up cannot claim the address.
    */
   async changeEmail(userId: string, input: ChangeEmailRequest): Promise<UserSettingsResponse> {
-    const user = this.requireUser(userId);
-
+    const user = await this.requireUser(userId);
     if (!(await verifyAccountPassword(this.db, userId, input.currentPassword))) {
       throw new UnauthorizedException('当前密码不正确');
     }
-
     const newEmail = input.newEmail.trim().toLowerCase();
     if (newEmail.toLowerCase() === user.email.toLowerCase()) {
       throw new BadRequestException('新邮箱与当前邮箱相同');
     }
-
-    const existing = this.db.db
-      .select({ id: userTable.id })
-      .from(userTable)
-      .where(sql`lower(${userTable.email}) = ${newEmail}`)
-      .get();
+    const existing = (
+      await this.db.db
+        .select({ id: userTable.id })
+        .from(userTable)
+        .where(sql`lower(${userTable.email}) = ${newEmail}`)
+    )[0];
     if (existing) {
       throw new ConflictException('该邮箱已被其他账号使用');
     }
-
     try {
-      this.db.db.transaction((tx) => {
-        tx.update(userTable)
+      await this.db.transaction(async (tx) => {
+        await tx
+          .update(userTable)
           .set({ email: newEmail, updatedAt: new Date() })
-          .where(eq(userTable.id, userId))
-          .run();
+          .where(eq(userTable.id, userId));
       });
       // The unique index backs the update above: a concurrent sign-up claiming
       // the same address would collide here and land in the handler below.
@@ -92,13 +86,11 @@ export class UserService {
       }
       throw error;
     }
-
-    return this.getSettings(userId);
+    return await this.getSettings(userId);
   }
-
-  getSettings(userId: string): UserSettingsResponse {
-    const user = this.requireUser(userId);
-    const player = this.oauth.getPlayerForUser(userId);
+  async getSettings(userId: string): Promise<UserSettingsResponse> {
+    const user = await this.requireUser(userId);
+    const player = await this.oauth.getPlayerForUser(userId);
     const cooldownUntil = player?.nameCooldownAt
       ? new Date(player.nameCooldownAt.getTime() + RENAME_COOLDOWN_MS)
       : null;
@@ -111,12 +103,12 @@ export class UserService {
         signature: user.signature,
         role: normalizeUserRole(user.role),
         banned: user.banned,
-        permissions: this.db.db
-          .select({ permission: userPermission.permission })
-          .from(userPermission)
-          .where(eq(userPermission.userId, user.id))
-          .all()
-          .map((row) => row.permission),
+        permissions: (
+          await this.db.db
+            .select({ permission: userPermission.permission })
+            .from(userPermission)
+            .where(eq(userPermission.userId, user.id))
+        ).map((row) => row.permission),
         mutedUntil: user.mutedUntil?.toISOString() ?? null,
         createdAt: user.createdAt.toISOString(),
       },
@@ -137,12 +129,10 @@ export class UserService {
         : null,
     };
   }
-
-  updateProfile(userId: string, input: UpdateProfileRequest): UserSettingsResponse {
-    const user = this.requireUser(userId);
+  async updateProfile(userId: string, input: UpdateProfileRequest): Promise<UserSettingsResponse> {
+    const user = await this.requireUser(userId);
     const avatarUrl = normalizeAvatarUrl(input.avatarUrl, user.avatarUrl);
-
-    this.db.db
+    await this.db.db
       .update(userTable)
       .set({
         ...(input.signature === undefined
@@ -155,77 +145,70 @@ export class UserService {
             }),
         ...(input.avatarUrl === undefined ? {} : { avatarUrl }),
       })
-      .where(eq(userTable.id, userId))
-      .run();
-
-    return this.getSettings(userId);
+      .where(eq(userTable.id, userId));
+    return await this.getSettings(userId);
   }
-
-  renamePlayer(userId: string, nicknameInput: string): RenamePlayerResponse {
-    const player = this.oauth.getPlayerForUser(userId);
+  async renamePlayer(userId: string, nicknameInput: string): Promise<RenamePlayerResponse> {
+    const player = await this.oauth.getPlayerForUser(userId);
     if (!player) {
       throw new BadRequestException('尚未创建游戏角色，请先完成一次启动器授权');
     }
-
     const nickname = nicknameInput.trim();
     if (nickname === player.nickname) {
       throw new BadRequestException('新昵称与当前昵称相同');
     }
-
     const now = new Date();
     if (
       player.nameCooldownAt !== null &&
       player.nameCooldownAt.getTime() + RENAME_COOLDOWN_MS > now.getTime()
     ) {
       const days = Math.ceil(
-        (player.nameCooldownAt.getTime() + RENAME_COOLDOWN_MS - now.getTime()) / 86_400_000,
+        (player.nameCooldownAt.getTime() + RENAME_COOLDOWN_MS - now.getTime()) / 86400000,
       );
       throw new BusinessException(ErrorCode.RENAME_COOLDOWN, 400, `改名冷却中，约还需 ${days} 天`);
     }
-
-    const taken = this.db.db
-      .select({ uuid: playerTable.uuid })
-      .from(playerTable)
-      .where(eq(playerTable.nickname, nickname))
-      .get();
+    const taken = (
+      await this.db.db
+        .select({ uuid: playerTable.uuid })
+        .from(playerTable)
+        .where(eq(playerTable.nickname, nickname))
+    )[0];
     if (taken) {
       throw new BusinessException(ErrorCode.NICKNAME_TAKEN, 409, '该昵称已被使用');
     }
-
-    if (this.reservations.isReservedByOther(nickname, player.uuid)) {
+    if (await this.reservations.isReservedByOther(nickname, player.uuid)) {
       throw new BusinessException(ErrorCode.NICKNAME_TAKEN, 409, '该昵称处于 30 天保留期');
     }
-
     const history = [...new Set([...player.nicknameHistory, player.nickname])];
     const cooldownUntil = new Date(now.getTime() + RENAME_COOLDOWN_MS);
-
     try {
-      this.db.db.transaction((tx) => {
-        tx.update(playerTable)
+      await this.db.transaction(async (tx) => {
+        await tx
+          .update(playerTable)
           .set({
             nickname,
             previousNickname: player.nickname,
             nicknameHistory: history,
             nameCooldownAt: now,
           })
-          .where(eq(playerTable.uuid, player.uuid))
-          .run();
-        tx.insert(nicknameReservation)
-          .values({
+          .where(eq(playerTable.uuid, player.uuid));
+        await this.db.upsert(
+          nicknameReservation,
+          {
             nickname: player.nickname,
             playerUuid: player.uuid,
             reservedUntil: cooldownUntil,
-          })
-          .onConflictDoUpdate({
+          },
+          {
             target: nicknameReservation.nickname,
             set: { playerUuid: player.uuid, reservedUntil: cooldownUntil },
-          })
-          .run();
+          },
+          tx,
+        );
       });
     } catch {
       throw new BusinessException(ErrorCode.NICKNAME_TAKEN, 409, '该昵称已被使用');
     }
-
     return {
       uuid: player.uuid,
       nickname,
@@ -234,27 +217,25 @@ export class UserService {
       nicknameHistory: history,
     };
   }
-
-  getPublicProfile(userId: string): PublicUserProfile {
-    const user = this.db.db.select().from(userTable).where(eq(userTable.id, userId)).get();
+  async getPublicProfile(userId: string): Promise<PublicUserProfile> {
+    const user = (await this.db.db.select().from(userTable).where(eq(userTable.id, userId)))[0];
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
-    const player = this.oauth.getPlayerForUser(userId);
-
-    const postCount = this.db.db
-      .select({ value: count() })
-      .from(postTable)
-      .where(and(eq(postTable.authorId, userId), eq(postTable.status, 'published')))
-      .get();
-    const replyCount = this.db.db
-      .select({ value: count() })
-      .from(replyTable)
-      .where(and(eq(replyTable.authorId, userId), eq(replyTable.status, 'published')))
-      .get();
-
-    const progress = this.progress.summary(userId);
-
+    const player = await this.oauth.getPlayerForUser(userId);
+    const postCount = (
+      await this.db.db
+        .select({ value: count() })
+        .from(postTable)
+        .where(and(eq(postTable.authorId, userId), eq(postTable.status, 'published')))
+    )[0];
+    const replyCount = (
+      await this.db.db
+        .select({ value: count() })
+        .from(replyTable)
+        .where(and(eq(replyTable.authorId, userId), eq(replyTable.status, 'published')))
+    )[0];
+    const progress = await this.progress.summary(userId);
     return {
       user: {
         id: user.id,
@@ -276,35 +257,31 @@ export class UserService {
         title: progress.title ? { name: progress.title.name, color: progress.title.color } : null,
         checkinStreak: progress.checkinStreak,
       },
-      recentPosts: this.forum.recentPostsByUser(userId, 5),
+      recentPosts: await this.forum.recentPostsByUser(userId, 5),
     };
   }
-
-  activateTexture(userId: string, textureId: number): ActivateTextureResponse {
-    const player = this.oauth.getPlayerForUser(userId);
+  async activateTexture(userId: string, textureId: number): Promise<ActivateTextureResponse> {
+    const player = await this.oauth.getPlayerForUser(userId);
     if (!player) {
       throw new BadRequestException('尚未创建游戏角色');
     }
     return this.textures.activate(player, textureId);
   }
-
-  deleteTexture(userId: string, textureId: number): DeleteTextureResponse {
-    const player = this.oauth.getPlayerForUser(userId);
+  async deleteTexture(userId: string, textureId: number): Promise<DeleteTextureResponse> {
+    const player = await this.oauth.getPlayerForUser(userId);
     if (!player) {
       throw new NotFoundException('纹理不存在');
     }
-    return this.textures.delete(player, textureId);
+    return await this.textures.delete(player, textureId);
   }
-
-  private requireUser(userId: string) {
-    const row = this.db.db.select().from(userTable).where(eq(userTable.id, userId)).get();
+  private async requireUser(userId: string) {
+    const row = (await this.db.db.select().from(userTable).where(eq(userTable.id, userId)))[0];
     if (!row) {
       throw new NotFoundException('账号不存在');
     }
     return row;
   }
 }
-
 function normalizeAvatarUrl(
   value: string | null | undefined,
   current: string | null,

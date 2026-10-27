@@ -17,7 +17,6 @@ import type { Request } from 'express';
 import { AccountAccessService } from '../auth/account-access.service.js';
 import { NotificationListQueryDto } from './dto/forum.dto.js';
 import { NotificationsService } from './notifications.service.js';
-
 /** Current account's in-site notifications. */
 @ApiTags('Forum')
 @ApiCookieAuth('better-auth.session_token')
@@ -28,44 +27,56 @@ export class NotificationsController {
     private readonly accounts: AccountAccessService,
     private readonly notifications: NotificationsService,
   ) {}
-
   @Get()
   @SkipThrottle()
   @ApiOperation({ summary: '通知列表（分页）与未读数' })
   async list(
-    @Req() request: Request,
-    @Query() query: NotificationListQueryDto,
+    @Req()
+    request: Request,
+    @Query()
+    query: NotificationListQueryDto,
   ): Promise<NotificationListResponse> {
     const user = await this.accounts.requireUser(request);
-    return this.notifications.list(user.id, query);
+    return await this.notifications.list(user.id, query);
   }
-
   @Get('unread-count')
   @SkipThrottle()
   @ApiOperation({ summary: '未读通知数' })
-  async unreadCount(@Req() request: Request): Promise<{ unreadCount: number }> {
+  async unreadCount(
+    @Req()
+    request: Request,
+  ): Promise<{
+    unreadCount: number;
+  }> {
     const user = await this.accounts.requireUser(request);
-    return { unreadCount: this.notifications.unreadCount(user.id) };
+    return { unreadCount: await this.notifications.unreadCount(user.id) };
   }
-
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: '全部标记为已读' })
-  async readAll(@Req() request: Request): Promise<{ updated: number }> {
+  async readAll(
+    @Req()
+    request: Request,
+  ): Promise<{
+    updated: number;
+  }> {
     const user = await this.accounts.requireUser(request);
-    return { updated: this.notifications.markAllRead(user.id) };
+    return { updated: await this.notifications.markAllRead(user.id) };
   }
-
   @Post(':id/read')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: '单条标记为已读' })
   async read(
-    @Req() request: Request,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<{ read: boolean }> {
+    @Req()
+    request: Request,
+    @Param('id', ParseIntPipe)
+    id: number,
+  ): Promise<{
+    read: boolean;
+  }> {
     const user = await this.accounts.requireUser(request);
-    return { read: this.notifications.markRead(user.id, id) };
+    return { read: await this.notifications.markRead(user.id, id) };
   }
 }

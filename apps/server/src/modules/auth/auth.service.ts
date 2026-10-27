@@ -6,7 +6,6 @@ import { DbService } from '../../db/db.service.js';
 import { CaptchaService } from '../captcha/captcha.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { type Auth, createAuth } from './auth.instance.js';
-
 /**
  * Owns the single better-auth instance and the Node handler mounted at
  * `/api/auth/*` by main.ts.
@@ -15,7 +14,6 @@ import { type Auth, createAuth } from './auth.instance.js';
 export class AuthService {
   readonly auth: Auth;
   readonly handler: ReturnType<typeof toNodeHandler>;
-
   constructor(
     config: AppConfigService,
     db: DbService,
@@ -25,11 +23,10 @@ export class AuthService {
     this.auth = createAuth(config.env, db, captcha, mailer);
     this.handler = toNodeHandler(this.auth);
   }
-
   /** Resolves the cookie session for a raw Node request (future guards/M1). */
   async getSession(
     headers: IncomingHttpHeaders,
   ): Promise<Awaited<ReturnType<Auth['api']['getSession']>>> {
-    return this.auth.api.getSession({ headers: fromNodeHeaders(headers) });
+    return await this.auth.api.getSession({ headers: fromNodeHeaders(headers) });
   }
 }

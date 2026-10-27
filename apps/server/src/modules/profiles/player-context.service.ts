@@ -3,14 +3,11 @@ import type { Request } from 'express';
 import { AuthService } from '../auth/auth.service.js';
 import { OAuthService } from '../auth/oauth.service.js';
 import { player as playerTable } from '../../db/schema/index.js';
-
 type PlayerRow = typeof playerTable.$inferSelect;
-
 export interface PlayerActor {
   userId: string;
   player: PlayerRow;
 }
-
 /**
  * Resolves the player behind a texture/profile request.
  *
@@ -25,23 +22,19 @@ export class PlayerContextService {
     private readonly auth: AuthService,
     private readonly oauth: OAuthService,
   ) {}
-
   async requirePlayer(request: Request): Promise<PlayerActor> {
     const authorization = request.headers.authorization;
-
     if (authorization !== undefined) {
       const match = /^Bearer\s+(\S+)$/i.exec(authorization);
       const accessToken = match?.[1];
       if (!accessToken) {
         throw new UnauthorizedException('Authorization 头格式应为 Bearer <access_token>');
       }
-
-      const profile = this.oauth.resolveAccessToken(accessToken);
+      const profile = await this.oauth.resolveAccessToken(accessToken);
       if (!profile?.player) {
         throw new UnauthorizedException('访问令牌无效或已过期');
       }
-
-      const player = this.oauth.getPlayerByUuid(profile.player.uuid);
+      const player = await this.oauth.getPlayerByUuid(profile.player.uuid);
       if (!player) {
         throw new UnauthorizedException('玩家档案不存在');
       }
@@ -50,13 +43,11 @@ export class PlayerContextService {
       }
       return { userId: profile.user.id, player };
     }
-
     const session = await this.auth.getSession(request.headers);
     if (!session) {
       throw new UnauthorizedException('未登录或登录已失效');
     }
-
-    const player = this.oauth.ensurePlayerForUser(session.user.id, session.user.name);
+    const player = await this.oauth.ensurePlayerForUser(session.user.id, session.user.name);
     if (player.banned) {
       throw new ForbiddenException('该玩家已被封禁');
     }

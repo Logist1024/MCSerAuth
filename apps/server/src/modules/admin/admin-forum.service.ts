@@ -26,7 +26,8 @@ import {
   type UnmuteUserRequest,
 } from '@mcserauth/shared';
 import { and, count, desc, eq, gt, inArray, isNull, like, or, type SQL } from 'drizzle-orm';
-import { alias, type SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { alias, type PgTable } from 'drizzle-orm/pg-core';
+import { firstOrThrow } from '../../common/helpers/rows.js';
 import { DbService } from '../../db/db.service.js';
 import {
   category as categoryTable,
@@ -50,9 +51,7 @@ import type {
 } from './dto/admin-forum.dto.js';
 import { ForumService } from '../forum/forum.service.js';
 import { NotificationsService } from '../forum/notifications.service.js';
-
 type UserRow = typeof userTable.$inferSelect;
-
 function clampPagination(
   page: number | undefined,
   pageSize: number | undefined,
@@ -65,7 +64,6 @@ function clampPagination(
     pageSize: Math.min(100, Math.max(1, pageSize ?? 20)),
   };
 }
-
 /** Admin operations for users, reports, content moderation, categories and stats. */
 @Injectable()
 export class AdminForumService {
@@ -75,94 +73,86 @@ export class AdminForumService {
     private readonly notifications: NotificationsService,
     private readonly progress: ProgressService,
   ) {}
-
-  stats(): AdminStats {
+  async stats(): Promise<AdminStats> {
     return {
       users: {
-        total: this.countWhere(userTable),
-        banned: this.countWhere(userTable, eq(userTable.banned, true)),
+        total: await this.countWhere(userTable),
+        banned: await this.countWhere(userTable, eq(userTable.banned, true)),
       },
       players: {
-        total: this.countWhere(playerTable),
-        banned: this.countWhere(playerTable, eq(playerTable.banned, true)),
+        total: await this.countWhere(playerTable),
+        banned: await this.countWhere(playerTable, eq(playerTable.banned, true)),
       },
       posts: {
-        total: this.countWhere(postTable),
-        published: this.countWhere(postTable, eq(postTable.status, 'published')),
-        pending: this.countWhere(postTable, eq(postTable.status, 'pending')),
-        hidden: this.countWhere(postTable, eq(postTable.status, 'hidden')),
+        total: await this.countWhere(postTable),
+        published: await this.countWhere(postTable, eq(postTable.status, 'published')),
+        pending: await this.countWhere(postTable, eq(postTable.status, 'pending')),
+        hidden: await this.countWhere(postTable, eq(postTable.status, 'hidden')),
       },
       replies: {
-        total: this.countWhere(replyTable),
-        published: this.countWhere(replyTable, eq(replyTable.status, 'published')),
+        total: await this.countWhere(replyTable),
+        published: await this.countWhere(replyTable, eq(replyTable.status, 'published')),
       },
       reports: {
-        pending: this.countWhere(reportTable, eq(reportTable.status, 'pending')),
-        resolved: this.countWhere(reportTable, eq(reportTable.status, 'resolved')),
-        rejected: this.countWhere(reportTable, eq(reportTable.status, 'rejected')),
+        pending: await this.countWhere(reportTable, eq(reportTable.status, 'pending')),
+        resolved: await this.countWhere(reportTable, eq(reportTable.status, 'resolved')),
+        rejected: await this.countWhere(reportTable, eq(reportTable.status, 'rejected')),
       },
       skins: {
-        pending: this.countWhere(skinTable, eq(skinTable.status, 'pending')),
-        approved: this.countWhere(skinTable, eq(skinTable.status, 'approved')),
-        rejected: this.countWhere(skinTable, eq(skinTable.status, 'rejected')),
+        pending: await this.countWhere(skinTable, eq(skinTable.status, 'pending')),
+        approved: await this.countWhere(skinTable, eq(skinTable.status, 'approved')),
+        rejected: await this.countWhere(skinTable, eq(skinTable.status, 'rejected')),
       },
       tokens: {
-        active: this.countWhere(
+        active: await this.countWhere(
           tokenTable,
           and(isNull(tokenTable.revokedAt), gt(tokenTable.expiresAt, new Date())),
         ),
       },
-      categories: this.countWhere(categoryTable),
+      categories: await this.countWhere(categoryTable),
     };
   }
-
-  listUsers(query: AdminUserListQueryDto): Paginated<AdminUserSummary> {
+  async listUsers(query: AdminUserListQueryDto): Promise<Paginated<AdminUserSummary>> {
     const { page, pageSize } = clampPagination(query.page, query.pageSize);
     const search = query.search?.trim();
     const condition =
       search === undefined || search === ''
         ? undefined
         : or(like(userTable.name, `%${search}%`), like(userTable.email, `%${search}%`));
-
-    const total = this.countWhere(userTable, condition);
-    const rows = this.db.db
+    const total = await this.countWhere(userTable, condition);
+    const rows = await this.db.db
       .select({ user: userTable, player: playerTable })
       .from(userTable)
       .leftJoin(playerTable, eq(playerTable.userId, userTable.id))
       .where(condition)
       .orderBy(desc(userTable.createdAt))
       .limit(pageSize)
-      .offset((page - 1) * pageSize)
-      .all();
-
+      .offset((page - 1) * pageSize);
     const userIds = rows.map((row) => row.user.id);
     const postCounts =
       userIds.length === 0
         ? []
-        : this.db.db
+        : await this.db.db
             .select({ authorId: postTable.authorId, value: count() })
             .from(postTable)
             .where(and(inArray(postTable.authorId, userIds), eq(postTable.status, 'published')))
-            .groupBy(postTable.authorId)
-            .all();
+            .groupBy(postTable.authorId);
     const postCountMap = new Map(postCounts.map((row) => [row.authorId, row.value]));
-    const badges = this.progress.badgesFor(userIds);
-    const wallets = this.progress.walletsFor(userIds);
+    const badges = await this.progress.badgesFor(userIds);
+    const wallets = await this.progress.walletsFor(userIds);
     const permissionRows =
       userIds.length === 0
         ? []
-        : this.db.db
+        : await this.db.db
             .select({ userId: userPermission.userId, permission: userPermission.permission })
             .from(userPermission)
-            .where(inArray(userPermission.userId, userIds))
-            .all();
+            .where(inArray(userPermission.userId, userIds));
     const permissionMap = new Map<string, Array<(typeof permissionRows)[number]['permission']>>();
     for (const row of permissionRows) {
       const list = permissionMap.get(row.userId) ?? [];
       list.push(row.permission);
       permissionMap.set(row.userId, list);
     }
-
     return {
       items: rows.map(({ user, player }) => {
         const badge = badges.get(user.id);
@@ -189,42 +179,43 @@ export class AdminForumService {
       total,
     };
   }
-
-  banUser(actor: AdminActor, userId: string, input: BanUserRequest): AdminUserSummary {
-    const target = this.requireUser(userId);
+  async banUser(
+    actor: AdminActor,
+    userId: string,
+    input: BanUserRequest,
+  ): Promise<AdminUserSummary> {
+    const target = await this.requireUser(userId);
     if (target.id === actor.userId) {
       throw new ForbiddenException('不能封禁自己');
     }
     if (ROLE_RANK[normalizeUserRole(target.role)] >= ROLE_RANK[normalizeUserRole(actor.role)]) {
       throw new ForbiddenException('不能封禁同级或更高权限的账号');
     }
-
     const banForum = input.banForum ?? true;
     const banGame = input.banGame ?? true;
     if (!banForum && !banGame) {
       throw new BadRequestException('至少选择封禁论坛或游戏');
     }
-
     if (banForum) {
-      this.db.db.update(userTable).set({ banned: true }).where(eq(userTable.id, userId)).run();
+      await this.db.db.update(userTable).set({ banned: true }).where(eq(userTable.id, userId));
     }
     if (banGame) {
-      this.db.db
+      await this.db.db
         .update(playerTable)
         .set({ banned: true })
-        .where(eq(playerTable.userId, userId))
-        .run();
+        .where(eq(playerTable.userId, userId));
     }
-
     const reason = input.reason?.trim() || undefined;
-    this.log(actor.userId, 'ban_user', 'user', userId, reason);
+    await this.log(actor.userId, 'ban_user', 'user', userId, reason);
     this.notifications.notifyModeration(userId, `你的账号已被封禁${reason ? `：${reason}` : ''}`);
-
-    return this.getUserSummary(userId);
+    return await this.getUserSummary(userId);
   }
-
-  unbanUser(actor: AdminActor, userId: string, input: UnbanUserRequest): AdminUserSummary {
-    const target = this.requireUser(userId);
+  async unbanUser(
+    actor: AdminActor,
+    userId: string,
+    input: UnbanUserRequest,
+  ): Promise<AdminUserSummary> {
+    const target = await this.requireUser(userId);
     if (target.id === actor.userId) {
       throw new ForbiddenException('不能解封自己');
     }
@@ -236,77 +227,72 @@ export class AdminForumService {
     if (!unbanForum && !unbanGame) {
       throw new BadRequestException('至少选择解封论坛或游戏');
     }
-
     if (unbanForum) {
-      this.db.db.update(userTable).set({ banned: false }).where(eq(userTable.id, userId)).run();
+      await this.db.db.update(userTable).set({ banned: false }).where(eq(userTable.id, userId));
     }
     if (unbanGame) {
-      this.db.db
+      await this.db.db
         .update(playerTable)
         .set({ banned: false })
-        .where(eq(playerTable.userId, userId))
-        .run();
+        .where(eq(playerTable.userId, userId));
     }
-
     const reason = input.reason?.trim() || undefined;
-    this.log(actor.userId, 'unban_user', 'user', userId, reason);
+    await this.log(actor.userId, 'unban_user', 'user', userId, reason);
     this.notifications.notifyModeration(userId, '你的账号已被解封');
-
-    return this.getUserSummary(userId);
+    return await this.getUserSummary(userId);
   }
-
-  muteUser(actor: AdminActor, userId: string, input: MuteUserRequest): AdminUserSummary {
-    const target = this.requireUser(userId);
+  async muteUser(
+    actor: AdminActor,
+    userId: string,
+    input: MuteUserRequest,
+  ): Promise<AdminUserSummary> {
+    const target = await this.requireUser(userId);
     if (target.id === actor.userId) {
       throw new ForbiddenException('不能禁言自己');
     }
     if (ROLE_RANK[normalizeUserRole(target.role)] >= ROLE_RANK[normalizeUserRole(actor.role)]) {
       throw new ForbiddenException('不能禁言同级或更高权限的账号');
     }
-
     const durationHours = input.durationHours;
     if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 720) {
       throw new BadRequestException('禁言时长必须是 1–720 小时');
     }
     const mutedUntil = new Date(Date.now() + durationHours * 60 * 60 * 1000);
-    this.db.db.update(userTable).set({ mutedUntil }).where(eq(userTable.id, userId)).run();
-
+    await this.db.db.update(userTable).set({ mutedUntil }).where(eq(userTable.id, userId));
     const reason = input.reason?.trim() || undefined;
-    this.log(actor.userId, 'mute_user', 'user', userId, reason);
+    await this.log(actor.userId, 'mute_user', 'user', userId, reason);
     this.notifications.notifyModeration(
       userId,
-      `你已被禁言至 ${mutedUntil.toLocaleString('zh-CN', { hour12: false })}${
-        reason ? `：${reason}` : ''
-      }`,
+      `你已被禁言至 ${mutedUntil.toLocaleString('zh-CN', { hour12: false })}${reason ? `：${reason}` : ''}`,
     );
-
-    return this.getUserSummary(userId);
+    return await this.getUserSummary(userId);
   }
-
-  unmuteUser(actor: AdminActor, userId: string, input: UnmuteUserRequest): AdminUserSummary {
-    const target = this.requireUser(userId);
+  async unmuteUser(
+    actor: AdminActor,
+    userId: string,
+    input: UnmuteUserRequest,
+  ): Promise<AdminUserSummary> {
+    const target = await this.requireUser(userId);
     if (target.id === actor.userId) {
       throw new ForbiddenException('不能解除自己的禁言');
     }
     if (ROLE_RANK[normalizeUserRole(target.role)] >= ROLE_RANK[normalizeUserRole(actor.role)]) {
       throw new ForbiddenException('不能操作同级或更高权限的账号');
     }
-    this.db.db.update(userTable).set({ mutedUntil: null }).where(eq(userTable.id, userId)).run();
+    await this.db.db.update(userTable).set({ mutedUntil: null }).where(eq(userTable.id, userId));
     const reason = input.reason?.trim() || undefined;
-    this.log(actor.userId, 'unmute_user', 'user', userId, reason);
+    await this.log(actor.userId, 'unmute_user', 'user', userId, reason);
     this.notifications.notifyModeration(userId, '你的禁言已解除');
-    return this.getUserSummary(userId);
+    return await this.getUserSummary(userId);
   }
-
-  listReports(query: AdminReportListQueryDto): Paginated<AdminReport> {
+  async listReports(query: AdminReportListQueryDto): Promise<Paginated<AdminReport>> {
     const { page, pageSize } = clampPagination(query.page, query.pageSize);
     const status = query.status ?? 'pending';
     const condition = eq(reportTable.status, status);
-
-    const total = this.countWhere(reportTable, condition);
+    const total = await this.countWhere(reportTable, condition);
     const reporter = alias(userTable, 'reporter');
     const handler = alias(userTable, 'handler');
-    const rows = this.db.db
+    const rows = await this.db.db
       .select({
         report: reportTable,
         reporterId: reporter.id,
@@ -320,9 +306,7 @@ export class AdminForumService {
       .where(condition)
       .orderBy(desc(reportTable.createdAt))
       .limit(pageSize)
-      .offset((page - 1) * pageSize)
-      .all();
-
+      .offset((page - 1) * pageSize);
     return {
       items: rows.map(({ report, reporterId, reporterName, handlerId, handlerName }) => ({
         id: report.id,
@@ -339,29 +323,25 @@ export class AdminForumService {
       total,
     };
   }
-
-  handleReport(
+  async handleReport(
     actor: AdminActor,
     id: number,
     status: 'resolved' | 'rejected',
     input: HandleReportRequest,
-  ): AdminReport {
-    const row = this.db.db.select().from(reportTable).where(eq(reportTable.id, id)).get();
+  ): Promise<AdminReport> {
+    const row = (await this.db.db.select().from(reportTable).where(eq(reportTable.id, id)))[0];
     if (!row) {
       throw new NotFoundException('举报不存在');
     }
     if (row.status !== 'pending') {
       throw new BadRequestException('该举报已处理');
     }
-
-    this.db.db
+    await this.db.db
       .update(reportTable)
       .set({ status, handledBy: actor.userId })
-      .where(eq(reportTable.id, id))
-      .run();
-
+      .where(eq(reportTable.id, id));
     const reason = input.reason?.trim() || undefined;
-    this.log(
+    await this.log(
       actor.userId,
       status === 'resolved' ? 'resolve_report' : 'reject_report',
       'report',
@@ -374,7 +354,7 @@ export class AdminForumService {
         status === 'resolved' ? '你的举报已处理' : '你的举报被驳回',
       );
     }
-    const reporter = this.requireUser(row.reporterId);
+    const reporter = await this.requireUser(row.reporterId);
     return {
       id: row.id,
       targetType: row.targetType,
@@ -386,28 +366,30 @@ export class AdminForumService {
       createdAt: row.createdAt.toISOString(),
     };
   }
-
-  moderatePost(actor: AdminActor, id: number, input: ModeratePostRequest): ModeratePostResponse {
-    return this.forum.moderatePost(actor.user, id, input);
+  async moderatePost(
+    actor: AdminActor,
+    id: number,
+    input: ModeratePostRequest,
+  ): Promise<ModeratePostResponse> {
+    return await this.forum.moderatePost(actor.user, id, input);
   }
-
-  moderateReply(actor: AdminActor, id: number, input: ModerateReplyRequest): ModerateReplyResponse {
-    return this.forum.moderateReply(actor.user, id, input);
+  async moderateReply(
+    actor: AdminActor,
+    id: number,
+    input: ModerateReplyRequest,
+  ): Promise<ModerateReplyResponse> {
+    return await this.forum.moderateReply(actor.user, id, input);
   }
-
-  listCategories(): AdminCategory[] {
-    const rows = this.db.db
+  async listCategories(): Promise<AdminCategory[]> {
+    const rows = await this.db.db
       .select()
       .from(categoryTable)
-      .orderBy(categoryTable.sortOrder, categoryTable.id)
-      .all();
-    const counts = this.db.db
+      .orderBy(categoryTable.sortOrder, categoryTable.id);
+    const counts = await this.db.db
       .select({ categoryId: postTable.categoryId, value: count() })
       .from(postTable)
-      .groupBy(postTable.categoryId)
-      .all();
+      .groupBy(postTable.categoryId);
     const countMap = new Map(counts.map((row) => [row.categoryId, row.value]));
-
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -418,37 +400,35 @@ export class AdminForumService {
       postCount: countMap.get(row.id) ?? 0,
     }));
   }
-
-  createCategory(actor: AdminActor, input: AdminCategoryDto): AdminCategory {
-    this.assertSlugAvailable(input.slug);
+  async createCategory(actor: AdminActor, input: AdminCategoryDto): Promise<AdminCategory> {
+    await this.assertSlugAvailable(input.slug);
     if (input.parentId !== null && input.parentId !== undefined) {
-      this.requireCategory(input.parentId);
+      await this.requireCategory(input.parentId);
     }
-
-    const inserted = this.db.db
-      .insert(categoryTable)
-      .values({
+    const inserted = firstOrThrow(
+      await this.db.insertReturning(categoryTable, {
         name: input.name.trim(),
         slug: input.slug,
         description: input.description?.trim() || null,
         sortOrder: input.sortOrder ?? 0,
         parentId: input.parentId ?? null,
-      })
-      .returning()
-      .get();
-
-    this.log(actor.userId, 'create_category', 'category', String(inserted.id));
+      }),
+    );
+    await this.log(actor.userId, 'create_category', 'category', String(inserted.id));
     return { ...inserted, postCount: 0 };
   }
-
-  updateCategory(actor: AdminActor, id: number, input: UpdateAdminCategoryDto): AdminCategory {
-    this.requireCategory(id);
+  async updateCategory(
+    actor: AdminActor,
+    id: number,
+    input: UpdateAdminCategoryDto,
+  ): Promise<AdminCategory> {
+    await this.requireCategory(id);
     const changes: Record<string, unknown> = {};
     if (input.name !== undefined) {
       changes.name = input.name.trim();
     }
     if (input.slug !== undefined) {
-      this.assertSlugAvailable(input.slug, id);
+      await this.assertSlugAvailable(input.slug, id);
       changes.slug = input.slug;
     }
     if (input.description !== undefined) {
@@ -462,80 +442,88 @@ export class AdminForumService {
         throw new BadRequestException('版块不能作为自己的父级');
       }
       if (input.parentId !== null) {
-        this.requireCategory(input.parentId);
-        this.assertNoCycle(id, input.parentId);
+        await this.requireCategory(input.parentId);
+        await this.assertNoCycle(id, input.parentId);
       }
       changes.parentId = input.parentId;
     }
     if (Object.keys(changes).length === 0) {
       throw new BadRequestException('没有需要更新的字段');
     }
-
-    this.db.db.update(categoryTable).set(changes).where(eq(categoryTable.id, id)).run();
-    this.log(actor.userId, 'update_category', 'category', String(id));
-
-    const updated = this.requireCategory(id);
-    const posts = this.db.db
-      .select({ value: count() })
-      .from(postTable)
-      .where(eq(postTable.categoryId, id))
-      .get();
+    await this.db.db.update(categoryTable).set(changes).where(eq(categoryTable.id, id));
+    await this.log(actor.userId, 'update_category', 'category', String(id));
+    const updated = await this.requireCategory(id);
+    const posts = (
+      await this.db.db
+        .select({ value: count() })
+        .from(postTable)
+        .where(eq(postTable.categoryId, id))
+    )[0];
     return { ...updated, postCount: posts?.value ?? 0 };
   }
-
-  deleteCategory(actor: AdminActor, id: number): { deleted: true } {
-    this.requireCategory(id);
-    const posts = this.db.db
-      .select({ value: count() })
-      .from(postTable)
-      .where(eq(postTable.categoryId, id))
-      .get();
+  async deleteCategory(
+    actor: AdminActor,
+    id: number,
+  ): Promise<{
+    deleted: true;
+  }> {
+    await this.requireCategory(id);
+    const posts = (
+      await this.db.db
+        .select({ value: count() })
+        .from(postTable)
+        .where(eq(postTable.categoryId, id))
+    )[0];
     if ((posts?.value ?? 0) > 0) {
       throw new ConflictException('版块下仍有帖子，无法删除');
     }
-    const children = this.db.db
-      .select({ value: count() })
-      .from(categoryTable)
-      .where(eq(categoryTable.parentId, id))
-      .get();
+    const children = (
+      await this.db.db
+        .select({ value: count() })
+        .from(categoryTable)
+        .where(eq(categoryTable.parentId, id))
+    )[0];
     if ((children?.value ?? 0) > 0) {
       throw new ConflictException('版块下仍有子版块，无法删除');
     }
-
-    this.db.db.delete(categoryTable).where(eq(categoryTable.id, id)).run();
-    this.log(actor.userId, 'delete_category', 'category', String(id));
+    await this.db.db.delete(categoryTable).where(eq(categoryTable.id, id));
+    await this.log(actor.userId, 'delete_category', 'category', String(id));
     return { deleted: true };
   }
-
-  announce(actor: AdminActor, input: CreateAnnouncementRequest): { recipients: number } {
-    const recipients = this.notifications.announce(input.message.trim(), input.link ?? null);
-    this.log(actor.userId, 'announce', 'system', 'all', input.message.trim());
+  async announce(
+    actor: AdminActor,
+    input: CreateAnnouncementRequest,
+  ): Promise<{
+    recipients: number;
+  }> {
+    const recipients = await this.notifications.announce(input.message.trim(), input.link ?? null);
+    await this.log(actor.userId, 'announce', 'system', 'all', input.message.trim());
     return { recipients };
   }
-
-  private getUserSummary(userId: string): AdminUserSummary {
-    const row = this.db.db
-      .select({ user: userTable, player: playerTable })
-      .from(userTable)
-      .leftJoin(playerTable, eq(playerTable.userId, userTable.id))
-      .where(eq(userTable.id, userId))
-      .get();
+  private async getUserSummary(userId: string): Promise<AdminUserSummary> {
+    const row = (
+      await this.db.db
+        .select({ user: userTable, player: playerTable })
+        .from(userTable)
+        .leftJoin(playerTable, eq(playerTable.userId, userTable.id))
+        .where(eq(userTable.id, userId))
+    )[0];
     if (!row) {
       throw new NotFoundException('用户不存在');
     }
-    const posts = this.db.db
-      .select({ value: count() })
-      .from(postTable)
-      .where(and(eq(postTable.authorId, userId), eq(postTable.status, 'published')))
-      .get();
-    const badge = this.progress.badgesFor([userId]).get(userId);
-    const permissions = this.db.db
-      .select({ permission: userPermission.permission })
-      .from(userPermission)
-      .where(eq(userPermission.userId, userId))
-      .all()
-      .map((entry) => entry.permission);
-
+    const posts = (
+      await this.db.db
+        .select({ value: count() })
+        .from(postTable)
+        .where(and(eq(postTable.authorId, userId), eq(postTable.status, 'published')))
+    )[0];
+    const badge = (await this.progress.badgesFor([userId])).get(userId);
+    const permissions = (
+      await this.db.db
+        .select({ permission: userPermission.permission })
+        .from(userPermission)
+        .where(eq(userPermission.userId, userId))
+    ).map((entry) => entry.permission);
     return {
       id: row.user.id,
       email: row.user.email,
@@ -549,44 +537,38 @@ export class AdminForumService {
         : null,
       postCount: posts?.value ?? 0,
       level: badge?.level ?? 1,
-      points: this.progress.walletsFor([userId]).get(userId) ?? 0,
+      points: (await this.progress.walletsFor([userId])).get(userId) ?? 0,
       title: badge?.title ? { name: badge.title.name, color: badge.title.color } : null,
       permissions,
     };
   }
-
-  private requireUser(userId: string): UserRow {
-    const row = this.db.db.select().from(userTable).where(eq(userTable.id, userId)).get();
+  private async requireUser(userId: string): Promise<UserRow> {
+    const row = (await this.db.db.select().from(userTable).where(eq(userTable.id, userId)))[0];
     if (!row) {
       throw new NotFoundException('用户不存在');
     }
     return row;
   }
-
-  private requireCategory(id: number) {
-    const row = this.db.db.select().from(categoryTable).where(eq(categoryTable.id, id)).get();
+  private async requireCategory(id: number) {
+    const row = (await this.db.db.select().from(categoryTable).where(eq(categoryTable.id, id)))[0];
     if (!row) {
       throw new NotFoundException('版块不存在');
     }
     return row;
   }
-
-  private assertSlugAvailable(slug: string, excludeId?: number): void {
-    const rows = this.db.db
+  private async assertSlugAvailable(slug: string, excludeId?: number): Promise<void> {
+    const rows = await this.db.db
       .select({ id: categoryTable.id })
       .from(categoryTable)
-      .where(eq(categoryTable.slug, slug))
-      .all();
+      .where(eq(categoryTable.slug, slug));
     if (rows.some((row) => row.id !== excludeId)) {
       throw new ConflictException('slug 已被使用');
     }
   }
-
-  private assertNoCycle(id: number, parentId: number): void {
-    const rows = this.db.db
+  private async assertNoCycle(id: number, parentId: number): Promise<void> {
+    const rows = await this.db.db
       .select({ id: categoryTable.id, parentId: categoryTable.parentId })
-      .from(categoryTable)
-      .all();
+      .from(categoryTable);
     const parents = new Map(rows.map((row) => [row.id, row.parentId]));
     let cursor: number | null = parentId;
     const guard = new Set<number>();
@@ -598,23 +580,23 @@ export class AdminForumService {
       cursor = parents.get(cursor) ?? null;
     }
   }
-
-  private countWhere(table: SQLiteTable, condition?: SQL): number {
-    const row = this.db.db.select({ value: count() }).from(table).where(condition).get() as
-      { value: number } | undefined;
+  private async countWhere(table: PgTable, condition?: SQL): Promise<number> {
+    const row = (await this.db.db.select({ value: count() }).from(table).where(condition))[0] as
+      | {
+          value: number;
+        }
+      | undefined;
     return row?.value ?? 0;
   }
-
-  private log(
+  private async log(
     actorId: string,
     action: ModerationAction,
     targetType: string,
     targetId: string,
     reason?: string,
-  ): void {
-    this.db.db
+  ): Promise<void> {
+    await this.db.db
       .insert(moderationLog)
-      .values({ actorId, action, targetType, targetId, reason: reason ?? null })
-      .run();
+      .values({ actorId, action, targetType, targetId, reason: reason ?? null });
   }
 }

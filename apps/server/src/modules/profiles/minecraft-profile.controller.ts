@@ -38,7 +38,6 @@ import {
 } from './dto/profiles.dto.js';
 import { PlayerContextService } from './player-context.service.js';
 import { MAX_TEXTURE_BYTES, TextureService } from './texture.service.js';
-
 /**
  * Skin/cape distribution and upload endpoints.
  *
@@ -54,7 +53,6 @@ export class MinecraftProfileController {
     private readonly players: PlayerContextService,
     private readonly textures: TextureService,
   ) {}
-
   @Get('skins')
   @ApiBearerAuth('launcher-token')
   @ApiCookieAuth('better-auth.session_token')
@@ -64,11 +62,13 @@ export class MinecraftProfileController {
   })
   @ApiOkResponse({ type: MinecraftProfileResponseDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
-  async getSkins(@Req() request: Request): Promise<MinecraftProfileResponse> {
+  async getSkins(
+    @Req()
+    request: Request,
+  ): Promise<MinecraftProfileResponse> {
     const actor = await this.players.requirePlayer(request);
-    return this.textures.getTextures(actor.player);
+    return await this.textures.getTextures(actor.player);
   }
-
   @Post('skins')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_TEXTURE_BYTES, files: 1 } }))
@@ -95,14 +95,16 @@ export class MinecraftProfileController {
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async uploadSkin(
-    @UploadedFile() file: Express.Multer.File | undefined,
-    @Body() body: SkinUploadMetadataDto,
-    @Req() request: Request,
+    @UploadedFile()
+    file: Express.Multer.File | undefined,
+    @Body()
+    body: SkinUploadMetadataDto,
+    @Req()
+    request: Request,
   ): Promise<TextureUploadResponse> {
     const actor = await this.players.requirePlayer(request);
-    return this.textures.upload(actor.player, 'skin', file, body.variant);
+    return await this.textures.upload(actor.player, 'skin', file, body.variant);
   }
-
   @Get('capes')
   @ApiBearerAuth('launcher-token')
   @ApiCookieAuth('better-auth.session_token')
@@ -112,11 +114,13 @@ export class MinecraftProfileController {
   })
   @ApiOkResponse({ type: MinecraftProfileResponseDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
-  async getCapes(@Req() request: Request): Promise<MinecraftProfileResponse> {
+  async getCapes(
+    @Req()
+    request: Request,
+  ): Promise<MinecraftProfileResponse> {
     const actor = await this.players.requirePlayer(request);
-    return this.textures.getTextures(actor.player);
+    return await this.textures.getTextures(actor.player);
   }
-
   @Post('capes')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_TEXTURE_BYTES, files: 1 } }))
@@ -139,13 +143,14 @@ export class MinecraftProfileController {
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async uploadCape(
-    @UploadedFile() file: Express.Multer.File | undefined,
-    @Req() request: Request,
+    @UploadedFile()
+    file: Express.Multer.File | undefined,
+    @Req()
+    request: Request,
   ): Promise<TextureUploadResponse> {
     const actor = await this.players.requirePlayer(request);
-    return this.textures.upload(actor.player, 'cape', file, undefined);
+    return await this.textures.upload(actor.player, 'cape', file, undefined);
   }
-
   @Get('textures/:id')
   @ApiProduces('image/png')
   @ApiOperation({
@@ -153,16 +158,20 @@ export class MinecraftProfileController {
     description: '由签名 URL 直接访问，校验 expires + sig；无需登录，签名即授权。',
   })
   @ApiParam({ name: 'id', example: 1 })
-  @ApiQuery({ name: 'expires', required: true, example: 1_800_000_000 })
+  @ApiQuery({ name: 'expires', required: true, example: 1800000000 })
   @ApiQuery({ name: 'sig', required: true })
   @ApiResponse({ status: 200, description: 'PNG 图像', content: { 'image/png': {} } })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   @ApiResponse({ status: 404, type: ProtocolErrorDto })
   getTexture(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('expires') expires: string | undefined,
-    @Query('sig') signature: string | undefined,
-    @Res() response: Response,
+    @Param('id', ParseIntPipe)
+    id: number,
+    @Query('expires')
+    expires: string | undefined,
+    @Query('sig')
+    signature: string | undefined,
+    @Res()
+    response: Response,
   ): void {
     const data = this.textures.readSignedTexture(id, expires, signature);
     response.setHeader('Content-Type', 'image/png');

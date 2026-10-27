@@ -28,7 +28,9 @@ export class AccountAccessService {
     if (!session) {
       return null;
     }
-    const row = this.db.db.select().from(userTable).where(eq(userTable.id, session.user.id)).get();
+    const row = (
+      await this.db.db.select().from(userTable).where(eq(userTable.id, session.user.id))
+    )[0];
     return row ? { ...row, role: normalizeUserRole(row.role) } : null;
   }
 

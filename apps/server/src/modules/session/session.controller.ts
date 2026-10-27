@@ -14,7 +14,6 @@ import { ProtocolErrorDto } from '../../common/dto/protocol-error.dto.js';
 import { GameProfileDto } from '../profiles/dto/game-profile.dto.js';
 import { HasJoinedQueryDto, JoinServerRequestDto } from './dto/session.dto.js';
 import { SessionService } from './session.service.js';
-
 /**
  * Minecraft session service used by game servers.
  *
@@ -28,7 +27,6 @@ import { SessionService } from './session.service.js';
 @Controller('session')
 export class SessionController {
   constructor(private readonly sessions: SessionService) {}
-
   @Post('joinServer')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -41,10 +39,14 @@ export class SessionController {
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  joinServer(@Body() body: JoinServerRequestDto, @Req() request: Request): void {
-    this.sessions.joinServer(body, { ip: request.ip });
+  async joinServer(
+    @Body()
+    body: JoinServerRequestDto,
+    @Req()
+    request: Request,
+  ): Promise<void> {
+    await this.sessions.joinServer(body, { ip: request.ip });
   }
-
   @Post('hasJoined')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -57,12 +59,13 @@ export class SessionController {
   @ApiNoContentResponse({ description: '无有效会话或玩家不存在' })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async hasJoinedByPost(
-    @Body() query: HasJoinedQueryDto,
-    @Res({ passthrough: true }) response: Response,
+    @Body()
+    query: HasJoinedQueryDto,
+    @Res({ passthrough: true })
+    response: Response,
   ): Promise<GameProfile | undefined> {
     return this.respond(query, response);
   }
-
   @Get('hasJoined')
   @ApiOperation({
     summary: '查询某玩家最近会话（GET 兼容变体）',
@@ -72,14 +75,18 @@ export class SessionController {
   @ApiNoContentResponse({ description: '无有效会话或玩家不存在' })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async hasJoinedByGet(
-    @Query() query: HasJoinedQueryDto,
-    @Res({ passthrough: true }) response: Response,
+    @Query()
+    query: HasJoinedQueryDto,
+    @Res({ passthrough: true })
+    response: Response,
   ): Promise<GameProfile | undefined> {
     return this.respond(query, response);
   }
-
-  private respond(query: HasJoinedQueryDto, response: Response): GameProfile | undefined {
-    const profile = this.sessions.hasJoined(query);
+  private async respond(
+    query: HasJoinedQueryDto,
+    response: Response,
+  ): Promise<GameProfile | undefined> {
+    const profile = await this.sessions.hasJoined(query);
     if (profile === null) {
       response.status(HttpStatus.NO_CONTENT);
       return undefined;

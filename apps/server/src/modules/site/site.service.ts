@@ -31,25 +31,20 @@ import { DbService } from '../../db/db.service.js';
 import { moderationLog, siteSetting, user as userTable } from '../../db/schema/index.js';
 import { ProgressService } from '../growth/progress.service.js';
 import { NotificationsService } from '../forum/notifications.service.js';
-
 const ROLE_LABELS: Record<UserRole, string> = {
   user: '注册用户',
   reviewer: '审核员',
   admin: '管理员',
   superadmin: '超级管理员',
 };
-
 export const MAX_SITE_ICON_BYTES = 1024 * 1024;
-
 const ICON_CONTENT_TYPES: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   webp: 'image/webp',
   gif: 'image/gif',
 };
-
 const ICON_FILENAME_PATTERN = /^[a-f0-9]{64}\.(png|jpg|webp|gif)$/;
-
 const DISPLAY_DEFAULTS = {
   siteName: 'MCSerAuth 社区',
   tagline: 'Minecraft 服务器社区',
@@ -60,7 +55,6 @@ const DISPLAY_DEFAULTS = {
   iconUrl: null,
   customCss: null,
 } satisfies SiteDisplaySettings;
-
 /** Public site configuration plus superadmin/console role management. */
 @Injectable()
 export class SiteService {
@@ -70,9 +64,8 @@ export class SiteService {
     private readonly notifications: NotificationsService,
     private readonly progress: ProgressService,
   ) {}
-
-  getDisplaySettings(): SiteDisplaySettings {
-    const values = this.readValues();
+  async getDisplaySettings(): Promise<SiteDisplaySettings> {
+    const values = await this.readValues();
     return {
       siteName: this.stringValue(values, 'siteName', DISPLAY_DEFAULTS.siteName),
       tagline: this.stringValue(values, 'tagline', DISPLAY_DEFAULTS.tagline),
@@ -84,26 +77,23 @@ export class SiteService {
       customCss: this.nullableStringValue(values, 'customCss'),
     };
   }
-
   /** Editable landing-page content with defaults for a fresh deployment. */
-  getHomeContent(): HomeContent {
-    const stored = this.readValues().get('homeContent');
+  async getHomeContent(): Promise<HomeContent> {
+    const stored = (await this.readValues()).get('homeContent');
     const parsed = homeContentSchema.safeParse(stored);
-    return parsed.success ? parsed.data : this.defaultHomeContent();
+    return parsed.success ? parsed.data : await this.defaultHomeContent();
   }
-
   /** Public landing page payload: managed content plus active banners. */
-  getHome(): PublicHomeResponse {
+  async getHome(): Promise<PublicHomeResponse> {
     return {
-      content: this.getHomeContent(),
-      banners: this.progress.listActiveBanners(),
+      content: await this.getHomeContent(),
+      banners: await this.progress.listActiveBanners(),
     };
   }
-
-  getSettings(): SiteSettings {
-    const values = this.readValues();
+  async getSettings(): Promise<SiteSettings> {
+    const values = await this.readValues();
     return {
-      ...this.getDisplaySettings(),
+      ...(await this.getDisplaySettings()),
       mailProvider: this.mailProviderValue(values),
       mailFrom: this.stringValue(values, 'mailFrom', this.config.mailFrom),
       smtpHost: this.nullableStringValueOrFallback(
@@ -122,17 +112,16 @@ export class SiteService {
         (this.config.smtpPass !== undefined && this.config.smtpPass !== ''),
     };
   }
-
   /** Decrypted mail credentials for future mail delivery. */
-  getMailConfig(): {
+  async getMailConfig(): Promise<{
     provider: SiteSettings['mailProvider'];
     from: string;
     host: string | null;
     port: number;
     user: string | null;
     pass: string | null;
-  } {
-    const values = this.readValues();
+  }> {
+    const values = await this.readValues();
     const storedPass = this.stringValue(values, 'smtpPass', '');
     return {
       provider: this.mailProviderValue(values),
@@ -143,10 +132,11 @@ export class SiteService {
       pass: storedPass === '' ? (this.config.smtpPass ?? null) : this.decryptSecret(storedPass),
     };
   }
-
-  updateSettings(input: UpdateSiteSettingsRequest, actorId: string | null): SiteSettings {
+  async updateSettings(
+    input: UpdateSiteSettingsRequest,
+    actorId: string | null,
+  ): Promise<SiteSettings> {
     const changes = new Map<string, string>();
-
     if (input.siteName !== undefined) {
       changes.set('siteName', this.validateText(input.siteName, '站点名称', 40));
     }
@@ -189,7 +179,7 @@ export class SiteService {
       changes.set('smtpHost', this.encodeNullableText(input.smtpHost, 'SMTP 主机', 255));
     }
     if (input.smtpPort !== undefined) {
-      if (!Number.isInteger(input.smtpPort) || input.smtpPort < 1 || input.smtpPort > 65_535) {
+      if (!Number.isInteger(input.smtpPort) || input.smtpPort < 1 || input.smtpPort > 65535) {
         throw new BadRequestException('SMTP 端口必须是 1–65535 的整数');
       }
       changes.set('smtpPort', JSON.stringify(input.smtpPort));
@@ -207,16 +197,12 @@ export class SiteService {
         changes.set('smtpPass', JSON.stringify(this.encryptSecret(input.smtpPass)));
       }
     }
-
     if (changes.size === 0) {
       throw new BadRequestException('没有需要更新的配置');
     }
-
-    this.persist(changes, actorId);
-
-    return this.getSettings();
+    await this.persist(changes, actorId);
+    return await this.getSettings();
   }
-
   /**
    * Replaces the site icon. Files are content-addressed, so the public URL —
    * and therefore the browser favicon — changes as soon as the picture does.
@@ -232,10 +218,9 @@ export class SiteService {
     if (buffer.length > MAX_SITE_ICON_BYTES) {
       throw new BadRequestException(`图标不得超过 ${MAX_SITE_ICON_BYTES / 1024} KiB`);
     }
-
     let format: string | undefined;
     try {
-      format = (await sharp(buffer, { failOn: 'error', limitInputPixels: 4_000_000 }).metadata())
+      format = (await sharp(buffer, { failOn: 'error', limitInputPixels: 4000000 }).metadata())
         .format;
     } catch {
       throw new BadRequestException('无法解析图标文件');
@@ -243,23 +228,20 @@ export class SiteService {
     if (format !== 'png' && format !== 'jpeg' && format !== 'webp' && format !== 'gif') {
       throw new BadRequestException('仅支持 PNG / JPEG / WebP / GIF 图标');
     }
-
-    const filename = `${createHash('sha256').update(buffer).digest('hex')}.${
-      format === 'jpeg' ? 'jpg' : format
-    }`;
+    const filename = `${createHash('sha256').update(buffer).digest('hex')}.${format === 'jpeg' ? 'jpg' : format}`;
     this.writeIconFile(filename, buffer);
-    this.persist(new Map([['siteIcon', JSON.stringify(filename)]]), actorId);
-
-    return this.getDisplaySettings();
+    await this.persist(new Map([['siteIcon', JSON.stringify(filename)]]), actorId);
+    return await this.getDisplaySettings();
   }
-
-  clearIcon(actorId: string | null): SiteDisplaySettings {
-    this.persist(new Map([['siteIcon', JSON.stringify(null)]]), actorId);
-    return this.getDisplaySettings();
+  async clearIcon(actorId: string | null): Promise<SiteDisplaySettings> {
+    await this.persist(new Map([['siteIcon', JSON.stringify(null)]]), actorId);
+    return await this.getDisplaySettings();
   }
-
   /** Icon bytes for the public `GET /site/icon/:filename` route. */
-  readIcon(filename: string): { data: Buffer; contentType: string } {
+  readIcon(filename: string): {
+    data: Buffer;
+    contentType: string;
+  } {
     if (!ICON_FILENAME_PATTERN.test(filename)) {
       throw new NotFoundException('图标不存在');
     }
@@ -273,30 +255,28 @@ export class SiteService {
       contentType: ICON_CONTENT_TYPES[extension] ?? 'application/octet-stream',
     };
   }
-
-  private persist(changes: Map<string, string>, actorId: string | null): void {
-    this.db.db.transaction((tx) => {
+  private async persist(changes: Map<string, string>, actorId: string | null): Promise<void> {
+    await this.db.transaction(async (tx) => {
       for (const [key, value] of changes) {
-        tx.insert(siteSetting)
-          .values({ key, value, updatedBy: actorId })
-          .onConflictDoUpdate({
+        await this.db.upsert(
+          siteSetting,
+          { key, value, updatedBy: actorId },
+          {
             target: siteSetting.key,
             set: { value, updatedAt: new Date(), updatedBy: actorId },
-          })
-          .run();
+          },
+          tx,
+        );
       }
-      tx.insert(moderationLog)
-        .values({
-          actorId,
-          action: 'update_site',
-          targetType: 'site',
-          targetId: 'settings',
-          reason: `updated: ${[...changes.keys()].join(', ')}`,
-        })
-        .run();
+      await tx.insert(moderationLog).values({
+        actorId,
+        action: 'update_site',
+        targetType: 'site',
+        targetId: 'settings',
+        reason: `updated: ${[...changes.keys()].join(', ')}`,
+      });
     });
   }
-
   private writeIconFile(filename: string, buffer: Buffer): void {
     const absolutePath = path.resolve(this.config.uploadDir, 'site', filename);
     if (fs.existsSync(absolutePath)) {
@@ -305,36 +285,35 @@ export class SiteService {
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
     fs.writeFileSync(absolutePath, buffer, { flag: 'wx' });
   }
-
   /** User search for the root console (promoting a regular account). */
-  searchUsers(search: string | undefined, limit = 20): ConsoleStaffMember[] {
+  async searchUsers(search: string | undefined, limit = 20): Promise<ConsoleStaffMember[]> {
     const term = search?.trim() ?? '';
     const condition =
       term === ''
         ? undefined
         : or(like(userTable.name, `%${term}%`), like(userTable.email, `%${term}%`));
-    return this.db.db
-      .select()
-      .from(userTable)
-      .where(condition)
-      .orderBy(desc(userTable.createdAt))
-      .limit(Math.min(50, Math.max(1, limit)))
-      .all()
-      .map((row) => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: normalizeUserRole(row.role),
-        createdAt: row.createdAt.toISOString(),
-      }));
+    return (
+      await this.db.db
+        .select()
+        .from(userTable)
+        .where(condition)
+        .orderBy(desc(userTable.createdAt))
+        .limit(Math.min(50, Math.max(1, limit)))
+    ).map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: normalizeUserRole(row.role),
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
-
-  listStaff(): ConsoleStaffMember[] {
-    return this.db.db
-      .select()
-      .from(userTable)
-      .where(inArray(userTable.role, [...STAFF_ROLES]))
-      .all()
+  async listStaff(): Promise<ConsoleStaffMember[]> {
+    return (
+      await this.db.db
+        .select()
+        .from(userTable)
+        .where(inArray(userTable.role, [...STAFF_ROLES]))
+    )
       .map((row) => ({
         id: row.id,
         name: row.name,
@@ -347,19 +326,22 @@ export class SiteService {
         return byRank !== 0 ? byRank : left.createdAt.localeCompare(right.createdAt);
       });
   }
-
   /**
    * Changes a staff role.
    *
    * Web superadmins may assign reviewer/admin only; the root console may assign
    * any role including superadmin, but can never remove the last superadmin.
    */
-  setUserRole(
+  async setUserRole(
     targetId: string,
     role: UserRole,
-    actor: { actorId: string | null; actorRole: UserRole | null; source: 'web' | 'console' },
-  ): ConsoleStaffMember {
-    const target = this.db.db.select().from(userTable).where(eq(userTable.id, targetId)).get();
+    actor: {
+      actorId: string | null;
+      actorRole: UserRole | null;
+      source: 'web' | 'console';
+    },
+  ): Promise<ConsoleStaffMember> {
+    const target = (await this.db.db.select().from(userTable).where(eq(userTable.id, targetId)))[0];
     if (!target) {
       throw new NotFoundException('用户不存在');
     }
@@ -367,7 +349,6 @@ export class SiteService {
     if (currentRole === role) {
       throw new BadRequestException('该用户已经是此角色');
     }
-
     if (actor.source === 'web') {
       if (actor.actorRole === null || !roleAtLeast(actor.actorRole, 'superadmin')) {
         throw new ForbiddenException('仅超级管理员可以调整角色');
@@ -379,31 +360,27 @@ export class SiteService {
         throw new ForbiddenException('超级管理员只能在超级后台中调整');
       }
     } else if (currentRole === 'superadmin' && role !== 'superadmin') {
-      const superadmins = this.db.db
-        .select({ value: count() })
-        .from(userTable)
-        .where(eq(userTable.role, 'superadmin'))
-        .get();
+      const superadmins = (
+        await this.db.db
+          .select({ value: count() })
+          .from(userTable)
+          .where(eq(userTable.role, 'superadmin'))
+      )[0];
       if ((superadmins?.value ?? 0) <= 1) {
         throw new ConflictException('必须至少保留一名超级管理员');
       }
     }
-
-    this.db.db.transaction((tx) => {
-      tx.update(userTable).set({ role }).where(eq(userTable.id, targetId)).run();
-      tx.insert(moderationLog)
-        .values({
-          actorId: actor.actorId,
-          action: 'assign_role',
-          targetType: 'user',
-          targetId,
-          reason: `${currentRole} -> ${role} (${actor.source})`,
-        })
-        .run();
+    await this.db.transaction(async (tx) => {
+      await tx.update(userTable).set({ role }).where(eq(userTable.id, targetId));
+      await tx.insert(moderationLog).values({
+        actorId: actor.actorId,
+        action: 'assign_role',
+        targetType: 'user',
+        targetId,
+        reason: `${currentRole} -> ${role} (${actor.source})`,
+      });
     });
-
     this.notifications.notifyModeration(targetId, `你的站点角色已调整为${ROLE_LABELS[role]}`);
-
     return {
       id: target.id,
       name: target.name,
@@ -412,9 +389,8 @@ export class SiteService {
       createdAt: target.createdAt.toISOString(),
     };
   }
-
-  private defaultHomeContent(): HomeContent {
-    const display = this.getDisplaySettings();
+  private async defaultHomeContent(): Promise<HomeContent> {
+    const display = await this.getDisplaySettings();
     return {
       heroEyebrow: display.tagline,
       heroTitle: display.siteName,
@@ -443,9 +419,8 @@ export class SiteService {
       ],
     };
   }
-
-  private readValues(): Map<string, unknown> {
-    const rows = this.db.db.select().from(siteSetting).all();
+  private async readValues(): Promise<Map<string, unknown>> {
+    const rows = await this.db.db.select().from(siteSetting);
     const values = new Map<string, unknown>();
     for (const row of rows) {
       try {
@@ -456,17 +431,14 @@ export class SiteService {
     }
     return values;
   }
-
   private stringValue(values: Map<string, unknown>, key: string, fallback: string): string {
     const value = values.get(key);
     return typeof value === 'string' && value.trim() !== '' ? value : fallback;
   }
-
   private nullableStringValue(values: Map<string, unknown>, key: string): string | null {
     const value = values.get(key);
     return typeof value === 'string' && value.trim() !== '' ? value : null;
   }
-
   private iconUrl(values: Map<string, unknown>): string | null {
     const filename = this.nullableStringValue(values, 'siteIcon');
     if (filename === null || !ICON_FILENAME_PATTERN.test(filename)) {
@@ -474,7 +446,6 @@ export class SiteService {
     }
     return `${this.config.authUrl.replace(/\/+$/, '')}/api/site/icon/${filename}`;
   }
-
   private nullableStringValueOrFallback(
     values: Map<string, unknown>,
     key: string,
@@ -482,12 +453,10 @@ export class SiteService {
   ): string | null {
     return values.has(key) ? this.nullableStringValue(values, key) : fallback;
   }
-
   private numberValue(values: Map<string, unknown>, key: string, fallback: number): number {
     const value = values.get(key);
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   }
-
   private mailProviderValue(values: Map<string, unknown>): SiteSettings['mailProvider'] {
     const value = values.get('mailProvider');
     if (value === 'smtp' || value === 'resend' || value === 'console') {
@@ -495,7 +464,6 @@ export class SiteService {
     }
     return this.config.mailProvider;
   }
-
   private validateText(value: string, label: string, maxLength: number): string {
     const trimmed = value.trim();
     if (trimmed === '') {
@@ -506,7 +474,6 @@ export class SiteService {
     }
     return JSON.stringify(trimmed);
   }
-
   private encodeNullableText(value: string | null, label: string, maxLength: number): string {
     const trimmed = value?.trim() ?? '';
     if (trimmed.length > maxLength) {
@@ -514,7 +481,6 @@ export class SiteService {
     }
     return JSON.stringify(trimmed === '' ? null : trimmed);
   }
-
   private encodeNullableEmail(value: string | null, label: string): string {
     const trimmed = value?.trim() ?? '';
     if (trimmed === '') {
@@ -522,7 +488,6 @@ export class SiteService {
     }
     return JSON.stringify(this.validateEmail(trimmed, label));
   }
-
   /**
    * Normalises the superadmin stylesheet. The web layout inlines it inside a
    * `<style>` element, so an end tag there would escape into the document.
@@ -540,7 +505,6 @@ export class SiteService {
     }
     return trimmed;
   }
-
   private validateEmail(value: string, label: string): string {
     const trimmed = value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || trimmed.length > 254) {
@@ -548,11 +512,9 @@ export class SiteService {
     }
     return trimmed;
   }
-
   private encryptSecret(plain: string): string {
     return encryptSiteSecret(plain, this.config.betterAuthSecret);
   }
-
   private decryptSecret(stored: string): string | null {
     return decryptSiteSecret(stored, this.config.betterAuthSecret);
   }

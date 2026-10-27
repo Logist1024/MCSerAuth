@@ -20,34 +20,31 @@ export class ForumCategoryService implements OnModuleInit {
 
   constructor(private readonly db: DbService) {}
 
-  onModuleInit(): void {
-    const existing = this.db.db.select({ value: count() }).from(categoryTable).get();
+  async onModuleInit(): Promise<void> {
+    const existing = (await this.db.db.select({ value: count() }).from(categoryTable))[0];
     if ((existing?.value ?? 0) > 0) {
       return;
     }
-    this.db.db.insert(categoryTable).values(DEFAULT_CATEGORIES).run();
+    await this.db.db.insert(categoryTable).values(DEFAULT_CATEGORIES);
     this.logger.log(`Seeded ${DEFAULT_CATEGORIES.length} default forum categories`);
   }
 
-  listCategories(): ForumCategory[] {
-    const categories = this.db.db
+  async listCategories(): Promise<ForumCategory[]> {
+    const categories = await this.db.db
       .select()
       .from(categoryTable)
-      .orderBy(categoryTable.sortOrder, categoryTable.id)
-      .all();
+      .orderBy(categoryTable.sortOrder, categoryTable.id);
 
-    const counts = this.db.db
+    const counts = await this.db.db
       .select({ categoryId: postTable.categoryId, value: count() })
       .from(postTable)
       .where(eq(postTable.status, 'published'))
-      .groupBy(postTable.categoryId)
-      .all();
-    const activity = this.db.db
+      .groupBy(postTable.categoryId);
+    const activity = await this.db.db
       .select({ categoryId: postTable.categoryId, value: max(postTable.lastActivityAt) })
       .from(postTable)
       .where(eq(postTable.status, 'published'))
-      .groupBy(postTable.categoryId)
-      .all();
+      .groupBy(postTable.categoryId);
 
     const countMap = new Map(counts.map((row) => [row.categoryId, row.value]));
     const activityMap = new Map(activity.map((row) => [row.categoryId, row.value]));
@@ -96,19 +93,20 @@ export class ForumCategoryService implements OnModuleInit {
     return roots;
   }
 
-  getCategoryBySlug(slug: string): CategoryRow {
-    const row = this.db.db.select().from(categoryTable).where(eq(categoryTable.slug, slug)).get();
+  async getCategoryBySlug(slug: string): Promise<CategoryRow> {
+    const row = (
+      await this.db.db.select().from(categoryTable).where(eq(categoryTable.slug, slug))
+    )[0];
     if (!row) {
       throw new NotFoundException('版块不存在');
     }
     return row;
   }
 
-  descendantCategoryIds(categoryId: number): number[] {
-    const rows = this.db.db
+  async descendantCategoryIds(categoryId: number): Promise<number[]> {
+    const rows = await this.db.db
       .select({ id: categoryTable.id, parentId: categoryTable.parentId })
-      .from(categoryTable)
-      .all();
+      .from(categoryTable);
     const result = new Set<number>([categoryId]);
     let changed = true;
     while (changed) {

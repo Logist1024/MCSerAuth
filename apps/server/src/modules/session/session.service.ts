@@ -16,11 +16,9 @@ import { DbService } from '../../db/db.service.js';
 import { gameSession, player as playerTable, serverEntry } from '../../db/schema/index.js';
 import { OAuthService } from '../auth/oauth.service.js';
 import { TextureService } from '../profiles/texture.service.js';
-
 export interface SessionRequestMeta {
   ip?: string;
 }
-
 export interface SessionOptions {
   /**
    * Native `/api/session/*` callers must use an admin-registered `serverId`;
@@ -29,7 +27,6 @@ export interface SessionOptions {
    */
   enforceServerWhitelist?: boolean;
 }
-
 function normalizeIp(value: string | null | undefined): string | null {
   if (value === null || value === undefined) {
     return null;
@@ -38,7 +35,6 @@ function normalizeIp(value: string | null | undefined): string | null {
   const withoutMappedPrefix = trimmed.startsWith('::ffff:') ? trimmed.slice(7) : trimmed;
   return withoutMappedPrefix.length > 0 ? withoutMappedPrefix : null;
 }
-
 /**
  * Minecraft session service (Yggdrasil joinServer/hasJoined semantics).
  *
@@ -55,21 +51,18 @@ export class SessionService {
     private readonly oauth: OAuthService,
     private readonly textures: TextureService,
   ) {}
-
-  joinServer(
+  async joinServer(
     input: JoinServerRequest,
     meta: SessionRequestMeta,
     options: SessionOptions = {},
-  ): void {
+  ): Promise<void> {
     if (options.enforceServerWhitelist !== false) {
-      this.assertServerAllowed(input.serverId);
+      await this.assertServerAllowed(input.serverId);
     }
-
-    const profile = this.oauth.resolveAccessToken(input.accessToken);
+    const profile = await this.oauth.resolveAccessToken(input.accessToken);
     if (!profile?.player) {
       throw new UnauthorizedException('访问令牌无效或已过期');
     }
-
     const selectedProfile = normalizeProtocolUuid(input.selectedProfile);
     if (selectedProfile === null) {
       throw new BadRequestException('selectedProfile 必须是 32 位十六进制 UUID');
@@ -80,37 +73,33 @@ export class SessionService {
     if (profile.player.banned) {
       throw new ForbiddenException('该玩家已被封禁');
     }
-
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.config.sessionJoinTtlSeconds * 1000);
-
-    this.db.db
-      .insert(gameSession)
-      .values({
+    await this.db.upsert(
+      gameSession,
+      {
         playerUuid: profile.player.uuid,
         serverId: input.serverId,
         ip: normalizeIp(meta.ip),
         createdAt: now,
         expiresAt,
-      })
-      .onConflictDoUpdate({
+      },
+      {
         target: [gameSession.playerUuid, gameSession.serverId],
         set: { ip: normalizeIp(meta.ip), createdAt: now, expiresAt },
-      })
-      .run();
+      },
+    );
   }
-
-  hasJoined(input: HasJoinedQuery, options: SessionOptions = {}): GameProfile | null {
+  async hasJoined(
+    input: HasJoinedQuery,
+    options: SessionOptions = {},
+  ): Promise<GameProfile | null> {
     if (options.enforceServerWhitelist !== false) {
-      this.assertServerAllowed(input.serverId);
+      await this.assertServerAllowed(input.serverId);
     }
-
-    const player = this.db.db
-      .select()
-      .from(playerTable)
-      .where(eq(playerTable.nickname, input.username))
-      .get();
-
+    const player = (
+      await this.db.db.select().from(playerTable).where(eq(playerTable.nickname, input.username))
+    )[0];
     // Unknown username and "no session" intentionally share the 204 result so
     // the endpoint cannot be used to enumerate accounts.
     if (!player) {
@@ -119,39 +108,32 @@ export class SessionService {
     if (player.banned) {
       throw new ForbiddenException('该玩家已被封禁');
     }
-
-    const session = this.db.db
-      .select()
-      .from(gameSession)
-      .where(
-        and(
-          eq(gameSession.playerUuid, player.uuid),
-          eq(gameSession.serverId, input.serverId),
-          gt(gameSession.expiresAt, new Date()),
-        ),
-      )
-      .get();
-
+    const session = (
+      await this.db.db
+        .select()
+        .from(gameSession)
+        .where(
+          and(
+            eq(gameSession.playerUuid, player.uuid),
+            eq(gameSession.serverId, input.serverId),
+            gt(gameSession.expiresAt, new Date()),
+          ),
+        )
+    )[0];
     if (!session) {
       return null;
     }
-
     const expectedIp = normalizeIp(session.ip);
     const actualIp = normalizeIp(input.ip);
     if (expectedIp !== null && actualIp !== null && expectedIp !== actualIp) {
       return null;
     }
-
-    return this.textures.buildGameProfile(player);
+    return await this.textures.buildGameProfile(player);
   }
-
-  private assertServerAllowed(serverId: string): void {
-    const entry = this.db.db
-      .select()
-      .from(serverEntry)
-      .where(eq(serverEntry.serverId, serverId))
-      .get();
-
+  private async assertServerAllowed(serverId: string): Promise<void> {
+    const entry = (
+      await this.db.db.select().from(serverEntry).where(eq(serverEntry.serverId, serverId))
+    )[0];
     if (!entry || !entry.enabled) {
       throw new ForbiddenException('服务器未在白名单内或已停用');
     }

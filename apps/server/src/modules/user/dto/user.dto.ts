@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { ChangeEmailRequest, RenamePlayerRequest, UpdateProfileRequest } from '@mcserauth/shared';
+import type {
+  ChangeEmailRequest,
+  RenamePlayerRequest,
+  UpdateProfileRequest,
+} from '@mcserauth/shared';
 import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
 
 export class UpdateProfileDto implements UpdateProfileRequest {

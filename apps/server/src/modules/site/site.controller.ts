@@ -20,15 +20,15 @@ export class SiteController {
   @Get()
   @ApiOperation({ summary: '公开站点展示信息（站名、公告、页脚、图标与自定义 CSS）' })
   @ApiOkResponse({ description: '统一封装：data 为展示配置' })
-  get(): SiteDisplaySettings {
-    return this.site.getDisplaySettings();
+  async get(): Promise<SiteDisplaySettings> {
+    return await this.site.getDisplaySettings();
   }
 
   @Get('home')
   @ApiOperation({ summary: '公开首页内容与正在展示的 Banner' })
   @ApiOkResponse({ description: '统一封装：data 为首页内容与 Banner' })
-  home(): PublicHomeResponse {
-    return this.site.getHome();
+  async home(): Promise<PublicHomeResponse> {
+    return await this.site.getHome();
   }
 
   @Get('icon/:filename')

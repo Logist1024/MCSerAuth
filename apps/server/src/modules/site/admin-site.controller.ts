@@ -19,7 +19,6 @@ import type { Request } from 'express';
 import { AdminAccessService } from '../admin/admin-access.service.js';
 import { AdminSiteUpdateDto, UpdateUserRoleDto } from './dto/site.dto.js';
 import { MAX_SITE_ICON_BYTES, SiteService } from './site.service.js';
-
 /** Site-wide display settings and staff roles (site.manage / superadmin). */
 @ApiTags('Admin')
 @ApiCookieAuth('better-auth.session_token')
@@ -29,14 +28,15 @@ export class AdminSiteController {
     private readonly access: AdminAccessService,
     private readonly site: SiteService,
   ) {}
-
   @Get()
   @ApiOperation({ summary: '读取站点展示配置（site.manage）' })
-  async get(@Req() request: Request): Promise<SiteDisplaySettings> {
+  async get(
+    @Req()
+    request: Request,
+  ): Promise<SiteDisplaySettings> {
     await this.access.requireCapability(request, 'site.manage');
-    return this.site.getDisplaySettings();
+    return await this.site.getDisplaySettings();
   }
-
   @Patch()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -44,14 +44,15 @@ export class AdminSiteController {
   })
   @ApiBody({ type: AdminSiteUpdateDto })
   async update(
-    @Req() request: Request,
-    @Body() body: AdminSiteUpdateDto,
+    @Req()
+    request: Request,
+    @Body()
+    body: AdminSiteUpdateDto,
   ): Promise<SiteDisplaySettings> {
     const actor = await this.access.requireCapability(request, 'site.manage');
-    this.site.updateSettings(body, actor.userId);
-    return this.site.getDisplaySettings();
+    await this.site.updateSettings(body, actor.userId);
+    return await this.site.getDisplaySettings();
   }
-
   @Post('icon')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SITE_ICON_BYTES, files: 1 } }))
@@ -65,28 +66,33 @@ export class AdminSiteController {
     },
   })
   async uploadIcon(
-    @Req() request: Request,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req()
+    request: Request,
+    @UploadedFile()
+    file: Express.Multer.File | undefined,
   ): Promise<SiteDisplaySettings> {
     const actor = await this.access.requireCapability(request, 'site.manage');
-    return this.site.setIcon(file, actor.userId);
+    return await this.site.setIcon(file, actor.userId);
   }
-
   @Delete('icon')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '移除站点图标，恢复内置标志（site.manage）' })
-  async removeIcon(@Req() request: Request): Promise<SiteDisplaySettings> {
+  async removeIcon(
+    @Req()
+    request: Request,
+  ): Promise<SiteDisplaySettings> {
     const actor = await this.access.requireCapability(request, 'site.manage');
-    return this.site.clearIcon(actor.userId);
+    return await this.site.clearIcon(actor.userId);
   }
-
   @Get('staff')
   @ApiOperation({ summary: '审核员/管理员/超级管理员列表（superadmin）' })
-  async staff(@Req() request: Request): Promise<ConsoleStaffMember[]> {
+  async staff(
+    @Req()
+    request: Request,
+  ): Promise<ConsoleStaffMember[]> {
     await this.access.requireAtLeast(request, 'superadmin');
-    return this.site.listStaff();
+    return await this.site.listStaff();
   }
-
   @Patch('staff/:id/role')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -95,12 +101,15 @@ export class AdminSiteController {
   })
   @ApiBody({ type: UpdateUserRoleDto })
   async updateRole(
-    @Req() request: Request,
-    @Param('id') id: string,
-    @Body() body: UpdateUserRoleDto,
+    @Req()
+    request: Request,
+    @Param('id')
+    id: string,
+    @Body()
+    body: UpdateUserRoleDto,
   ): Promise<ConsoleStaffMember> {
     const actor = await this.access.requireAtLeast(request, 'superadmin');
-    return this.site.setUserRole(id, body.role, {
+    return await this.site.setUserRole(id, body.role, {
       actorId: actor.userId,
       actorRole: actor.role,
       source: 'web',

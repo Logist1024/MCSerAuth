@@ -21,7 +21,6 @@ import {
   YggdrasilValidateRequestDto,
 } from './dto/yggdrasil.dto.js';
 import { YggdrasilService } from './yggdrasil.service.js';
-
 /**
  * API root metadata.
  *
@@ -33,7 +32,6 @@ import { YggdrasilService } from './yggdrasil.service.js';
 @Controller()
 export class YggdrasilMetadataController {
   constructor(private readonly yggdrasil: YggdrasilService) {}
-
   @Get()
   @ApiOperation({
     summary: 'API 元数据（authlib-injector 根路径）',
@@ -45,7 +43,6 @@ export class YggdrasilMetadataController {
     return this.yggdrasil.metadata();
   }
 }
-
 /**
  * Yggdrasil password login / token lifecycle.
  *
@@ -61,10 +58,9 @@ export class YggdrasilMetadataController {
 @Controller('authserver')
 export class YggdrasilAuthController {
   constructor(private readonly yggdrasil: YggdrasilService) {}
-
   @Post('authenticate')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: '用网站邮箱 + 密码登录（authlib-injector）',
     description:
@@ -75,18 +71,19 @@ export class YggdrasilAuthController {
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async authenticate(
-    @Body() body: YggdrasilAuthenticateRequestDto,
-    @Req() request: Request,
+    @Body()
+    body: YggdrasilAuthenticateRequestDto,
+    @Req()
+    request: Request,
   ): Promise<YggdrasilAuthenticateResponseDto> {
-    return this.yggdrasil.authenticate(body, {
+    return await this.yggdrasil.authenticate(body, {
       ip: request.ip,
       userAgent: request.headers['user-agent'],
     });
   }
-
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: '轮换访问令牌（authlib-injector）',
     description: '旧 accessToken 立即失效；未知、过期、已吊销或封禁返回 403。',
@@ -94,37 +91,43 @@ export class YggdrasilAuthController {
   @ApiBody({ type: YggdrasilRefreshRequestDto })
   @ApiOkResponse({ type: YggdrasilRefreshResponseDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  refresh(
-    @Body() body: YggdrasilRefreshRequestDto,
-    @Req() request: Request,
-  ): YggdrasilRefreshResponseDto {
-    return this.yggdrasil.refresh(body, {
+  async refresh(
+    @Body()
+    body: YggdrasilRefreshRequestDto,
+    @Req()
+    request: Request,
+  ): Promise<YggdrasilRefreshResponseDto> {
+    return await this.yggdrasil.refresh(body, {
       ip: request.ip,
       userAgent: request.headers['user-agent'],
     });
   }
-
   @Post('validate')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: '校验访问令牌（authlib-injector）' })
   @ApiBody({ type: YggdrasilValidateRequestDto })
   @ApiNoContentResponse({ description: '令牌有效' })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  validate(@Body() body: YggdrasilValidateRequestDto): void {
+  validate(
+    @Body()
+    body: YggdrasilValidateRequestDto,
+  ): void {
     this.yggdrasil.validate(body.accessToken);
   }
-
   @Post('invalidate')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: '吊销访问令牌（authlib-injector）',
     description: '幂等：未知或已吊销的令牌同样返回 204；吊销后 Bearer 立即 401。',
   })
   @ApiBody({ type: YggdrasilValidateRequestDto })
   @ApiNoContentResponse({ description: '令牌已吊销（或本就不存在）' })
-  invalidate(@Body() body: YggdrasilValidateRequestDto): void {
-    this.yggdrasil.invalidate(body);
+  async invalidate(
+    @Body()
+    body: YggdrasilValidateRequestDto,
+  ): Promise<void> {
+    await this.yggdrasil.invalidate(body);
   }
 }

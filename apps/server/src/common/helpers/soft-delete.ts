@@ -1,5 +1,5 @@
 import { isNull, type SQL } from 'drizzle-orm';
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /**
  * S5 soft-delete filter: rows are not physically removed; a nullable marker
@@ -7,6 +7,6 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
  *
  * Usage: `where(activeRows(token.revokedAt))`.
  */
-export function activeRows(softDeleteColumn: AnySQLiteColumn): SQL {
+export function activeRows(softDeleteColumn: AnyPgColumn): SQL {
   return isNull(softDeleteColumn);
 }

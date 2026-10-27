@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { detectDialect, type DatabaseDialect } from '../db/dialect.js';
 import { type AppEnv, validateEnv } from './env.js';
 
 /**
@@ -71,6 +72,30 @@ export class AppConfigService {
 
   get databaseUrl(): string {
     return this.value.DATABASE_URL;
+  }
+
+  get databaseDialect(): DatabaseDialect {
+    return detectDialect(this.value.DATABASE_URL, this.value.DB_DIALECT);
+  }
+
+  get dbPoolMin(): number {
+    return this.value.DB_POOL_MIN;
+  }
+
+  get dbPoolMax(): number {
+    return this.value.DB_POOL_MAX;
+  }
+
+  get dbConnectionTimeoutMs(): number {
+    return this.value.DB_CONNECTION_TIMEOUT_MS;
+  }
+
+  get dbIdleTimeoutMs(): number {
+    return this.value.DB_IDLE_TIMEOUT_MS;
+  }
+
+  get dbSsl(): boolean {
+    return this.value.DB_SSL;
   }
 
   get uploadDir(): string {

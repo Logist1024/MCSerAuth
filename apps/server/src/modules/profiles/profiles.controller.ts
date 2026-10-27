@@ -25,7 +25,6 @@ import { ProtocolErrorDto } from '../../common/dto/protocol-error.dto.js';
 import { GameProfileDto } from './dto/game-profile.dto.js';
 import { ProfilesBatchRequestDto } from './dto/profiles.dto.js';
 import { ProfilesService } from './profiles.service.js';
-
 /**
  * Player profile lookups.
  *
@@ -38,7 +37,6 @@ import { ProfilesService } from './profiles.service.js';
 @Controller('profiles')
 export class ProfilesController {
   constructor(private readonly profiles: ProfilesService) {}
-
   @Get('minecraft/:name')
   @ApiOperation({
     summary: '按昵称查询档案',
@@ -47,18 +45,19 @@ export class ProfilesController {
   @ApiParam({ name: 'name', example: 'Notch' })
   @ApiOkResponse({ type: GameProfileDto })
   @ApiNoContentResponse({ description: '玩家不存在' })
-  getByName(
-    @Param('name') name: string,
-    @Res({ passthrough: true }) response: Response,
-  ): GameProfile | undefined {
-    const profile = this.profiles.getByName(name);
+  async getByName(
+    @Param('name')
+    name: string,
+    @Res({ passthrough: true })
+    response: Response,
+  ): Promise<GameProfile | undefined> {
+    const profile = await this.profiles.getByName(name);
     if (profile === null) {
       response.status(HttpStatus.NO_CONTENT);
       return undefined;
     }
     return profile;
   }
-
   @Post('minecraft')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -67,10 +66,12 @@ export class ProfilesController {
   })
   @ApiBody({ type: ProfilesBatchRequestDto })
   @ApiOkResponse({ type: [GameProfileDto], description: '可能为空数组' })
-  getBatch(@Body() body: ProfilesBatchRequestDto): GameProfile[] {
-    return this.profiles.getBatch(body.names);
+  async getBatch(
+    @Body()
+    body: ProfilesBatchRequestDto,
+  ): Promise<GameProfile[]> {
+    return await this.profiles.getBatch(body.names);
   }
-
   @Get(':uuid')
   @ApiOperation({
     summary: '按 UUID 查询档案',
@@ -80,16 +81,17 @@ export class ProfilesController {
   @ApiOkResponse({ type: GameProfileDto })
   @ApiNoContentResponse({ description: '玩家不存在' })
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
-  getByUuid(
-    @Param('uuid') uuid: string,
-    @Res({ passthrough: true }) response: Response,
-  ): GameProfile | undefined {
+  async getByUuid(
+    @Param('uuid')
+    uuid: string,
+    @Res({ passthrough: true })
+    response: Response,
+  ): Promise<GameProfile | undefined> {
     const normalized = normalizeProtocolUuid(uuid);
     if (normalized === null) {
       throw new BadRequestException('uuid 必须是 32 位十六进制（可带连字符）');
     }
-
-    const profile = this.profiles.getByUuid(normalized);
+    const profile = await this.profiles.getByUuid(normalized);
     if (profile === null) {
       response.status(HttpStatus.NO_CONTENT);
       return undefined;

@@ -15,26 +15,21 @@ import { AppConfigService } from '../../config/app-config.service.js';
 import { decryptSiteSecret, encryptSiteSecret } from '../../common/crypto/site-secret.js';
 import { DbService } from '../../db/db.service.js';
 import { captchaChallenge, moderationLog, siteSetting } from '../../db/schema/index.js';
-
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-
 const TURNSTILE_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const HCAPTCHA_URL = 'https://hcaptcha.com/siteverify';
-
 interface StoredCaptchaConfig {
   enabled: boolean;
   provider: CaptchaProvider;
   siteKey: string | null;
   secret: string | null;
 }
-
 export interface CaptchaTokenCheck {
   ok: boolean;
   reason?: string;
 }
-
 /**
  * Pluggable human verification.
  *
@@ -49,23 +44,20 @@ export interface CaptchaTokenCheck {
 @Injectable()
 export class CaptchaService {
   private readonly logger = new Logger(CaptchaService.name);
-
   constructor(
     private readonly db: DbService,
     private readonly config: AppConfigService,
   ) {}
-
-  publicConfig(): CaptchaPublicConfig {
-    const settings = this.readSettings();
+  async publicConfig(): Promise<CaptchaPublicConfig> {
+    const settings = await this.readSettings();
     return {
       enabled: settings.enabled,
       provider: settings.provider,
       siteKey: settings.siteKey,
     };
   }
-
-  adminSettings(): CaptchaSettings {
-    const settings = this.readSettings();
+  async adminSettings(): Promise<CaptchaSettings> {
+    const settings = await this.readSettings();
     return {
       enabled: settings.enabled,
       provider: settings.provider,
@@ -73,13 +65,14 @@ export class CaptchaService {
       secretSet: settings.secret !== null && settings.secret !== '',
     };
   }
-
-  isEnabled(): boolean {
-    return this.readSettings().enabled;
+  async isEnabled(): Promise<boolean> {
+    return (await this.readSettings()).enabled;
   }
-
-  updateSettings(actorId: string | null, input: UpdateCaptchaSettingsRequest): CaptchaSettings {
-    const current = this.readSettings();
+  async updateSettings(
+    actorId: string | null,
+    input: UpdateCaptchaSettingsRequest,
+  ): Promise<CaptchaSettings> {
+    const current = await this.readSettings();
     const provider = input.provider ?? current.provider;
     if (!(CAPTCHA_PROVIDERS as readonly string[]).includes(provider)) {
       throw new BadRequestException('人机验证提供商不受支持');
@@ -98,7 +91,6 @@ export class CaptchaService {
         throw new BadRequestException('启用外部人机验证时必须填写 Secret');
       }
     }
-
     const changes = new Map<string, string>([
       ['captchaEnabled', JSON.stringify(enabled)],
       ['captchaProvider', JSON.stringify(provider)],
@@ -112,40 +104,36 @@ export class CaptchaService {
         ),
       );
     }
-
-    this.db.db.transaction((tx) => {
+    await this.db.transaction(async (tx) => {
       for (const [key, value] of changes) {
-        tx.insert(siteSetting)
-          .values({ key, value, updatedBy: actorId })
-          .onConflictDoUpdate({
+        await this.db.upsert(
+          siteSetting,
+          { key, value, updatedBy: actorId },
+          {
             target: siteSetting.key,
             set: { value, updatedAt: new Date(), updatedBy: actorId },
-          })
-          .run();
+          },
+          tx,
+        );
       }
-      tx.insert(moderationLog)
-        .values({
-          actorId,
-          action: 'update_site',
-          targetType: 'site',
-          targetId: 'captcha',
-          reason: `enabled=${enabled} provider=${provider}`,
-        })
-        .run();
+      await tx.insert(moderationLog).values({
+        actorId,
+        action: 'update_site',
+        targetType: 'site',
+        targetId: 'captcha',
+        reason: `enabled=${enabled} provider=${provider}`,
+      });
     });
-
     return this.adminSettings();
   }
-
-  createChallenge(): CaptchaChallengeResponse {
-    const settings = this.readSettings();
+  async createChallenge(): Promise<CaptchaChallengeResponse> {
+    const settings = await this.readSettings();
     if (!settings.enabled) {
       throw new BadRequestException('人机验证未启用');
     }
     if (settings.provider !== 'builtin') {
       throw new BadRequestException('当前人机验证由第三方组件完成，无需本地挑战');
     }
-
     const left = 2 + Math.floor(Math.random() * 18);
     const right = 1 + Math.floor(Math.random() * 9);
     const plus = Math.random() > 0.35;
@@ -155,36 +143,29 @@ export class CaptchaService {
     const id = randomBytes(18).toString('hex');
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
     const answerHash = this.hashAnswer(id, String(answer));
-
-    this.db.db
+    await this.db.db
       .insert(captchaChallenge)
-      .values({ id, answerHash, provider: settings.provider, expiresAt })
-      .run();
-
+      .values({ id, answerHash, provider: settings.provider, expiresAt });
     return {
       id,
       svg: renderArithmeticSvg(plus ? `${first} + ${second}` : `${first} − ${second}`),
       expiresAt: expiresAt.toISOString(),
     };
   }
-
   async verify(input: CaptchaVerifyRequest, ip?: string): Promise<CaptchaVerifyResponse> {
-    const settings = this.readSettings();
+    const settings = await this.readSettings();
     if (!settings.enabled) {
       throw new BadRequestException('人机验证未启用');
     }
-
     if (settings.provider === 'builtin') {
       const id = input.id?.trim() ?? '';
       const answer = input.answer?.trim() ?? '';
       if (id === '' || answer === '') {
         throw new BadRequestException('请填写人机验证答案');
       }
-      const row = this.db.db
-        .select()
-        .from(captchaChallenge)
-        .where(eq(captchaChallenge.id, id))
-        .get();
+      const row = (
+        await this.db.db.select().from(captchaChallenge).where(eq(captchaChallenge.id, id))
+      )[0];
       if (!row || row.expiresAt.getTime() <= Date.now()) {
         throw new BadRequestException('验证码已过期，请刷新');
       }
@@ -195,21 +176,18 @@ export class CaptchaService {
         throw new BadRequestException('尝试次数过多，请刷新验证码');
       }
       if (!this.matches(row.answerHash, this.hashAnswer(id, answer))) {
-        this.db.db
+        await this.db.db
           .update(captchaChallenge)
           .set({ attempts: row.attempts + 1 })
-          .where(eq(captchaChallenge.id, id))
-          .run();
+          .where(eq(captchaChallenge.id, id));
         throw new BadRequestException('验证码不正确');
       }
-      this.db.db
+      await this.db.db
         .update(captchaChallenge)
         .set({ verifiedAt: new Date() })
-        .where(eq(captchaChallenge.id, id))
-        .run();
+        .where(eq(captchaChallenge.id, id));
       return this.issueToken(id);
     }
-
     const widgetToken = input.token?.trim() ?? '';
     if (widgetToken === '') {
       throw new BadRequestException('缺少人机验证令牌');
@@ -223,25 +201,21 @@ export class CaptchaService {
     }
     const id = randomBytes(18).toString('hex');
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
-    this.db.db
-      .insert(captchaChallenge)
-      .values({
-        id,
-        answerHash: '',
-        provider: settings.provider,
-        expiresAt,
-        verifiedAt: new Date(),
-      })
-      .run();
+    await this.db.db.insert(captchaChallenge).values({
+      id,
+      answerHash: '',
+      provider: settings.provider,
+      expiresAt,
+      verifiedAt: new Date(),
+    });
     return this.issueToken(id, expiresAt);
   }
-
   /**
    * Consumes an auth captcha token. Returns `{ok:true}` when verification is
    * disabled so callers stay simple.
    */
-  consumeToken(token: string | undefined): CaptchaTokenCheck {
-    if (!this.isEnabled()) {
+  async consumeToken(token: string | undefined): Promise<CaptchaTokenCheck> {
+    if (!(await this.isEnabled())) {
       return { ok: true };
     }
     if (token === undefined || token.trim() === '') {
@@ -259,7 +233,9 @@ export class CaptchaService {
     if (!this.matches(this.signToken(id, expires), signature)) {
       return { ok: false, reason: '人机验证令牌无效，请重新验证' };
     }
-    const row = this.db.db.select().from(captchaChallenge).where(eq(captchaChallenge.id, id)).get();
+    const row = (
+      await this.db.db.select().from(captchaChallenge).where(eq(captchaChallenge.id, id))
+    )[0];
     if (!row || row.verifiedAt === null) {
       return { ok: false, reason: '请先完成人机验证' };
     }
@@ -269,18 +245,15 @@ export class CaptchaService {
     if (row.expiresAt.getTime() <= Date.now()) {
       return { ok: false, reason: '人机验证已过期，请重新验证' };
     }
-    this.db.db
+    await this.db.db
       .update(captchaChallenge)
       .set({ tokenUsedAt: new Date() })
-      .where(eq(captchaChallenge.id, id))
-      .run();
+      .where(eq(captchaChallenge.id, id));
     return { ok: true };
   }
-
   // ------------------------------------------------------------------ helpers
-
-  private readSettings(): StoredCaptchaConfig {
-    const rows = this.db.db.select().from(siteSetting).all();
+  private async readSettings(): Promise<StoredCaptchaConfig> {
+    const rows = await this.db.db.select().from(siteSetting);
     const values = new Map<string, unknown>();
     for (const row of rows) {
       try {
@@ -305,19 +278,16 @@ export class CaptchaService {
         : null;
     return { enabled, provider, siteKey, secret };
   }
-
   private hashAnswer(id: string, answer: string): string {
     return createHmac('sha256', this.config.betterAuthSecret)
       .update(`${id}:${answer.trim().toLowerCase()}`)
       .digest('hex');
   }
-
   private signToken(id: string, expires: number): string {
     return createHmac('sha256', this.config.betterAuthSecret)
       .update(`${id}.${expires}`)
       .digest('base64url');
   }
-
   private issueToken(
     id: string,
     expiresAt = new Date(Date.now() + TOKEN_TTL_MS),
@@ -328,13 +298,11 @@ export class CaptchaService {
       expiresAt: expiresAt.toISOString(),
     };
   }
-
   private matches(expected: string, actual: string): boolean {
     const left = Buffer.from(expected, 'utf8');
     const right = Buffer.from(actual, 'utf8');
     return left.length === right.length && timingSafeEqual(left, right);
   }
-
   private async verifyExternal(
     provider: CaptchaProvider,
     secret: string,
@@ -351,25 +319,24 @@ export class CaptchaService {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(8000),
       });
       if (!response.ok) {
         this.logger.warn(`Captcha provider ${provider} returned HTTP ${response.status}`);
         return false;
       }
-      const payload = (await response.json()) as { success?: unknown };
+      const payload = (await response.json()) as {
+        success?: unknown;
+      };
       return payload.success === true;
     } catch (error) {
       this.logger.warn(
-        `Captcha provider ${provider} unreachable: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Captcha provider ${provider} unreachable: ${error instanceof Error ? error.message : String(error)}`,
       );
       return false;
     }
   }
 }
-
 /** Distorted arithmetic SVG; only generated digits/operators are interpolated. */
 function renderArithmeticSvg(expression: string): string {
   const rotate = (Math.random() * 8 - 4).toFixed(1);

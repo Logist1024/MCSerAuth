@@ -47,14 +47,12 @@ import {
 import type { RequestMeta } from './oauth.service.js';
 import { OAuthService } from './oauth.service.js';
 import { isAllowedRedirectUri } from './oauth.util.js';
-
 function requestMeta(request: Request): RequestMeta {
   return {
     ip: request.ip,
     userAgent: request.headers['user-agent'],
   };
 }
-
 /**
  * Commons-Designs OAuth-style endpoints.
  *
@@ -72,7 +70,6 @@ export class OAuthController {
     private readonly oauth: OAuthService,
     private readonly config: AppConfigService,
   ) {}
-
   @Get('availability')
   @ApiOperation({
     summary: '授权页可用性检查',
@@ -82,7 +79,6 @@ export class OAuthController {
   getAvailability(): OAuthAvailabilityResponse {
     return { available: true };
   }
-
   @Get('entry')
   @ApiOperation({
     summary: '启动器跳转的授权页',
@@ -94,20 +90,21 @@ export class OAuthController {
     content: { 'text/html': { schema: { type: 'string' } } },
   })
   async getEntry(
-    @Query() query: OAuthEntryQueryDto,
-    @Req() request: Request,
-    @Res() response: Response,
+    @Query()
+    query: OAuthEntryQueryDto,
+    @Req()
+    request: Request,
+    @Res()
+    response: Response,
   ): Promise<void> {
     const session = await this.auth.getSession(request.headers);
-
     if (!session) {
       const html = renderEntryLoginPage({ appUrl: this.config.appUrl, query });
       response.setHeader('Cache-Control', 'no-store');
       response.status(HttpStatus.OK).type('html').send(html);
       return;
     }
-
-    const player = this.oauth.getPlayerForUser(session.user.id);
+    const player = await this.oauth.getPlayerForUser(session.user.id);
     const context: ConsentPageContext = {
       appUrl: this.config.appUrl,
       query: { ...query, redirect_uri: query.redirect_uri ?? '' },
@@ -121,9 +118,8 @@ export class OAuthController {
     response.setHeader('Cache-Control', 'no-store');
     response.status(HttpStatus.OK).type('html').send(html);
   }
-
   @Post('entry')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: '提交授权确认',
     description:
@@ -136,29 +132,30 @@ export class OAuthController {
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   async approveEntry(
-    @Body() body: OAuthEntryConsentDto,
-    @Req() request: Request,
-    @Res() response: Response,
+    @Body()
+    body: OAuthEntryConsentDto,
+    @Req()
+    request: Request,
+    @Res()
+    response: Response,
   ): Promise<void> {
     this.oauth.assertTrustedOrigin(
       request.headers.origin ?? request.headers.referer,
       this.config.isProduction,
     );
-
     const session = await this.auth.getSession(request.headers);
     if (!session) {
       throw new UnauthorizedException('未登录或登录已失效');
     }
     // Fail early on the consent page instead of at token-exchange time.
-    this.oauth.assertUserCanAuthorize(session.user.id);
+    await this.oauth.assertUserCanAuthorize(session.user.id);
     if (!isAllowedRedirectUri(body.redirect_uri)) {
       throw new BadRequestException(
         'redirect_uri 不合法：仅允许 HTTPS 或本机（localhost/127.0.0.1）HTTP 地址',
       );
     }
     this.oauth.validatePkceInput(body.code_challenge, body.code_challenge_method);
-
-    const code = this.oauth.createAuthorizationCode({
+    const code = await this.oauth.createAuthorizationCode({
       userId: session.user.id,
       clientId: body.client_id,
       redirectUri: body.redirect_uri,
@@ -166,7 +163,6 @@ export class OAuthController {
       codeChallenge: body.code_challenge,
       codeChallengeMethod: body.code_challenge_method,
     });
-
     const redirect = new URL(body.redirect_uri);
     redirect.searchParams.set('code', code);
     if (body.state !== undefined && body.state !== '') {
@@ -174,10 +170,9 @@ export class OAuthController {
     }
     response.redirect(HttpStatus.FOUND, redirect.toString());
   }
-
   @Post('authenticate')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: '授权码换取访问令牌',
     description:
@@ -188,16 +183,17 @@ export class OAuthController {
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  authenticate(
-    @Body() body: OAuthAuthenticateRequestDto,
-    @Req() request: Request,
-  ): OAuthTokenResponse {
-    return this.oauth.exchangeAuthorizationCode(body, requestMeta(request));
+  async authenticate(
+    @Body()
+    body: OAuthAuthenticateRequestDto,
+    @Req()
+    request: Request,
+  ): Promise<OAuthTokenResponse> {
+    return await this.oauth.exchangeAuthorizationCode(body, requestMeta(request));
   }
-
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: '刷新访问令牌',
     description: '刷新令牌轮换：成功后旧 access/refresh 令牌立即失效。',
@@ -207,10 +203,14 @@ export class OAuthController {
   @ApiResponse({ status: 400, type: ProtocolErrorDto })
   @ApiResponse({ status: 401, type: ProtocolErrorDto })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  refresh(@Body() body: OAuthRefreshRequestDto, @Req() request: Request): OAuthTokenResponse {
-    return this.oauth.refreshAccessToken(body.refresh_token, requestMeta(request));
+  async refresh(
+    @Body()
+    body: OAuthRefreshRequestDto,
+    @Req()
+    request: Request,
+  ): Promise<OAuthTokenResponse> {
+    return await this.oauth.refreshAccessToken(body.refresh_token, requestMeta(request));
   }
-
   private describeAuthorizationProblem(query: OAuthEntryQuery): string | undefined {
     if (query.redirect_uri === undefined || query.redirect_uri === '') {
       return '缺少 redirect_uri，无法把授权码送回启动器。';

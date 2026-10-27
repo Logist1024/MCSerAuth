@@ -2,10 +2,8 @@ import { Injectable, ServiceUnavailableException, UnauthorizedException } from '
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { AppConfigService } from '../../config/app-config.service.js';
-
 export const CONSOLE_COOKIE = 'mcserauth_console';
 const TOKEN_VERSION = 'v1';
-
 function parseCookies(header: string | undefined): Map<string, string> {
   const cookies = new Map<string, string>();
   if (header === undefined || header === '') {
@@ -24,17 +22,19 @@ function parseCookies(header: string | undefined): Map<string, string> {
   }
   return cookies;
 }
-
 /** Key-only root console session (independent from website accounts). */
 @Injectable()
 export class ConsoleAuthService {
   constructor(private readonly config: AppConfigService) {}
-
   get enabled(): boolean {
     return this.config.consoleKey !== undefined && this.config.consoleKey !== '';
   }
-
-  login(key: string, response: Response): { expiresAt: string } {
+  login(
+    key: string,
+    response: Response,
+  ): {
+    expiresAt: string;
+  } {
     if (!this.enabled) {
       throw new ServiceUnavailableException('超级后台未启用：请在服务端配置 CONSOLE_KEY');
     }
@@ -45,7 +45,6 @@ export class ConsoleAuthService {
     if (!timingSafeEqual(expected, actual)) {
       throw new UnauthorizedException('控制台密钥不正确');
     }
-
     const expiresAt = Math.floor(Date.now() / 1000) + this.config.consoleSessionTtlSeconds;
     response.cookie(CONSOLE_COOKIE, `${TOKEN_VERSION}.${expiresAt}.${this.sign(expiresAt)}`, {
       httpOnly: true,
@@ -56,7 +55,6 @@ export class ConsoleAuthService {
     });
     return { expiresAt: new Date(expiresAt * 1000).toISOString() };
   }
-
   logout(response: Response): void {
     response.clearCookie(CONSOLE_COOKIE, {
       httpOnly: true,
@@ -65,9 +63,8 @@ export class ConsoleAuthService {
       path: '/',
     });
   }
-
   /** Returns the session expiry, or null when the cookie is missing/invalid. */
-  sessionExpiry(request: Request): Date | null {
+  async sessionExpiry(request: Request): Promise<Date | null> {
     const token = parseCookies(request.headers.cookie).get(CONSOLE_COOKIE);
     if (token === undefined) {
       return null;
@@ -87,15 +84,13 @@ export class ConsoleAuthService {
     }
     return new Date(expiresAt * 1000);
   }
-
-  requireSession(request: Request): Date {
-    const expiry = this.sessionExpiry(request);
+  async requireSession(request: Request): Promise<Date> {
+    const expiry = await this.sessionExpiry(request);
     if (expiry === null) {
       throw new UnauthorizedException('请先使用控制台密钥登录');
     }
     return expiry;
   }
-
   private sign(expiresAt: number): string {
     const keyFingerprint = createHash('sha256')
       .update(this.config.consoleKey ?? '')
