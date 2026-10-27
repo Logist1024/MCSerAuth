@@ -197,7 +197,9 @@ export default function LoginForm() {
             先去论坛看看
           </Link>
         </div>
-        <p className="auth-alt small muted">收不到？请检查垃圾邮件，或确认邮箱地址无误后重新注册。</p>
+        <p className="auth-alt small muted">
+          收不到？请检查垃圾邮件，或确认邮箱地址无误后重新注册。
+        </p>
       </div>
     );
   }
@@ -305,9 +307,7 @@ export default function LoginForm() {
       </form>
 
       <p className="auth-alt">
-        {mode === 'signin' ? (
-          <Link href="/forgot-password">忘记密码？</Link>
-        ) : null}
+        {mode === 'signin' ? <Link href="/forgot-password">忘记密码？</Link> : null}
         <Link href="/forum">先去论坛看看</Link>
       </p>
     </div>

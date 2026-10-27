@@ -22,7 +22,11 @@ export default function AccountSecurity({ currentEmail }: { currentEmail: string
       </div>
 
       {!passwordOpen ? (
-        <button className="button tiny secondary" type="button" onClick={() => setPasswordOpen(true)}>
+        <button
+          className="button tiny secondary"
+          type="button"
+          onClick={() => setPasswordOpen(true)}
+        >
           修改密码
         </button>
       ) : (
@@ -34,7 +38,11 @@ export default function AccountSecurity({ currentEmail }: { currentEmail: string
       {!emailOpen ? (
         <>
           <p className="muted small">当前邮箱 {currentEmail}</p>
-          <button className="button tiny secondary" type="button" onClick={() => setEmailOpen(true)}>
+          <button
+            className="button tiny secondary"
+            type="button"
+            onClick={() => setEmailOpen(true)}
+          >
             修改邮箱
           </button>
         </>
@@ -127,12 +135,7 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
         <button className="button small" type="submit" disabled={busy}>
           {busy ? '提交中…' : '确认修改'}
         </button>
-        <button
-          className="button ghost small"
-          type="button"
-          disabled={busy}
-          onClick={onDone}
-        >
+        <button className="button ghost small" type="button" disabled={busy} onClick={onDone}>
           取消
         </button>
       </div>
@@ -140,13 +143,7 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function EmailForm({
-  currentEmail,
-  onDone,
-}: {
-  currentEmail: string;
-  onDone: () => void;
-}) {
+function EmailForm({ currentEmail, onDone }: { currentEmail: string; onDone: () => void }) {
   const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -211,12 +208,7 @@ function EmailForm({
         <button className="button small" type="submit" disabled={busy}>
           {busy ? '提交中…' : '确认修改'}
         </button>
-        <button
-          className="button ghost small"
-          type="button"
-          disabled={busy}
-          onClick={onDone}
-        >
+        <button className="button ghost small" type="button" disabled={busy} onClick={onDone}>
           取消
         </button>
       </div>

@@ -2,10 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import type {
-  TitleApplicationSummary,
-  UserProgressSummary,
-} from '@mcserauth/shared';
+import type { TitleApplicationSummary, UserProgressSummary } from '@mcserauth/shared';
 import { submitTitleApplication } from '@/lib/api-client';
 import { describeApiError } from '@/lib/errors';
 import { Icon } from '@/components/icons';

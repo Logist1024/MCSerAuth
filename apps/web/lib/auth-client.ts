@@ -151,10 +151,7 @@ export async function resendVerificationEmail(email: string): Promise<void> {
  * link. The origin-check middleware narrows `redirectTo` to trusted origins;
  * `${origin}/reset-password` is where the email link lands.
  */
-export async function requestPasswordReset(
-  email: string,
-  captchaToken?: string,
-): Promise<void> {
+export async function requestPasswordReset(email: string, captchaToken?: string): Promise<void> {
   await authRequest('/api/auth/request-password-reset', {
     method: 'POST',
     body: {
@@ -222,7 +219,9 @@ export async function changePassword(input: {
     body: {
       currentPassword: input.currentPassword,
       newPassword: input.newPassword,
-      ...(input.revokeOtherSessions === undefined ? {} : { revokeOtherSessions: input.revokeOtherSessions }),
+      ...(input.revokeOtherSessions === undefined
+        ? {}
+        : { revokeOtherSessions: input.revokeOtherSessions }),
     },
   });
 }
