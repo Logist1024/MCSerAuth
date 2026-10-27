@@ -76,6 +76,12 @@ export class DbService implements OnModuleDestroy {
    * and run its queries on the wrong connection, so the context is async-local.
    */
   private readonly transactionContext = new AsyncLocalStorage<CanonicalDb>();
+  /**
+   * SQLite has one connection and one writer. Concurrent top-level
+   * transactions must queue instead of issuing nested `BEGIN IMMEDIATE`
+   * statements on the same connection.
+   */
+  private sqliteTransactionTail: Promise<void> = Promise.resolve();
 
   constructor(config: AppConfigService) {
     this.dialect = detectDialect(config.databaseUrl, config.env.DB_DIALECT);
@@ -164,14 +170,24 @@ export class DbService implements OnModuleDestroy {
     }
 
     if (this.sqlite !== null) {
-      this.sqlite.exec('BEGIN IMMEDIATE');
+      let release!: () => void;
+      const previous = this.sqliteTransactionTail;
+      this.sqliteTransactionTail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
       try {
-        const result = await this.transactionContext.run(this.db, () => fn(this.db));
-        this.sqlite.exec('COMMIT');
-        return result;
-      } catch (error) {
-        this.sqlite.exec('ROLLBACK');
-        throw error;
+        this.sqlite.exec('BEGIN IMMEDIATE');
+        try {
+          const result = await this.transactionContext.run(this.db, () => fn(this.db));
+          this.sqlite.exec('COMMIT');
+          return result;
+        } catch (error) {
+          this.sqlite.exec('ROLLBACK');
+          throw error;
+        }
+      } finally {
+        release();
       }
     }
 
@@ -330,6 +346,10 @@ export class DbService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.sqlite !== null) {
+      // Let queued transactions finish before closing the connection.
+      await this.sqliteTransactionTail;
+    }
     if (this.sqlite !== null && this.sqlite.open) {
       this.sqlite.close();
     }
