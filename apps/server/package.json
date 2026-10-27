@@ -59,7 +59,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.0.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.5",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
