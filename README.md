@@ -339,14 +339,15 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 ## 里程碑与文档
 
-| 文档                                                                 | 内容                                       |
-| -------------------------------------------------------------------- | ------------------------------------------ |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                           | 产品范围、架构与全部已定稿决策（S1–S6 等） |
-| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)       | M0 交付物、验收结论与遗留事项              |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)           | 协议字段对照、启动器联调记录               |
-| [`docs/database.md`](docs/database.md)                               | 三库配置、schema 工作流、迁移/复制/备份    |
-| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md) | 三库支持的设计取舍                         |
-| [`docs/openapi.json`](docs/openapi.json)                             | OpenAPI 契约产物（`pnpm openapi:export`）  |
+| 文档                                                                   | 内容                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------ |
+| [`docs/项目策划案.md`](docs/项目策划案.md)                             | 产品范围、架构与全部已定稿决策（S1–S6 等） |
+| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)         | M0 交付物、验收结论与遗留事项              |
+| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)             | 协议字段对照、启动器联调记录               |
+| [`docs/database.md`](docs/database.md)                                 | 三库配置、schema 工作流、迁移/复制/备份    |
+| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md) | 三库重构的度量、缺陷修复与待验证项         |
+| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)   | 三库支持的设计取舍                         |
+| [`docs/openapi.json`](docs/openapi.json)                               | OpenAPI 契约产物（`pnpm openapi:export`）  |
 
 里程碑：M0 底座（已完成）→ M1 认证核心（已完成）→ M2 会话与形象（已完成）→ M3 论坛 MVP（已完成）→ M4 运营与加固（当前）→ M5 生产部署。
 Paper 插件与启动器修改**永不**实施。
