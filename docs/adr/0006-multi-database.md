@@ -42,18 +42,20 @@
 
 `DbService` 暴露一组跨方言 helper，业务代码不直接使用方言特有的 API：
 
-| Helper            | SQLite / PostgreSQL            | MySQL                                    |
-| ----------------- | ------------------------------ | ---------------------------------------- |
-| `insertReturning` | 原生 `RETURNING`               | `$returningId()` + 按主键回查            |
-| `updateReturning` | 原生 `RETURNING`               | 先查 → 更新 → 再查                       |
-| `insertIgnore`    | `ON CONFLICT DO NOTHING`       | `INSERT IGNORE`                          |
-| `upsert`          | `ON CONFLICT ... DO UPDATE`    | `ON DUPLICATE KEY UPDATE`（忽略 target） |
-| `affectedRows`    | 驱动返回值归一                 | 驱动返回值归一                           |
-| `primaryKeyOf`    | 读取表模型主键                 | 读取表模型主键                           |
-| `transaction`     | AsyncLocalStorage 绑定当前事务 | AsyncLocalStorage 绑定当前事务           |
+| Helper            | SQLite / PostgreSQL         | MySQL                                    |
+| ----------------- | --------------------------- | ---------------------------------------- |
+| `insertReturning` | 原生 `RETURNING`            | `$returningId()` + 按主键回查            |
+| `updateReturning` | 原生 `RETURNING`            | 先查 → 更新 → 再查                       |
+| `insertIgnore`    | `ON CONFLICT DO NOTHING`    | `INSERT IGNORE`                          |
+| `upsert`          | `ON CONFLICT ... DO UPDATE` | `ON DUPLICATE KEY UPDATE`（忽略 target） |
+| `affectedRows`    | 驱动返回值归一              | 驱动返回值归一                           |
+| `primaryKeyOf`    | 读取表模型主键              | 读取表模型主键                           |
+| `transaction`     | 见下方说明                  | 见下方说明                               |
 
 - 事务使用 `AsyncLocalStorage<CanonicalDb>` 传递当前事务连接，而不是全局深度计数；
   并发请求不会串用彼此的事务。
+- SQLite 只有一个连接和一个写者，顶层事务通过 Promise 队列串行化，避免并发请求在
+  同一连接上重复 `BEGIN IMMEDIATE`；MySQL / PostgreSQL 使用连接池事务，可并行执行。
 - MySQL 没有部分唯一索引，因此 `skin` 增加 `active_slot` 判别列：
   活跃纹理写 `player_uuid:kind`，非活跃写 `NULL`，配合普通唯一索引实现
   “每个玩家每种纹理最多一条 active”。

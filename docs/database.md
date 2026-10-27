@@ -197,3 +197,5 @@ pg_dump --format=custom mcserauth > mcserauth.dump
   新增类似需求时沿用判别列模式。
 - **迁移顺序**：生产迁移前先备份；MySQL/PostgreSQL 的大表 DDL 建议在维护窗口执行。
 - **连接池**：多实例部署时按 `实例数 × DB_POOL_MAX` 估算数据库连接上限。
+- **SQLite 并发**：单进程内顶层事务会串行执行（单连接、单写者）；需要高并发写入时
+  切换到 MySQL / PostgreSQL。MySQL / PostgreSQL 的事务走连接池，可并行。
