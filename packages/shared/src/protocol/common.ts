@@ -32,6 +32,8 @@ export type ProtocolErrorName = (typeof ProtocolErrorName)[keyof typeof Protocol
 export function protocolErrorNameForHttpStatus(status: number): ProtocolErrorName {
   switch (status) {
     case 400:
+    case 413:
+    case 415:
     case 422:
       return ProtocolErrorName.ILLEGAL_ARGUMENT;
     case 401:
@@ -51,3 +53,12 @@ export const PROTOCOL_TOKEN_TYPE = 'Bearer';
 
 /** UUIDs in the protocol are lowercase hex without dashes. */
 export const PROTOCOL_UUID_PATTERN = /^[0-9a-f]{32}$/;
+
+/**
+ * Accepts dashless protocol UUIDs as well as the dashed RFC 4122 form used by
+ * some launchers/servers, returning the canonical dashless lowercase value.
+ */
+export function normalizeProtocolUuid(value: string): string | null {
+  const normalized = value.replaceAll('-', '').toLowerCase();
+  return PROTOCOL_UUID_PATTERN.test(normalized) ? normalized : null;
+}

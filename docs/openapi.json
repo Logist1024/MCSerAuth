@@ -37,9 +37,64 @@
         ]
       }
     },
+    "/api/captcha/config": {
+      "get": {
+        "operationId": "CaptchaController_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "人机验证公开配置（是否启用、提供商、Site Key）",
+        "tags": [
+          "Captcha"
+        ]
+      }
+    },
+    "/api/captcha/challenge": {
+      "get": {
+        "operationId": "CaptchaController_challenge",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "获取内置人机验证题目（SVG）",
+        "tags": [
+          "Captcha"
+        ]
+      }
+    },
+    "/api/captcha/verify": {
+      "post": {
+        "operationId": "CaptchaController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptchaVerifyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "校验人机验证并签发一次性登录令牌",
+        "tags": [
+          "Captcha"
+        ]
+      }
+    },
     "/api/oauth/availability": {
       "get": {
-        "description": "M0 恒返回 available=true，用于启动器连通性冒烟。",
+        "description": "服务可达时返回 available=true，供启动器做连通性检查。",
         "operationId": "OAuthController_getAvailability",
         "parameters": [],
         "responses": {
@@ -62,7 +117,7 @@
     },
     "/api/oauth/entry": {
       "get": {
-        "description": "A3：正式实现在 NestJS 侧直接渲染，与网站登录态同源。",
+        "description": "未登录时渲染登录表单；已登录时渲染授权确认页。页面由 NestJS 直出，复用 better-auth Cookie。",
         "operationId": "OAuthController_getEntry",
         "parameters": [
           {
@@ -128,7 +183,7 @@
         ],
         "responses": {
           "200": {
-            "description": "HTML 授权页",
+            "description": "HTML 登录页或授权确认页",
             "content": {
               "text/html": {
                 "schema": {
@@ -138,7 +193,66 @@
             }
           }
         },
-        "summary": "启动器跳转的授权确认页（M0 占位 HTML）",
+        "summary": "启动器跳转的授权页",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      },
+      "post": {
+        "description": "校验网站会话、redirect_uri 与 PKCE 参数，签发一次性授权码并 302 回跳 redirect_uri。",
+        "operationId": "OAuthController_approveEntry",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthEntryConsentDto"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthEntryConsentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "302": {
+            "description": "携带 code 与 state 回跳 redirect_uri"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "提交授权确认",
         "tags": [
           "Commons-Designs / OAuth"
         ]
@@ -146,7 +260,7 @@
     },
     "/api/oauth/authenticate": {
       "post": {
-        "description": "M0 返回 501；M1 实现后返回 OAuthTokenResponse。",
+        "description": "使用一次性 code（或同义字段 token）换取 Bearer 访问令牌与刷新令牌；支持 PKCE code_verifier。",
         "operationId": "OAuthController_authenticate",
         "parameters": [],
         "requestBody": {
@@ -161,7 +275,7 @@
         },
         "responses": {
           "200": {
-            "description": "M1 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -170,7 +284,27 @@
               }
             }
           },
-          "501": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -181,7 +315,7 @@
             }
           }
         },
-        "summary": "授权码/令牌换取访问令牌（M0 stub）",
+        "summary": "授权码换取访问令牌",
         "tags": [
           "Commons-Designs / OAuth"
         ]
@@ -189,7 +323,7 @@
     },
     "/api/oauth/refresh": {
       "post": {
-        "description": "M0 返回 501；M1 实现后返回 OAuthTokenResponse。",
+        "description": "刷新令牌轮换：成功后旧 access/refresh 令牌立即失效。",
         "operationId": "OAuthController_refresh",
         "parameters": [],
         "requestBody": {
@@ -204,7 +338,7 @@
         },
         "responses": {
           "200": {
-            "description": "M1 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -213,7 +347,27 @@
               }
             }
           },
-          "501": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -224,7 +378,7 @@
             }
           }
         },
-        "summary": "刷新访问令牌（M0 stub）",
+        "summary": "刷新访问令牌",
         "tags": [
           "Commons-Designs / OAuth"
         ]
@@ -232,12 +386,12 @@
     },
     "/api/user/profiles/me": {
       "get": {
-        "description": "M0 返回 501；M1 接入启动器令牌后返回当前账号与 player 摘要。",
+        "description": "优先使用 Authorization: Bearer <access_token>（启动器）；未携带时回退到 better-auth 网站会话。",
         "operationId": "UserProfilesController_getMe",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "M1 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -246,7 +400,7 @@
               }
             }
           },
-          "501": {
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -257,15 +411,203 @@
             }
           }
         },
-        "summary": "获取当前用户档案（M0 stub）",
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "获取当前用户档案",
         "tags": [
           "Commons-Designs / User"
         ]
       }
     },
+    "/api": {
+      "get": {
+        "description": "HMCL/PCL2 在「外置登录」填入 http://<host>:8000/api 后首先请求本端点；不含 signaturePublickey，纹理属性无需签名。",
+        "operationId": "YggdrasilMetadataController_getMetadata",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YggdrasilMetadataDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "API 元数据（authlib-injector 根路径）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/authserver/authenticate": {
+      "post": {
+        "description": "校验 better-auth 账号密码后签发与 OAuth 流程同源的启动器令牌；凭据错误或封禁返回 403 ForbiddenOperationException。",
+        "operationId": "YggdrasilAuthController_authenticate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YggdrasilAuthenticateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YggdrasilAuthenticateResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "用网站邮箱 + 密码登录（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/authserver/refresh": {
+      "post": {
+        "description": "旧 accessToken 立即失效；未知、过期、已吊销或封禁返回 403。",
+        "operationId": "YggdrasilAuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YggdrasilRefreshRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YggdrasilRefreshResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "轮换访问令牌（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/authserver/validate": {
+      "post": {
+        "operationId": "YggdrasilAuthController_validate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YggdrasilValidateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "令牌有效"
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "校验访问令牌（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/authserver/invalidate": {
+      "post": {
+        "description": "幂等：未知或已吊销的令牌同样返回 204；吊销后 Bearer 立即 401。",
+        "operationId": "YggdrasilAuthController_invalidate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YggdrasilValidateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "令牌已吊销（或本就不存在）"
+          }
+        },
+        "summary": "吊销访问令牌（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
     "/api/session/joinServer": {
       "post": {
-        "description": "M0 返回 501；M1 校验令牌与服务器白名单后写入会话。",
+        "description": "校验启动器令牌、selectedProfile 与服务器白名单后，写入短期 joinServer 会话；封禁玩家返回 403。",
         "operationId": "SessionController_joinServer",
         "parameters": [],
         "requestBody": {
@@ -280,9 +622,29 @@
         },
         "responses": {
           "204": {
-            "description": "Yggdrasil 目标语义（M1 实现）"
+            "description": "会话已记录"
           },
-          "501": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -293,7 +655,7 @@
             }
           }
         },
-        "summary": "记录客户端会话（M0 stub）",
+        "summary": "记录客户端加入会话",
         "tags": [
           "Commons-Designs / Session"
         ]
@@ -301,7 +663,7 @@
     },
     "/api/session/hasJoined": {
       "post": {
-        "description": "M0 返回 501；M1 校验 server_entry 与 player.banned。",
+        "description": "校验服务器白名单与 player.banned；命中有效会话时返回带 textures 的 GameProfile，否则 204。",
         "operationId": "SessionController_hasJoinedByPost",
         "parameters": [],
         "requestBody": {
@@ -316,7 +678,7 @@
         },
         "responses": {
           "200": {
-            "description": "Yggdrasil 目标响应（M1）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -325,7 +687,10 @@
               }
             }
           },
-          "501": {
+          "204": {
+            "description": "无有效会话或玩家不存在"
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -336,13 +701,13 @@
             }
           }
         },
-        "summary": "查询某玩家最近会话（POST 变体，M0 stub）",
+        "summary": "查询某玩家最近会话（POST 变体）",
         "tags": [
           "Commons-Designs / Session"
         ]
       },
       "get": {
-        "description": "authlib-injector 生态惯用 GET；与 POST 变体共用协议核对项。",
+        "description": "authlib-injector 生态惯用 GET；与 POST 变体共用实现。",
         "operationId": "SessionController_hasJoinedByGet",
         "parameters": [
           {
@@ -365,6 +730,7 @@
             "name": "ip",
             "required": false,
             "in": "query",
+            "description": "服务器观测到的客户端 IP（可选，用于绑定会话）",
             "schema": {
               "type": "string"
             }
@@ -372,7 +738,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Yggdrasil 目标响应（M1）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -381,7 +747,10 @@
               }
             }
           },
-          "501": {
+          "204": {
+            "description": "无有效会话或玩家不存在"
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -392,15 +761,169 @@
             }
           }
         },
-        "summary": "查询某玩家最近会话（GET 兼容变体，M0 stub）",
+        "summary": "查询某玩家最近会话（GET 兼容变体）",
         "tags": [
           "Commons-Designs / Session"
         ]
       }
     },
+    "/api/sessionserver/session/minecraft/join": {
+      "post": {
+        "description": "不校验服务器白名单；令牌无效 401，selectedProfile 不匹配或封禁 403。",
+        "operationId": "YggdrasilSessionController_join",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YggdrasilJoinRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "会话已记录"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "记录客户端加入会话（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/sessionserver/session/minecraft/hasJoined": {
+      "get": {
+        "description": "命中返回带 textures 的 GameProfile，无会话/未知昵称/IP 不一致返回 204，封禁 403。",
+        "operationId": "YggdrasilSessionController_hasJoined",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serverId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ip",
+            "required": false,
+            "in": "query",
+            "description": "服务器观测到的客户端 IP（可选，用于绑定会话）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "无有效会话"
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询某玩家最近会话（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/sessionserver/session/minecraft/profile/{uuid}": {
+      "get": {
+        "description": "与 /api/profiles/{uuid} 同源；UUID 非法 400，玩家不存在 204。",
+        "operationId": "YggdrasilSessionController_profile",
+        "parameters": [
+          {
+            "name": "uuid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "85cbb85205d944eea137574bd7afe854",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "玩家不存在"
+          }
+        },
+        "summary": "按 UUID 查询档案（authlib-injector）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
     "/api/profiles/minecraft/{name}": {
       "get": {
-        "description": "M0 返回 501；M2 返回 GameProfile。",
+        "description": "返回带 textures 属性的 GameProfile；玩家不存在时 204。",
         "operationId": "ProfilesController_getByName",
         "parameters": [
           {
@@ -415,7 +938,7 @@
         ],
         "responses": {
           "200": {
-            "description": "M2 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -424,18 +947,11 @@
               }
             }
           },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProtocolErrorDto"
-                }
-              }
-            }
+          "204": {
+            "description": "玩家不存在"
           }
         },
-        "summary": "按昵称查询档案（M0 stub）",
+        "summary": "按昵称查询档案",
         "tags": [
           "Commons-Designs / Profiles"
         ]
@@ -443,7 +959,7 @@
     },
     "/api/profiles/minecraft": {
       "post": {
-        "description": "M0 返回 501；M2 最多返回 10 个 GameProfile。",
+        "description": "一次最多 10 个昵称；未知昵称会被跳过，结果保持请求顺序。",
         "operationId": "ProfilesController_getBatch",
         "parameters": [],
         "requestBody": {
@@ -458,7 +974,7 @@
         },
         "responses": {
           "200": {
-            "description": "M2 目标响应（M0 不返回）",
+            "description": "可能为空数组",
             "content": {
               "application/json": {
                 "schema": {
@@ -469,19 +985,9 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProtocolErrorDto"
-                }
-              }
-            }
           }
         },
-        "summary": "批量按昵称查询档案（M0 stub）",
+        "summary": "批量按昵称查询档案",
         "tags": [
           "Commons-Designs / Profiles"
         ]
@@ -489,7 +995,7 @@
     },
     "/api/profiles/{uuid}": {
       "get": {
-        "description": "M0 返回 501；M2 返回 GameProfile（含 textures 属性）。",
+        "description": "返回带 textures 属性的 GameProfile；UUID 非法时 400，玩家不存在时 204。",
         "operationId": "ProfilesController_getByUuid",
         "parameters": [
           {
@@ -504,7 +1010,7 @@
         ],
         "responses": {
           "200": {
-            "description": "M2 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -513,7 +1019,10 @@
               }
             }
           },
-          "501": {
+          "204": {
+            "description": "玩家不存在"
+          },
+          "400": {
             "description": "",
             "content": {
               "application/json": {
@@ -524,7 +1033,7 @@
             }
           }
         },
-        "summary": "按 UUID 查询档案（M0 stub）",
+        "summary": "按 UUID 查询档案",
         "tags": [
           "Commons-Designs / Profiles"
         ]
@@ -532,12 +1041,12 @@
     },
     "/api/minecraft/profile/skins": {
       "get": {
-        "description": "M0 返回 501；M2 返回 MinecraftProfileResponse。",
+        "description": "返回全部纹理（ACTIVE 标记当前使用），URL 为带签名的短时链接。",
         "operationId": "MinecraftProfileController_getSkins",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "M2 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -546,7 +1055,7 @@
               }
             }
           },
-          "501": {
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -557,13 +1066,21 @@
             }
           }
         },
-        "summary": "查询当前皮肤（M0 stub）",
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "查询当前玩家的皮肤与披风",
         "tags": [
           "Commons-Designs / Textures"
         ]
       },
       "post": {
-        "description": "M0 返回 501；M2 用 sharp 校验 64×32 / 64×64 后进入审核队列。",
+        "description": "multipart 上传 PNG（仅原版尺寸 64×32 或 64×64，variant=classic|slim）；上传后立即生效，尺寸/格式非法返回 400。",
         "operationId": "MinecraftProfileController_uploadSkin",
         "parameters": [],
         "requestBody": {
@@ -594,7 +1111,37 @@
           }
         },
         "responses": {
-          "501": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextureUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -605,7 +1152,15 @@
             }
           }
         },
-        "summary": "上传/设置皮肤（M0 stub）",
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "上传/设置皮肤",
         "tags": [
           "Commons-Designs / Textures"
         ]
@@ -613,12 +1168,12 @@
     },
     "/api/minecraft/profile/capes": {
       "get": {
-        "description": "M0 返回 501；M2 返回 MinecraftProfileResponse。",
+        "description": "与 GET /minecraft/profile/skins 返回相同结构。",
         "operationId": "MinecraftProfileController_getCapes",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "M2 目标响应（M0 不返回）",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -627,7 +1182,7 @@
               }
             }
           },
-          "501": {
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -638,13 +1193,21 @@
             }
           }
         },
-        "summary": "查询当前披风（M0 stub）",
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "查询当前玩家的皮肤与披风",
         "tags": [
           "Commons-Designs / Textures"
         ]
       },
       "post": {
-        "description": "M0 返回 501；M2 用 sharp 校验 64×32 后进入审核队列。",
+        "description": "multipart 上传 PNG（仅原版尺寸 64×32）；上传后立即生效。",
         "operationId": "MinecraftProfileController_uploadCape",
         "parameters": [],
         "requestBody": {
@@ -667,7 +1230,37 @@
           }
         },
         "responses": {
-          "501": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextureUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -678,16 +1271,2970 @@
             }
           }
         },
-        "summary": "上传/设置披风（M0 stub）",
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "上传/设置披风",
         "tags": [
           "Commons-Designs / Textures"
+        ]
+      }
+    },
+    "/api/minecraft/profile/textures/{id}": {
+      "get": {
+        "description": "由签名 URL 直接访问，校验 expires + sig；无需登录，签名即授权。",
+        "operationId": "MinecraftProfileController_getTexture",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sig",
+            "required": true,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "expires",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": 1800000000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG 图像",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "读取签名纹理文件",
+        "tags": [
+          "Commons-Designs / Textures"
+        ]
+      }
+    },
+    "/api/api/profiles/minecraft/{name}": {
+      "get": {
+        "operationId": "InjectorProfilesController_getByName",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "Notch",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameProfileDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "玩家不存在"
+          }
+        },
+        "summary": "按昵称查询档案（authlib-injector 命名空间）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/api/profiles/minecraft": {
+      "post": {
+        "operationId": "InjectorProfilesController_getBatch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilesBatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "可能为空数组",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GameProfileDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "批量按昵称查询档案（authlib-injector 命名空间）",
+        "tags": [
+          "authlib-injector"
+        ]
+      }
+    },
+    "/api/forum/categories": {
+      "get": {
+        "operationId": "ForumController_categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一封装：data 为版块树"
+          }
+        },
+        "summary": "版块树（含帖子数与最近活动）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/posts": {
+      "get": {
+        "operationId": "ForumController_posts",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "categorySlug",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "帖子列表（分页、置顶优先）",
+        "tags": [
+          "Forum"
+        ]
+      },
+      "post": {
+        "operationId": "ForumController_createPost",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "发帖（需登录且未被论坛封禁）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/posts/{id}": {
+      "get": {
+        "operationId": "ForumController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "replyPage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "replyPageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "帖子详情与回帖",
+        "tags": [
+          "Forum"
+        ]
+      },
+      "patch": {
+        "operationId": "ForumController_updatePost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "编辑自己的帖子",
+        "tags": [
+          "Forum"
+        ]
+      },
+      "delete": {
+        "operationId": "ForumController_deletePost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "删除自己的帖子（版主可删任意帖）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/posts/{id}/replies": {
+      "post": {
+        "operationId": "ForumController_createReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "回帖（锁定帖仅版主可回复）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/replies/{id}": {
+      "patch": {
+        "operationId": "ForumController_updateReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "编辑自己的回复",
+        "tags": [
+          "Forum"
+        ]
+      },
+      "delete": {
+        "operationId": "ForumController_deleteReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "删除自己的回复（版主可删任意回复）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/posts/{id}/vote": {
+      "post": {
+        "operationId": "ForumController_votePost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "点赞/取消点赞帖子",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/replies/{id}/vote": {
+      "post": {
+        "operationId": "ForumController_voteReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "点赞/取消点赞回复",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/reports": {
+      "post": {
+        "operationId": "ForumController_report",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "举报帖子/回复/用户/纹理",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/notifications": {
+      "get": {
+        "operationId": "NotificationsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "通知列表（分页）与未读数",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationsController_unreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "未读通知数",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_readAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "全部标记为已读",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationsController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "单条标记为已读",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/uploads": {
+      "post": {
+        "operationId": "ForumUploadsController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "上传帖子图片（PNG/JPEG/WebP/GIF，≤5 MiB）",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/forum/uploads/{filename}": {
+      "get": {
+        "operationId": "ForumUploadsController_get",
+        "parameters": [
+          {
+            "name": "filename",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "<sha256>.png",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "图片"
+          }
+        },
+        "summary": "读取已上传的帖子图片",
+        "tags": [
+          "Forum"
+        ]
+      }
+    },
+    "/api/user/settings": {
+      "get": {
+        "operationId": "UserController_getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "当前账号资料、玩家与改名冷却",
+        "tags": [
+          "User"
+        ]
+      },
+      "patch": {
+        "operationId": "UserController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "更新头像与签名",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/email": {
+      "post": {
+        "description": "新邮箱必须未被其他账号使用；成功后启动器同样用新邮箱外置登录。",
+        "operationId": "UserController_changeEmail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "修改账号邮箱（需当前密码）",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/player/rename": {
+      "post": {
+        "description": "仅游戏昵称变化，UUID 不变；旧名在冷却期内仅保留给原玩家。",
+        "operationId": "UserController_renamePlayer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePlayerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "玩家改名（30 天冷却；旧名保留 30 天）",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/textures/{id}/activate": {
+      "post": {
+        "operationId": "UserController_activateTexture",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "切换当前皮肤/披风",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/textures/{id}": {
+      "delete": {
+        "description": "删除当前生效的纹理后，游戏内回退到默认形象。",
+        "operationId": "UserController_deleteTexture",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "删除自己的纹理",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "operationId": "PublicUsersController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一封装：data 为公开档案"
+          }
+        },
+        "summary": "公开个人主页：统计、当前形象与最近帖子",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/admin/servers": {
+      "get": {
+        "operationId": "AdminServersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServerEntryDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "列出服务器白名单（servers.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "description": "库中只存密钥哈希；明文密钥只在本次响应中返回一次。",
+        "operationId": "AdminServersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ServerEntryDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "serverId 已存在"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "登记服务器（servers.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/servers/{id}": {
+      "patch": {
+        "operationId": "AdminServersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ServerEntryDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "更新服务器名称或启用状态（servers.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/textures": {
+      "get": {
+        "description": "默认返回全部状态；上传即生效，保留驳回/下架用于违规处理。",
+        "operationId": "AdminTexturesController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "skin",
+                "cape"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminTextureDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "列出纹理（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/textures/{id}/approve": {
+      "post": {
+        "description": "恢复后该纹理成为对应类型的当前纹理，并写入 moderation_log。",
+        "operationId": "AdminTexturesController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewTextureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminTextureDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "恢复纹理（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/textures/{id}/reject": {
+      "post": {
+        "operationId": "AdminTexturesController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewTextureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminTextureDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "下架纹理（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/stats": {
+      "get": {
+        "operationId": "AdminForumController_stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "运营数据概览（reviewer/admin/superadmin）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/users": {
+      "get": {
+        "operationId": "AdminForumController_users",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "用户列表/搜索（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/users/{id}/ban": {
+      "post": {
+        "operationId": "AdminForumController_ban",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BanUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "封禁用户（默认论坛+游戏，admin 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/users/{id}/unban": {
+      "post": {
+        "operationId": "AdminForumController_unban",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnbanUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "解封用户（admin 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/users/{id}/mute": {
+      "post": {
+        "operationId": "AdminForumController_mute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MuteUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "禁言用户（reviewer 起，1–720 小时）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/users/{id}/unmute": {
+      "post": {
+        "operationId": "AdminForumController_unmute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnmuteUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "解除禁言（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/reports": {
+      "get": {
+        "operationId": "AdminForumController_reports",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "resolved",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "举报队列（默认 pending，reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/reports/{id}/resolve": {
+      "post": {
+        "operationId": "AdminForumController_resolveReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandleReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "举报标记为已处理（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/reports/{id}/reject": {
+      "post": {
+        "operationId": "AdminForumController_rejectReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandleReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "驳回举报（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/posts/{id}": {
+      "patch": {
+        "operationId": "AdminForumController_moderatePost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeratePostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "帖子审核/置顶/加精/锁定（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/replies/{id}": {
+      "patch": {
+        "operationId": "AdminForumController_moderateReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "回复隐藏/恢复/删除（reviewer 起）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/categories": {
+      "get": {
+        "operationId": "AdminForumController_categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "版块管理列表（forum.categories）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminForumController_createCategory",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "新建版块（forum.categories）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/categories/{id}": {
+      "patch": {
+        "operationId": "AdminForumController_updateCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAdminCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "更新版块（forum.categories）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminForumController_deleteCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "删除空版块（forum.categories）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/forum/announcements": {
+      "post": {
+        "operationId": "AdminForumController_announce",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnnouncementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "发布全站公告（站内信，forum.announce）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/titles": {
+      "get": {
+        "operationId": "AdminGrowthController_titles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "称号与申请列表（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminGrowthController_createTitle",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTitleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "新建特别称号（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/titles/{id}/grant": {
+      "post": {
+        "operationId": "AdminGrowthController_grantTitle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "授予用户称号（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/titles/{id}/revoke": {
+      "post": {
+        "operationId": "AdminGrowthController_revokeTitle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "收回用户称号（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/title-applications/{id}/approve": {
+      "post": {
+        "operationId": "AdminGrowthController_approveApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "通过 100 级专属称号申请（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/title-applications/{id}/reject": {
+      "post": {
+        "operationId": "AdminGrowthController_rejectApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "驳回 100 级专属称号申请（titles.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/banners": {
+      "get": {
+        "operationId": "AdminGrowthController_banners",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "expired"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "Banner 审核队列（banners.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/banners/{id}/approve": {
+      "post": {
+        "operationId": "AdminGrowthController_approveBanner",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "通过 Banner（banners.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/banners/{id}/reject": {
+      "post": {
+        "operationId": "AdminGrowthController_rejectBanner",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "驳回 Banner 并退还积分（banners.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/users/{id}/points": {
+      "post": {
+        "operationId": "AdminGrowthController_adjustPoints",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustPointsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "调整用户积分（points.adjust）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/rules": {
+      "get": {
+        "operationId": "AdminGrowthController_rules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "成长规则当前值与默认值（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminGrowthController_updateRules",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrowthRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "部分更新成长规则（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/growth/rules/reset": {
+      "post": {
+        "operationId": "AdminGrowthController_resetRules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "恢复默认成长规则（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site/permissions/{id}": {
+      "get": {
+        "operationId": "AdminPermissionsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "读取某位员工的已下放权限（superadmin）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "put": {
+        "operationId": "AdminPermissionsController_replace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePermissionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "替换某位员工的权限集合（superadmin）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site/captcha": {
+      "get": {
+        "operationId": "AdminCaptchaController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "读取人机验证配置（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminCaptchaController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCaptchaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "修改人机验证配置（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site": {
+      "get": {
+        "operationId": "AdminSiteController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "读取站点展示配置（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminSiteController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSiteUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "修改站点展示信息、自定义 CSS 与首页内容（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site/icon": {
+      "post": {
+        "operationId": "AdminSiteController_uploadIcon",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "上传站点图标（PNG/JPEG/WebP/GIF，≤1 MiB；site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminSiteController_removeIcon",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "移除站点图标，恢复内置标志（site.manage）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site/staff": {
+      "get": {
+        "operationId": "AdminSiteController_staff",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "审核员/管理员/超级管理员列表（superadmin）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/site/staff/{id}/role": {
+      "patch": {
+        "description": "超级管理员角色只能在密钥保护的控制台中调整。",
+        "operationId": "AdminSiteController_updateRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "调整审核员或管理员角色（superadmin）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/site": {
+      "get": {
+        "operationId": "SiteController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一封装：data 为展示配置"
+          }
+        },
+        "summary": "公开站点展示信息（站名、公告、页脚、图标与自定义 CSS）",
+        "tags": [
+          "Site"
+        ]
+      }
+    },
+    "/api/site/home": {
+      "get": {
+        "operationId": "SiteController_home",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一封装：data 为首页内容与 Banner"
+          }
+        },
+        "summary": "公开首页内容与正在展示的 Banner",
+        "tags": [
+          "Site"
+        ]
+      }
+    },
+    "/api/site/icon/{filename}": {
+      "get": {
+        "operationId": "SiteController_icon",
+        "parameters": [
+          {
+            "name": "filename",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "<sha256>.png",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "图标二进制内容"
+          },
+          "404": {
+            "description": "图标不存在"
+          }
+        },
+        "summary": "读取站点图标（浏览器标签页图标与页头品牌）",
+        "tags": [
+          "Site"
+        ]
+      }
+    },
+    "/api/console/session": {
+      "get": {
+        "operationId": "ConsoleController_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "控制台可用性与登录状态",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/login": {
+      "post": {
+        "operationId": "ConsoleController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "使用 CONSOLE_KEY 登录控制台",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/logout": {
+      "post": {
+        "operationId": "ConsoleController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "退出控制台",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/settings": {
+      "get": {
+        "operationId": "ConsoleController_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "读取全站配置（含发件设置）",
+        "tags": [
+          "Console"
+        ]
+      },
+      "patch": {
+        "operationId": "ConsoleController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleSiteUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "修改全站配置（含发件设置）",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/staff": {
+      "get": {
+        "operationId": "ConsoleController_staff",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "全部审核员/管理员/超级管理员",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/users": {
+      "get": {
+        "operationId": "ConsoleController_users",
+        "parameters": [
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "搜索任意用户（用于提升角色）",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/console/staff/{id}/role": {
+      "patch": {
+        "operationId": "ConsoleController_updateRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "调整任意角色（含超级管理员）",
+        "tags": [
+          "Console"
+        ]
+      }
+    },
+    "/api/growth/overview": {
+      "get": {
+        "operationId": "GrowthController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "我的成长概览（等级、积分、商店、榜单、称号）",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/transactions": {
+      "get": {
+        "operationId": "GrowthController_transactions",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "我的积分流水（分页）",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/checkin": {
+      "post": {
+        "operationId": "GrowthController_checkin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "每日签到（经验 + 积分，连续签到有加成）",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/purchase": {
+      "post": {
+        "operationId": "GrowthController_purchase",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "积分商店：经验翻倍卡 / 披风解锁 / Banner 位",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/tips": {
+      "post": {
+        "operationId": "GrowthController_tip",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TipDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "打赏其他用户积分",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/title-applications": {
+      "post": {
+        "operationId": "GrowthController_applyTitle",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitTitleApplicationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "100 级专属称号申请",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/leaderboard": {
+      "get": {
+        "operationId": "GrowthController_leaderboard",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "等级排行榜（拥有称号的用户不参与普通等级榜）",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/titles": {
+      "get": {
+        "operationId": "GrowthController_titles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "称号目录（公开）",
+        "tags": [
+          "Growth"
+        ]
+      }
+    },
+    "/api/growth/banners": {
+      "get": {
+        "operationId": "GrowthController_banners",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "首页正在展示的 Banner（公开）",
+        "tags": [
+          "Growth"
         ]
       }
     }
   },
   "info": {
     "title": "MCSerAuth API",
-    "description": "MCSerAuth 后端 API（M0 底座）。\n\n**统一响应**：非协议端点成功返回 `{ code: 0, data }`，失败返回 `{ code, message }`（错误码见 packages/shared）。\n\n**例外**：`Commons-Designs` 协议端点（OAuth / Session / Profiles / Textures）返回协议原生结构，失败为 `{ error, errorMessage }`，不套统一封装。\n\n**M0 状态**：协议端点均为 stub；标有 “M1/M2 目标响应” 的结构是待实现契约，正与官方协议文档逐条核对（docs/protocol-checklist.md）。",
+    "description": "MCSerAuth 后端 API（M3 论坛 MVP + M4 运营能力）。\n\n**统一响应**：非协议端点成功返回 `{ code: 0, data }`，失败返回 `{ code, message }`（错误码见 packages/shared）。\n\n**例外**：`Commons-Designs` 协议端点（OAuth / Session / Profiles / Textures）返回协议原生结构，失败为 `{ error, errorMessage }`，不套统一封装。\n\n**已实现**：OAuth 授权、会话服务、档案与纹理分发；论坛版块/帖子/回复/点赞/通知/举报；\n账号资料（头像/签名、改名、设备令牌、纹理切换）；四级权限（审核员/管理员/超级管理员/超级后台）；\n管理端（禁言、封禁、内容审核、举报、版块、公告、纹理下架、服务器白名单、站点展示配置）。\n纹理上传经 sharp 校验后立即生效（仅原版尺寸），并通过短时签名 URL 分发。协议字段仍按暂定值与官方文档逐条核对（docs/protocol-checklist.md）。",
     "version": "0.1.0",
     "contact": {}
   },
@@ -715,6 +4262,18 @@
     {
       "name": "Commons-Designs / Textures",
       "description": "皮肤/披风（协议原生响应）"
+    },
+    {
+      "name": "Forum",
+      "description": "论坛：版块、帖子、回复、点赞、通知、举报（统一封装）"
+    },
+    {
+      "name": "User",
+      "description": "账号资料：头像/签名、改名、设备令牌、纹理切换（统一封装）"
+    },
+    {
+      "name": "Admin",
+      "description": "管理端：用户/内容/举报/版块/公告/纹理/服务器（统一封装）"
     }
   ],
   "servers": [
@@ -738,6 +4297,66 @@
       }
     },
     "schemas": {
+      "HealthDataDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "example": "0.1.0"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "example": 12
+          },
+          "checks": {
+            "type": "object",
+            "required": [
+              "database"
+            ],
+            "properties": {
+              "database": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "uptimeSeconds"
+        ]
+      },
+      "CaptchaVerifyDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "内置验证码挑战 ID",
+            "maxLength": 64
+          },
+          "answer": {
+            "type": "string",
+            "description": "内置验证码答案",
+            "maxLength": 16
+          },
+          "token": {
+            "type": "string",
+            "description": "Turnstile/hCaptcha 组件令牌",
+            "maxLength": 4096
+          }
+        }
+      },
       "OAuthAvailabilityResponseDto": {
         "type": "object",
         "properties": {
@@ -749,6 +4368,62 @@
         },
         "required": [
           "available"
+        ]
+      },
+      "OAuthEntryConsentDto": {
+        "type": "object",
+        "properties": {
+          "redirect_uri": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "response_type": {
+            "type": "string",
+            "enum": [
+              "code"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "code_challenge": {
+            "type": "string"
+          },
+          "code_challenge_method": {
+            "type": "string",
+            "enum": [
+              "S256",
+              "plain"
+            ]
+          }
+        },
+        "required": [
+          "redirect_uri"
+        ]
+      },
+      "ProtocolErrorDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "IllegalArgumentException"
+          },
+          "errorMessage": {
+            "type": "string",
+            "example": "请求参数不合法"
+          },
+          "cause": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "errorMessage"
         ]
       },
       "OAuthAuthenticateRequestDto": {
@@ -787,8 +4462,9 @@
             "type": "string",
             "enum": [
               "user",
-              "mod",
-              "admin"
+              "reviewer",
+              "admin",
+              "superadmin"
             ]
           }
         },
@@ -831,26 +4507,6 @@
           "token_type",
           "expires_in",
           "refresh_token"
-        ]
-      },
-      "ProtocolErrorDto": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string",
-            "example": "NotImplementedException"
-          },
-          "errorMessage": {
-            "type": "string",
-            "example": "M0 stub"
-          },
-          "cause": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "error",
-          "errorMessage"
         ]
       },
       "OAuthRefreshRequestDto": {
@@ -907,6 +4563,212 @@
           "player"
         ]
       },
+      "YggdrasilMetadataMetaDto": {
+        "type": "object",
+        "properties": {
+          "serverName": {
+            "type": "string",
+            "example": "MCSerAuth"
+          },
+          "implementationName": {
+            "type": "string",
+            "example": "MCSerAuth"
+          },
+          "implementationVersion": {
+            "type": "string",
+            "example": "0.1.0"
+          },
+          "links": {
+            "type": "object",
+            "example": {
+              "homepage": "http://localhost:3000"
+            }
+          }
+        },
+        "required": [
+          "serverName",
+          "implementationName",
+          "implementationVersion"
+        ]
+      },
+      "YggdrasilMetadataDto": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/YggdrasilMetadataMetaDto"
+          },
+          "skinDomains": {
+            "example": [
+              "localhost",
+              "127.0.0.1"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "meta",
+          "skinDomains"
+        ]
+      },
+      "YggdrasilAgentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Minecraft"
+          },
+          "version": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "YggdrasilAuthenticateRequestDto": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/YggdrasilAgentDto"
+          },
+          "username": {
+            "type": "string",
+            "description": "网站账号邮箱",
+            "example": "admin@mcserauth.dev"
+          },
+          "password": {
+            "type": "string",
+            "example": "Admin@12345"
+          },
+          "clientToken": {
+            "type": "string",
+            "description": "启动器自身标识；不传则由服务端生成"
+          },
+          "requestUser": {
+            "type": "boolean",
+            "description": "为 true 时额外返回 user 对象"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "YggdrasilProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "85cbb85205d944eea137574bd7afe854"
+          },
+          "name": {
+            "type": "string",
+            "example": "Admin"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "YggdrasilUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "YggdrasilAuthenticateResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "clientToken": {
+            "type": "string"
+          },
+          "availableProfiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YggdrasilProfileDto"
+            }
+          },
+          "selectedProfile": {
+            "$ref": "#/components/schemas/YggdrasilProfileDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/YggdrasilUserDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "clientToken",
+          "availableProfiles"
+        ]
+      },
+      "YggdrasilRefreshRequestDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "当前访问令牌"
+          },
+          "clientToken": {
+            "type": "string"
+          },
+          "requestUser": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "YggdrasilRefreshResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "clientToken": {
+            "type": "string"
+          },
+          "selectedProfile": {
+            "$ref": "#/components/schemas/YggdrasilProfileDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/YggdrasilUserDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "clientToken"
+        ]
+      },
+      "YggdrasilValidateRequestDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "待校验的访问令牌"
+          },
+          "clientToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
       "JoinServerRequestDto": {
         "type": "object",
         "properties": {
@@ -916,7 +4778,7 @@
           },
           "selectedProfile": {
             "type": "string",
-            "description": "玩家 UUID（小写、无连字符）"
+            "description": "玩家 UUID（32 位无连字符；兼容带连字符形式）"
           },
           "serverId": {
             "type": "string"
@@ -938,7 +4800,8 @@
             "type": "string"
           },
           "ip": {
-            "type": "string"
+            "type": "string",
+            "description": "服务器观测到的客户端 IP（可选，用于绑定会话）"
           }
         },
         "required": [
@@ -992,6 +4855,29 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "YggdrasilJoinRequestDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "启动器访问令牌"
+          },
+          "selectedProfile": {
+            "type": "string",
+            "description": "玩家 UUID（32 位无连字符；兼容带连字符形式）"
+          },
+          "serverId": {
+            "type": "string",
+            "description": "服务端握手哈希（每个服务器每次握手都不同，不要求是白名单 ID）",
+            "example": "a1b2c3d4e5f6"
+          }
+        },
+        "required": [
+          "accessToken",
+          "selectedProfile",
+          "serverId"
         ]
       },
       "ProfilesBatchRequestDto": {
@@ -1099,6 +4985,952 @@
           "name",
           "skins",
           "capes"
+        ]
+      },
+      "TextureUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "skin",
+              "cape"
+            ]
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "slim"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "uploadedAt": {
+            "type": "string",
+            "example": "2026-10-20T12:00:00.000Z"
+          },
+          "url": {
+            "type": "string",
+            "description": "带签名的短期预览 URL"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "variant",
+          "status",
+          "uploadedAt",
+          "url"
+        ]
+      },
+      "CreatePostDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "contentMd": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
+        },
+        "required": [
+          "categoryId",
+          "title",
+          "contentMd"
+        ]
+      },
+      "UpdatePostDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "contentMd": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
+        }
+      },
+      "CreateReplyDto": {
+        "type": "object",
+        "properties": {
+          "contentMd": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          }
+        },
+        "required": [
+          "contentMd"
+        ]
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "post",
+              "reply",
+              "user",
+              "skin"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "description": "帖子/回复/纹理为数字 ID，用户为账号 ID"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "targetType",
+          "targetId",
+          "reason"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "type": "object",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "object",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "http(s) 头像地址"
+          }
+        }
+      },
+      "ChangeEmailDto": {
+        "type": "object",
+        "properties": {
+          "newEmail": {
+            "type": "string",
+            "description": "新邮箱",
+            "example": "someone@example.com",
+            "maxLength": 200
+          },
+          "currentPassword": {
+            "type": "string",
+            "description": "当前账号密码",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "newEmail",
+          "currentPassword"
+        ]
+      },
+      "RenamePlayerDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 16,
+            "example": "NewNick"
+          }
+        },
+        "required": [
+          "nickname"
+        ]
+      },
+      "ServerEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "serverId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-10-20T12:00:00.000Z"
+          },
+          "secret": {
+            "type": "string",
+            "description": "仅在创建响应中返回一次的明文密钥"
+          }
+        },
+        "required": [
+          "id",
+          "serverId",
+          "name",
+          "enabled",
+          "createdAt"
+        ]
+      },
+      "CreateServerDto": {
+        "type": "object",
+        "properties": {
+          "serverId": {
+            "type": "string",
+            "example": "survival-1",
+            "description": "服务器白名单 ID（joinServer/hasJoined 使用）"
+          },
+          "name": {
+            "type": "string",
+            "example": "生存服一区"
+          },
+          "secret": {
+            "type": "string",
+            "description": "服务器密钥；省略时自动生成，明文只在创建响应中返回一次（库中只存哈希）"
+          }
+        },
+        "required": [
+          "serverId",
+          "name"
+        ]
+      },
+      "UpdateServerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdminTextureDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "playerUuid": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "skin",
+              "cape"
+            ]
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "slim"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "uploadedAt": {
+            "type": "string",
+            "example": "2026-10-20T12:00:00.000Z"
+          },
+          "url": {
+            "type": "string",
+            "description": "带签名的短期预览 URL"
+          }
+        },
+        "required": [
+          "id",
+          "playerUuid",
+          "nickname",
+          "kind",
+          "variant",
+          "status",
+          "isActive",
+          "uploadedAt",
+          "url"
+        ]
+      },
+      "ReviewTextureDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "处理备注（写入 moderation_log）"
+          }
+        }
+      },
+      "BanUserDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "banForum": {
+            "type": "boolean",
+            "default": true
+          },
+          "banGame": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "UnbanUserDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "unbanForum": {
+            "type": "boolean",
+            "default": true
+          },
+          "unbanGame": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "MuteUserDto": {
+        "type": "object",
+        "properties": {
+          "durationHours": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 720,
+            "description": "禁言时长（小时）"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "durationHours"
+        ]
+      },
+      "UnmuteUserDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "HandleReportDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "ModeratePostDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "pending",
+              "published",
+              "hidden",
+              "deleted"
+            ]
+          },
+          "pinned": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "ModerateReplyDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "published",
+              "hidden",
+              "deleted"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "AdminCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "slug": {
+            "type": "string",
+            "example": "new-category"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "default": 0
+          },
+          "parentId": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ]
+      },
+      "UpdateAdminCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "number"
+          },
+          "parentId": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      },
+      "CreateAnnouncementDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "link": {
+            "type": "object",
+            "description": "站内相对链接，如 /forum/post/1"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "CreateTitleDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 20
+          },
+          "description": {
+            "type": "object",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "description": "#RRGGBB",
+            "maxLength": 7
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "TitleUserDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "目标用户 ID"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "AdjustPointsDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "正数发放、负数扣减",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "GrowthRulesDto": {
+        "type": "object",
+        "properties": {
+          "checkinBaseXp": {
+            "type": "number",
+            "description": "每日签到基础经验",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "checkinStreakXp": {
+            "type": "number",
+            "description": "连签每日额外经验",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "checkinStreakXpCap": {
+            "type": "number",
+            "description": "连签经验加成封顶天数",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "checkinBasePoints": {
+            "type": "number",
+            "description": "每日签到基础积分",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "checkinStreakPoints": {
+            "type": "number",
+            "description": "连签每日额外积分",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "checkinStreakPointsCap": {
+            "type": "number",
+            "description": "连签积分加成封顶天数",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "postXp": {
+            "type": "number",
+            "description": "发帖经验",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "postDailyXpLimit": {
+            "type": "number",
+            "description": "发帖每日经验上限条数",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "replyXp": {
+            "type": "number",
+            "description": "回帖经验",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "replyDailyXpLimit": {
+            "type": "number",
+            "description": "回帖每日经验上限条数",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "xpBoostMultiplier": {
+            "type": "number",
+            "description": "翻倍卡倍率",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "xpBoostHours": {
+            "type": "number",
+            "description": "翻倍卡时长（小时）",
+            "minimum": 1,
+            "maximum": 720
+          },
+          "xpBoostPrice": {
+            "type": "number",
+            "description": "翻倍卡价格（积分）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "capeUnlockPrice": {
+            "type": "number",
+            "description": "披风解锁价格（积分）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "bannerPrice": {
+            "type": "number",
+            "description": "Banner 价格（积分）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "bannerDays": {
+            "type": "number",
+            "description": "Banner 展示天数",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "bannerMaxActive": {
+            "type": "number",
+            "description": "首页同时展示的 Banner 上限",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "tipMin": {
+            "type": "number",
+            "description": "单次打赏下限（积分）",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "tipMax": {
+            "type": "number",
+            "description": "单次打赏上限（积分）",
+            "minimum": 1,
+            "maximum": 10000000
+          },
+          "titleApplicationLevel": {
+            "type": "number",
+            "description": "可申请专属称号的等级",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "UpdatePermissionsDto": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "site.manage",
+                "forum.categories",
+                "forum.announce",
+                "users.ban",
+                "servers.manage",
+                "titles.manage",
+                "banners.manage",
+                "points.adjust"
+              ]
+            }
+          }
+        },
+        "required": [
+          "permissions"
+        ]
+      },
+      "UpdateCaptchaDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "是否启用登录/注册人机验证"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "turnstile",
+              "hcaptcha"
+            ]
+          },
+          "siteKey": {
+            "type": "object",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "secret": {
+            "type": "object",
+            "description": "留空字符串表示清除；写入后不再回显",
+            "maxLength": 256,
+            "nullable": true
+          }
+        }
+      },
+      "AdminSiteUpdateDto": {
+        "type": "object",
+        "properties": {
+          "siteName": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "tagline": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "footerText": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "announcement": {
+            "type": "object",
+            "maxLength": 300,
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "object",
+            "maxLength": 254,
+            "nullable": true
+          },
+          "customCss": {
+            "type": "object",
+            "maxLength": 20000,
+            "nullable": true,
+            "description": "全站自定义 CSS；留空或 null 表示清除"
+          },
+          "homeContent": {
+            "type": "object",
+            "description": "首页可编辑内容（首屏、数据条、加入步骤与入口卡片）"
+          }
+        }
+      },
+      "UpdateUserRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "reviewer",
+              "admin",
+              "superadmin"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "ConsoleLoginDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
+      "ConsoleSiteUpdateDto": {
+        "type": "object",
+        "properties": {
+          "siteName": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "tagline": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "footerText": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "announcement": {
+            "type": "object",
+            "maxLength": 300,
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "object",
+            "maxLength": 254,
+            "nullable": true
+          },
+          "customCss": {
+            "type": "object",
+            "maxLength": 20000,
+            "nullable": true,
+            "description": "全站自定义 CSS；留空或 null 表示清除"
+          },
+          "homeContent": {
+            "type": "object",
+            "description": "首页可编辑内容（首屏、数据条、加入步骤与入口卡片）"
+          },
+          "mailProvider": {
+            "type": "string",
+            "enum": [
+              "console",
+              "smtp",
+              "resend"
+            ]
+          },
+          "mailFrom": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "smtpHost": {
+            "type": "object",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "smtpPort": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "smtpUser": {
+            "type": "object",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "smtpPass": {
+            "type": "object",
+            "description": "留空字符串表示清除已保存的密码",
+            "maxLength": 512
+          }
+        }
+      },
+      "PurchaseDto": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string",
+            "enum": [
+              "xp_boost",
+              "cape_unlock",
+              "banner"
+            ]
+          },
+          "bannerTitle": {
+            "type": "string",
+            "description": "Banner 标题（购买 banner 时必填）",
+            "maxLength": 40
+          },
+          "bannerDescription": {
+            "type": "string",
+            "description": "Banner 描述",
+            "maxLength": 120
+          },
+          "bannerHref": {
+            "type": "string",
+            "description": "Banner 跳转链接（http/https）",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "item"
+        ]
+      },
+      "TipDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "被打赏的用户 ID"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "userId",
+          "amount"
+        ]
+      },
+      "SubmitTitleApplicationDto": {
+        "type": "object",
+        "properties": {
+          "proposedName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 20
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "proposedName",
+          "reason"
         ]
       }
     }

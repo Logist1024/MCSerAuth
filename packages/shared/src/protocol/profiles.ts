@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SkinKind, SkinStatus, SkinVariant } from '../enums.js';
 import type { GameProfile } from './session.js';
 
 /**
@@ -53,4 +54,17 @@ export type SkinUploadMetadata = z.infer<typeof skinUploadMetadataSchema>;
 export interface CapeUploadMetadata {
   /** Reserved for future aliases; the spec currently accepts the file only. */
   alias?: string;
+}
+
+/**
+ * Result of a texture upload. Uploads enter `pending` and are only distributed
+ * after moderation; `url` is a short-lived signed preview of the stored file.
+ */
+export interface TextureUploadResponse {
+  id: number;
+  kind: SkinKind;
+  variant: SkinVariant | null;
+  status: SkinStatus;
+  uploadedAt: string;
+  url: string;
 }

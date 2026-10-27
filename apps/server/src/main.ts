@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import {
   json,
   urlencoded,
@@ -27,9 +29,48 @@ async function bootstrap(): Promise<void> {
   expressApp.set('trust proxy', 1);
 
   app.enableCors({ origin: [config.appUrl, config.authUrl], credentials: true });
+  app.use(
+    helmet({
+      // The consent page ships inline styles/script; CSP is added once that
+      // page moves to a nonce-based template.
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+
+  const tooManyRequests = (
+    _request: Request,
+    response: Response,
+    _next: NextFunction,
+    _options: unknown,
+  ): void => {
+    response.status(429).json({ message: '请求过于频繁，请稍后再试' });
+  };
+  const authBurstLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 300,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: tooManyRequests,
+  });
+  const credentialLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: tooManyRequests,
+  });
 
   // better-auth owns /api/auth/*. It must run before the JSON parser because it
   // consumes the raw request stream itself.
+  // Credential endpoints get a tighter burst limit; all auth routes share a
+  // coarse per-IP ceiling. In-memory counters are sufficient for one process.
+  app.use('/api/auth/sign-in/email', credentialLimiter);
+  app.use('/api/auth/sign-up/email', credentialLimiter);
+  app.use('/api/auth/request-password-reset', credentialLimiter);
+  app.use('/api/auth/reset-password', credentialLimiter);
+  app.use('/api/auth', authBurstLimiter);
+
   const authHandler = auth.handler;
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path === '/api/auth' || req.path.startsWith('/api/auth/')) {

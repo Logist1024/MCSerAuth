@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { HealthData } from '@mcserauth/shared';
 import { APP_VERSION } from '../../app.constants.js';
 import { apiSuccessSchema } from '../../common/swagger/api-envelope.js';
@@ -8,6 +8,7 @@ import { HealthDataDto } from './dto/health.dto.js';
 
 /** `GET /health` (excluded from the /api prefix). Always 200 while the process lives. */
 @ApiTags('ops')
+@ApiExtraModels(HealthDataDto)
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: DbService) {}

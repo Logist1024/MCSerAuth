@@ -26,6 +26,20 @@ try {
   const db = drizzle(sqlite);
   migrate(db, { migrationsFolder });
 
+  // Legacy role rename: `mod` became `reviewer` in the four-tier permission model.
+  const renamedRoles = sqlite.prepare("update user set role = 'reviewer' where role = 'mod'").run();
+  if (renamedRoles.changes > 0) {
+    console.log(`Renamed ${renamedRoles.changes} legacy mod role(s) to reviewer`);
+  }
+
+  // Textures are no longer pre-moderated; historical pending rows become usable.
+  const approvedTextures = sqlite
+    .prepare("update skin set status = 'approved' where status = 'pending'")
+    .run();
+  if (approvedTextures.changes > 0) {
+    console.log(`Marked ${approvedTextures.changes} pending texture(s) as approved`);
+  }
+
   console.log(`Migrations applied to ${databaseFile}`);
 } finally {
   sqlite.close();

@@ -4,6 +4,7 @@ import {
   USER_ROLES,
   type OAuthAuthenticateRequest,
   type OAuthAvailabilityResponse,
+  type OAuthEntryConsentRequest,
   type OAuthEntryQuery,
   type OAuthRefreshRequest,
   type OAuthTokenResponse,
@@ -33,6 +34,43 @@ export class OAuthEntryQueryDto implements OAuthEntryQuery {
   @IsOptional()
   @IsString()
   response_type?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  scope?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  code_challenge?: string;
+
+  @ApiPropertyOptional({ enum: ['S256', 'plain'] })
+  @IsOptional()
+  @IsIn(['S256', 'plain'])
+  code_challenge_method?: 'S256' | 'plain';
+}
+
+export class OAuthEntryConsentDto implements OAuthEntryConsentRequest {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  redirect_uri!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  client_id?: string;
+
+  @ApiPropertyOptional({ enum: ['code'] })
+  @IsOptional()
+  @IsIn(['code'])
+  response_type?: 'code';
 
   @ApiPropertyOptional()
   @IsOptional()

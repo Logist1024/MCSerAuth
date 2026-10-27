@@ -17,9 +17,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm --filter @mcserauth/shared build && pnpm -r --parallel typecheck",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
     "db:generate": "pnpm --filter @mcserauth/server db:generate",
     "db:migrate": "pnpm --filter @mcserauth/server db:migrate",
+    "db:backup": "pnpm --filter @mcserauth/server db:backup",
     "db:studio": "pnpm --filter @mcserauth/server db:studio",
+    "admin:grant": "pnpm --filter @mcserauth/server admin:grant",
     "openapi:export": "pnpm --filter @mcserauth/server openapi:export",
     "prepare": "husky"
   },

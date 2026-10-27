@@ -27,6 +27,19 @@ export const oauthEntryQuerySchema = z.object({
 });
 export type OAuthEntryQuery = z.infer<typeof oauthEntryQuerySchema>;
 
+/**
+ * POST /api/oauth/entry — consent form submission.
+ *
+ * The consent page is rendered by NestJS so it shares the better-auth cookie.
+ * Submitting the form issues a single-use authorization code and redirects to
+ * `redirect_uri` with `code` + `state`.
+ */
+export const oauthEntryConsentSchema = oauthEntryQuerySchema.extend({
+  redirect_uri: z.string().min(1),
+  response_type: z.literal('code').optional(),
+});
+export type OAuthEntryConsentRequest = z.infer<typeof oauthEntryConsentSchema>;
+
 /** POST /api/oauth/authenticate */
 export const oauthAuthenticateRequestSchema = z.object({
   code: z.string().min(1).optional(),

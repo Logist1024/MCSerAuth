@@ -6,6 +6,7 @@ import type {
   SkinTexture,
   SkinUploadMetadata,
   TextureState,
+  TextureUploadResponse,
 } from '@mcserauth/shared';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsString, MinLength } from 'class-validator';
 
@@ -69,4 +70,24 @@ export class SkinUploadMetadataDto implements SkinUploadMetadata {
   @ApiProperty({ enum: ['classic', 'slim'] })
   @IsIn(['classic', 'slim'])
   variant!: SkinUploadMetadata['variant'];
+}
+
+export class TextureUploadResponseDto implements TextureUploadResponse {
+  @ApiProperty()
+  id!: number;
+
+  @ApiProperty({ enum: ['skin', 'cape'] })
+  kind!: TextureUploadResponse['kind'];
+
+  @ApiProperty({ enum: ['classic', 'slim'], nullable: true })
+  variant!: TextureUploadResponse['variant'];
+
+  @ApiProperty({ enum: ['pending', 'approved', 'rejected'] })
+  status!: TextureUploadResponse['status'];
+
+  @ApiProperty({ example: '2026-10-20T12:00:00.000Z' })
+  uploadedAt!: string;
+
+  @ApiProperty({ description: '带签名的短期预览 URL' })
+  url!: string;
 }

@@ -12,6 +12,8 @@ export const notification = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     type: text('type', { enum: NOTIFICATION_TYPES }).notNull(),
     actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+    /** Free-form text for system/moderation notices; replies/mentions link instead. */
+    message: text('message'),
     link: text('link'),
     readAt: integer('read_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' })
@@ -21,5 +23,7 @@ export const notification = sqliteTable(
   (t) => [
     index('notification_user_id_idx').on(t.userId),
     index('notification_read_at_idx').on(t.readAt),
+    index('notification_user_read_idx').on(t.userId, t.readAt),
+    index('notification_user_read_created_idx').on(t.userId, t.readAt, t.createdAt),
   ],
 );

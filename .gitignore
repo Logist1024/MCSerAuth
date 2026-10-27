@@ -27,3 +27,6 @@ coverage/
 .vscode/
 .idea/
 .DS_Store
+
+# local smoke-test artifacts
+.smoke/

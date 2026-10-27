@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { VOTE_TARGET_TYPES } from '@mcserauth/shared';
 import { user } from './user.js';
 
@@ -19,5 +19,8 @@ export const vote = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => [uniqueIndex('vote_user_target_unique_idx').on(t.userId, t.targetType, t.targetId)],
+  (t) => [
+    uniqueIndex('vote_user_target_unique_idx').on(t.userId, t.targetType, t.targetId),
+    index('vote_target_idx').on(t.targetType, t.targetId),
+  ],
 );

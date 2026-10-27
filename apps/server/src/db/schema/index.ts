@@ -1,12 +1,15 @@
 /**
- * Drizzle schema — the 15 tables of the M0 design:
- *  12 curated tables + 3 better-auth managed tables (session/account/verification).
+ * Drizzle schema — 29 tables:
+ *  26 curated tables + 3 better-auth managed tables (session/account/verification).
  * Every change must go through drizzle-kit migrations (`pnpm db:generate`).
  */
 export * from './user.js';
 export * from './better-auth.js';
 export * from './player.js';
+export * from './nickname-reservation.js';
 export * from './token.js';
+export * from './oauth-code.js';
+export * from './game-session.js';
 export * from './server-entry.js';
 export * from './skin.js';
 export * from './category.js';
@@ -16,3 +19,10 @@ export * from './vote.js';
 export * from './report.js';
 export * from './notification.js';
 export * from './moderation-log.js';
+export * from './upload-usage.js';
+export * from './site-setting.js';
+export * from './user-progress.js';
+export * from './title.js';
+export * from './banner.js';
+export * from './captcha-challenge.js';
+export * from './user-permission.js';

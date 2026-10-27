@@ -9,6 +9,8 @@ const REDACT_PATHS = [
   'req.headers["set-cookie"]',
   'res.headers["set-cookie"]',
   'req.body.password',
+  'req.body.key',
+  'req.body.smtpPass',
   'req.body.token',
   'req.body.accessToken',
   'req.body.refreshToken',

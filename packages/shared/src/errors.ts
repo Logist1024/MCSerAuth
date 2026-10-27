@@ -19,6 +19,10 @@ export const ErrorCode = {
   NOT_IMPLEMENTED: 10006,
   RATE_LIMITED: 10007,
   SERVICE_UNAVAILABLE: 10008,
+  NICKNAME_TAKEN: 20001,
+  RENAME_COOLDOWN: 20002,
+  UPLOAD_QUOTA_EXCEEDED: 20003,
+  ORIGIN_BLOCKED: 20004,
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -34,6 +38,10 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.NOT_IMPLEMENTED]: '该功能尚未实现（M0 占位）',
   [ErrorCode.RATE_LIMITED]: '请求过于频繁，请稍后再试',
   [ErrorCode.SERVICE_UNAVAILABLE]: '服务暂时不可用',
+  [ErrorCode.NICKNAME_TAKEN]: '该昵称已被使用',
+  [ErrorCode.RENAME_COOLDOWN]: '改名冷却中',
+  [ErrorCode.UPLOAD_QUOTA_EXCEEDED]: '上传次数已达上限，请稍后再试',
+  [ErrorCode.ORIGIN_BLOCKED]: '请求来源不受信任',
 };
 
 export function errorMessageFor(code: ErrorCode): string {
@@ -44,6 +52,8 @@ export function errorMessageFor(code: ErrorCode): string {
 export function errorCodeForHttpStatus(status: number): ErrorCode {
   switch (status) {
     case 400:
+    case 413:
+    case 415:
     case 422:
       return ErrorCode.VALIDATION_FAILED;
     case 401:

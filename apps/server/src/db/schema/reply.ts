@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { REPLY_STATUSES } from '@mcserauth/shared';
 import { post } from './post.js';
 import { user } from './user.js';
@@ -21,5 +21,10 @@ export const reply = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => [index('reply_post_id_idx').on(t.postId), index('reply_author_id_idx').on(t.authorId)],
+  (t) => [
+    index('reply_post_id_idx').on(t.postId),
+    index('reply_post_status_floor_idx').on(t.postId, t.status, t.floor),
+    index('reply_author_id_idx').on(t.authorId),
+    uniqueIndex('reply_post_floor_unique').on(t.postId, t.floor),
+  ],
 );

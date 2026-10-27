@@ -37,5 +37,6 @@ export const skin = sqliteTable(
     uniqueIndex('skin_active_unique_idx')
       .on(t.playerUuid, t.kind)
       .where(sql`${t.isActive} = 1`),
+    uniqueIndex('skin_player_kind_sha_unique').on(t.playerUuid, t.kind, t.sha256),
   ],
 );

@@ -1,0 +1,370 @@
+/* ==========================================================================
+   Growth system (成长中心)
+   Scopes to components/growth/*; relies on the tokens defined in globals.css.
+   ========================================================================== */
+
+.growth-layout {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.growth-columns {
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.growth-columns > * {
+  min-width: 0;
+}
+
+@media (min-width: 62rem) {
+  .growth-columns {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.growth-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.1rem;
+  align-content: start;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- level card */
+.level-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.level-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+
+.level-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.level-card-title h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.level-card-exempt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* XP progress bar (role=progressbar) */
+.xp-track {
+  position: relative;
+  height: 0.75rem;
+  border-radius: 3px;
+  background: var(--surface-strong);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.xp-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.35s ease;
+}
+
+.xp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.xp-legend strong {
+  color: var(--fg-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- badges */
+.growth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 10%, var(--surface));
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.growth-badge-lg {
+  padding: 0.16rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.growth-badge-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.growth-badge-title svg {
+  opacity: 0.85;
+}
+
+.growth-badges-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---------------------------------------------------------- stat / wallet */
+.wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+}
+
+.boost-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+  border-radius: 4px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.checkin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.checkin-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------ shop */
+.shop-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 44rem) {
+  .shop-grid {
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  }
+}
+
+.shop-item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.shop-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.shop-item-name {
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+
+.shop-item-price {
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.shop-item-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.shop-item .actions {
+  margin-top: 0.2rem;
+}
+
+.banner-form {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+/* ----------------------------------------------------------- tables */
+.growth-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.growth-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.growth-table caption {
+  padding: 0.6rem 0.8rem;
+  color: var(--muted);
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.growth-table th,
+.growth-table td {
+  padding: 0.5rem 0.55rem;
+  text-align: left;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.growth-table thead th {
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-top: 0;
+  background: var(--surface-soft);
+  white-space: nowrap;
+}
+
+.growth-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.growth-table .rank {
+  width: 2.4rem;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.growth-table .who {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 7rem;
+}
+
+.growth-table th:last-child,
+.growth-table td:last-child {
+  width: 4.25rem;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.growth-table td:last-child .button {
+  white-space: nowrap;
+}
+
+.growth-table .pos {
+  color: var(--success);
+}
+
+.tx-positive {
+  color: var(--success);
+}
+
+.tx-negative {
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------------- titles */
+.title-catalog {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.title-chip {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  min-width: 8rem;
+}
+
+.title-chip-name {
+  font-weight: 600;
+}
+
+.title-chip-kind {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.pending-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0;
+  color: var(--warning);
+  font-size: 0.82rem;
+}
+
+/* ------------------------------------------------------------ misc */
+.growth-section-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.growth-error {
+  margin: 0.4rem 0 0;
+}
+
+.growth-form {
+  display: grid;
+  gap: 0.7rem;
+}

@@ -1,0 +1,148 @@
+/* ==========================================================================
+   首页动态内容与 Banner 轮播（app/page.tsx 专用样式）
+   仅复用 globals.css 的 :root 变量，避免与其并行修改冲突。
+   ========================================================================== */
+
+/* 管理员可配置 1–4 条 hero 统计，覆盖 globals.css 中固定 3 列的布局。 */
+.community-hero .hero-stats {
+  grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+}
+
+/* ------------------------------------------------------------------ 轮播 */
+
+.home-banner-carousel {
+  position: relative;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.15rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.home-banner-viewport {
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.home-banner-track {
+  display: flex;
+  transition: transform 0.45s ease;
+}
+
+.home-banner-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+}
+
+.home-banner-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.home-banner-title {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.home-banner-title a {
+  color: var(--fg-strong);
+  text-decoration: none;
+}
+
+.home-banner-title a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.home-banner-description {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.home-banner-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.home-banner-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.home-banner-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 auto;
+}
+
+.home-banner-dot {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.home-banner-dot:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.home-banner-dot.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.home-banner-toggle {
+  min-height: 1.9rem;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+/* 减少动态效果时关闭滑动动画（组件会同时暂停自动轮播）。 */
+@media (prefers-reduced-motion: reduce) {
+  .home-banner-track {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-banner-carousel {
+    padding: 0.8rem 0.85rem 0.6rem;
+  }
+
+  .home-banner-card {
+    padding: 0.8rem 0.9rem;
+  }
+}

@@ -34,6 +34,18 @@ export const envSchema = z.object({
 
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
 
+  /** Launcher access-token lifetime (seconds); planning default is 30 days. */
+  OAUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(2_592_000),
+  /** Absolute refresh-token lifetime measured from the initial authorization. */
+  OAUTH_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).default(5_184_000),
+  /** Authorization-code lifetime (seconds); codes are also single-use. */
+  OAUTH_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
+
+  /** How long a joinServer registration stays usable by hasJoined (seconds). */
+  SESSION_JOIN_TTL_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
+  /** Lifetime of signed texture URLs handed to launchers/game servers. */
+  TEXTURE_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
+
   /** SQLite file; relative paths resolve from apps/server. */
   DATABASE_URL: z.string().min(1).default('./data/mcserauth.db'),
   /** Local texture/attachment directory (M2); relative paths resolve from apps/server. */
@@ -46,6 +58,16 @@ export const envSchema = z.object({
   SMTP_PORT: portFromEnv,
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+
+  /**
+   * Root console: a separate key-only login used to manage superadmins and
+   * site-wide configuration. The console is disabled when the key is absent.
+   */
+  CONSOLE_KEY: z.preprocess(
+    (value) => (value === '' || value === undefined ? undefined : value),
+    z.string().min(16).optional(),
+  ),
+  CONSOLE_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86_400).default(28_800),
 });
 
 export type ParsedEnv = z.infer<typeof envSchema>;

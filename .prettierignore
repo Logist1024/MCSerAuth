@@ -8,6 +8,9 @@ apps/server/drizzle/
 pnpm-lock.yaml
 docs/openapi.json
 
+# Local smoke-test artifacts (servers, cookie jars, generated PNGs).
+.smoke/
+
 # Husky hooks are plain shell scripts (no inferred parser).
 .husky/
 

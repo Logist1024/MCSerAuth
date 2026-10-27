@@ -3,6 +3,8 @@ import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import type { IncomingHttpHeaders } from 'node:http';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { DbService } from '../../db/db.service.js';
+import { CaptchaService } from '../captcha/captcha.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { type Auth, createAuth } from './auth.instance.js';
 
 /**
@@ -14,8 +16,13 @@ export class AuthService {
   readonly auth: Auth;
   readonly handler: ReturnType<typeof toNodeHandler>;
 
-  constructor(config: AppConfigService, db: DbService) {
-    this.auth = createAuth(config.env, db);
+  constructor(
+    config: AppConfigService,
+    db: DbService,
+    captcha: CaptchaService,
+    mailer: MailService,
+  ) {
+    this.auth = createAuth(config.env, db, captcha, mailer);
     this.handler = toNodeHandler(this.auth);
   }
 

@@ -19,12 +19,19 @@ export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-  name: text('name').notNull(),
+  /**
+   * Display name, unique website-wide (case handling stays in app code). It
+   * becomes the seed of the player's game nickname, so a name taken by another
+   * account, a player or a reservation is rejected at sign-up.
+   */
+  name: text('name').notNull().unique(),
   avatarUrl: text('avatar_url'),
-  /** S3: role enum, deliberately no RBAC tables. */
+  /** S3: role enum (user/reviewer/admin/superadmin), deliberately no RBAC tables. */
   role: text('role', { enum: USER_ROLES }).notNull().default('user'),
   /** Forum ban flag; game ban lives on `player.banned`. */
   banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
+  /** Forum mute expiry (reviewer-issued); null means not muted. */
+  mutedUntil: integer('muted_until', { mode: 'timestamp' }),
   signature: text('signature'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()

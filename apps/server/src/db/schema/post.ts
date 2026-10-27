@@ -22,6 +22,8 @@ export const post = sqliteTable(
     status: text('status', { enum: POST_STATUSES }).notNull().default('published'),
     pinned: integer('pinned', { mode: 'boolean' }).notNull().default(false),
     featured: integer('featured', { mode: 'boolean' }).notNull().default(false),
+    /** Locked posts reject new replies from regular users. */
+    locked: integer('locked', { mode: 'boolean' }).notNull().default(false),
     lastActivityAt: integer('last_activity_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -33,6 +35,8 @@ export const post = sqliteTable(
     index('post_category_id_idx').on(t.categoryId),
     index('post_author_id_idx').on(t.authorId),
     index('post_status_idx').on(t.status),
+    index('post_status_last_activity_idx').on(t.status, t.lastActivityAt),
+    index('post_category_status_activity_idx').on(t.categoryId, t.status, t.lastActivityAt),
     index('post_pinned_idx').on(t.pinned),
     index('post_last_activity_at_idx').on(t.lastActivityAt),
   ],
