@@ -237,6 +237,10 @@ class PostgresTarget implements Target {
   private async connect(): Promise<void> {
     if (this.connected) return;
     await this.client.connect();
+    // `EXTRACT(EPOCH FROM timestamp)` interprets a timestamp without time
+    // zone in the session time zone. Pin it so checksums match the SQLite
+    // source regardless of the server default.
+    await this.client.query("SET TIME ZONE 'UTC'");
     this.connected = true;
   }
 
