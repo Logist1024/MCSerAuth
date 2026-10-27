@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: lint · typecheck · test · build
+  quality:
+    name: lint · typecheck · build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,20 +39,118 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Build
+        run: pnpm build
+
+  test-sqlite:
+    name: test · sqlite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # @mcserauth/shared is consumed from dist/, so it must be built before
+      # any test run (the quality job builds it via typecheck).
+      - name: Build shared
+        run: pnpm --filter @mcserauth/shared build
+
+      # The test suite creates a throwaway SQLite file per test file, so no
+      # database service is required here.
       - name: Test
-        run: pnpm test:coverage
+        run: pnpm --filter @mcserauth/server test:coverage && pnpm --filter @mcserauth/web test
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-sqlite
           path: '**/coverage/lcov.info'
           if-no-files-found: ignore
 
-      - name: Build
-        run: pnpm build
-
       # Smoke-tests migrations on a clean runner: creates data/, enables WAL
-      # and applies the first migration into a throwaway SQLite file.
+      # and applies every migration into a throwaway SQLite file.
       - name: Database migration smoke test
         run: pnpm db:migrate
+
+  # Runs the same server test suite against real MySQL and PostgreSQL servers.
+  # Each test file creates and drops its own database, so the suite exercises
+  # dialect-specific SQL (RETURNING, upserts, insert-ignore, transactions)
+  # instead of mocking it.
+  test-databases:
+    name: test · ${{ matrix.dialect }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dialect: mysql
+            image: mysql:8.0
+            port: 3306
+            database-url: mysql://root:root@127.0.0.1:3306/mcserauth
+            test-database-url: mysql://root:root@127.0.0.1:3306/mcserauth
+            health-cmd: mysqladmin ping -h 127.0.0.1 -proot --silent
+          - dialect: postgres
+            image: postgres:16
+            port: 5432
+            database-url: postgres://postgres:postgres@127.0.0.1:5432/mcserauth
+            # PostgreSQL needs an existing maintenance database to issue
+            # CREATE DATABASE; `postgres` always exists.
+            test-database-url: postgres://postgres:postgres@127.0.0.1:5432/postgres
+            health-cmd: pg_isready -U postgres -d mcserauth
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          # Each engine ignores the other engine's variables.
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mcserauth
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mcserauth
+        ports:
+          - ${{ matrix.port }}:${{ matrix.port }}
+        options: >-
+          --health-cmd "${{ matrix.health-cmd }}"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @mcserauth/shared build
+
+      # Applies drizzle/mysql or drizzle/postgres from scratch. This catches
+      # migration drift before the tests do.
+      - name: Database migration smoke test
+        env:
+          DATABASE_URL: ${{ matrix.database-url }}
+        run: pnpm db:migrate
+
+      - name: Test
+        env:
+          TEST_DATABASE_URL: ${{ matrix.test-database-url }}
+        run: pnpm --filter @mcserauth/server test
