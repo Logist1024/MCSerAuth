@@ -183,7 +183,8 @@ pg_dump --format=custom mcserauth > mcserauth.dump
 
 ## 运维注意事项
 
-- **时间**：业务层统一使用 `Date`/ISO 字符串；跨库比较时避免依赖数据库本地时区。
+- **时间**：服务进程启动时固定 `TZ=UTC`。SQLite 存 epoch 毫秒，MySQL `DATETIME`
+  与 PostgreSQL `timestamp` 存 UTC wall-clock；跨库比较时不要依赖数据库本地时区。
 - **布尔值**：SQLite 以 0/1 存储，MySQL 使用 `tinyint(1)`，PostgreSQL 使用 `boolean`；
   应用层类型保持一致。
 - **JSON**：站点配置等字段以文本存储并显式 `JSON.parse`，不依赖方言 JSON 类型。
