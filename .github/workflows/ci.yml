@@ -80,7 +80,7 @@ jobs:
         run: pnpm --filter @mcserauth/server test:coverage && pnpm --filter @mcserauth/web test
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-sqlite
           path: '**/coverage/lcov.info'
