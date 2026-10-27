@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const databaseUrl = process.env.DATABASE_URL ?? './data/mcserauth.db';
-const databaseFile = path.resolve(process.cwd(), databaseUrl);
+const databaseFile = path.resolve(process.cwd(), sqliteFilePath(databaseUrl));
 
 const explicitTarget = process.argv.slice(2).find((arg) => arg !== '--');
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -23,7 +23,12 @@ const targetFile = path.resolve(
   explicitTarget ?? path.join('data', 'backups', `mcserauth-${timestamp}.db`),
 );
 
-if (!fs.existsSync(databaseFile)) {
+if (/^(?:mysql2?|postgres(?:ql)?):\/\//i.test(databaseUrl.trim())) {
+  console.error(
+    'pnpm db:backup only supports SQLite. Use mysqldump / pg_dump for MySQL or PostgreSQL.',
+  );
+  process.exitCode = 1;
+} else if (!fs.existsSync(databaseFile)) {
   console.error(`Database not found: ${databaseFile}`);
   process.exitCode = 1;
 } else if (path.resolve(targetFile) === path.resolve(databaseFile)) {
@@ -40,4 +45,22 @@ if (!fs.existsSync(databaseFile)) {
   } finally {
     sqlite.close();
   }
+}
+
+/** Normalizes the SQLite URL forms accepted by DATABASE_URL into a file path. */
+function sqliteFilePath(databaseUrl) {
+  const value = databaseUrl.trim();
+  if (value.startsWith('sqlite://')) {
+    return new URL(value).pathname;
+  }
+  if (value.startsWith('sqlite:')) {
+    return value.slice('sqlite:'.length);
+  }
+  if (value.startsWith('file://')) {
+    return new URL(value).pathname;
+  }
+  if (value.startsWith('file:')) {
+    return value.slice('file:'.length);
+  }
+  return value;
 }
