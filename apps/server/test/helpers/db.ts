@@ -102,7 +102,7 @@ async function createDatabase(
       password: decodeURIComponent(url.password),
     });
     try {
-      await connection.query(`CREATE DATABASE \`${name}\``);
+      await connection.query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4`);
     } finally {
       await connection.end();
     }

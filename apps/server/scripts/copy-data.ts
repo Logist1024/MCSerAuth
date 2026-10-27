@@ -149,6 +149,12 @@ function createTarget(dialect: TargetDialect, databaseUrl: string): Target {
   return new PostgresTarget(databaseUrl);
 }
 
+/** Same `DB_SSL` semantics as the server: verify the server certificate. */
+function dbSsl(): { rejectUnauthorized: true } | undefined {
+  const raw = (process.env.DB_SSL ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === '1' ? { rejectUnauthorized: true } : undefined;
+}
+
 class MySqlTarget implements Target {
   readonly dialect = 'mysql' as const;
   private readonly connection;
@@ -166,6 +172,7 @@ class MySqlTarget implements Target {
       supportBigNumbers: true,
       bigNumberStrings: true,
       charset: 'utf8mb4',
+      ssl: dbSsl(),
     });
   }
 
@@ -231,7 +238,7 @@ class PostgresTarget implements Target {
   private readonly client: PgClient;
 
   constructor(databaseUrl: string) {
-    this.client = new PgClient({ connectionString: databaseUrl });
+    this.client = new PgClient({ connectionString: databaseUrl, ssl: dbSsl() });
   }
 
   private async connect(): Promise<void> {

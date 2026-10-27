@@ -86,7 +86,13 @@ async function migrateMysql(databaseUrl) {
   const { drizzle } = await import('drizzle-orm/mysql2');
   const { migrate } = await import('drizzle-orm/mysql2/migrator');
 
-  const pool = createPool({ uri: databaseUrl, connectionLimit: 1, timezone: 'Z' });
+  const pool = createPool({
+    uri: databaseUrl,
+    connectionLimit: 1,
+    timezone: 'Z',
+    charset: 'utf8mb4',
+    ssl: dbSsl(),
+  });
   try {
     await migrate(drizzle(pool, { mode: 'default' }), { migrationsFolder });
     console.log(`MySQL migrations applied to ${redact(databaseUrl)}`);
@@ -100,13 +106,19 @@ async function migratePostgres(databaseUrl) {
   const { drizzle } = await import('drizzle-orm/node-postgres');
   const { migrate } = await import('drizzle-orm/node-postgres/migrator');
 
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl: dbSsl() });
   try {
     await migrate(drizzle(pool), { migrationsFolder });
     console.log(`PostgreSQL migrations applied to ${redact(databaseUrl)}`);
   } finally {
     await pool.end();
   }
+}
+
+/** Same `DB_SSL` semantics as the server: verify the server certificate. */
+function dbSsl() {
+  const raw = (process.env.DB_SSL ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === '1' ? { rejectUnauthorized: true } : undefined;
 }
 
 function detectDialect(databaseUrl, override) {
