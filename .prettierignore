@@ -5,6 +5,9 @@ out/
 coverage/
 data/
 apps/server/drizzle/
+# Generated from src/db/schema/model.ts; formatting is owned by the generator.
+apps/server/src/db/schema/generated/
+apps/server/src/db/schema/index.ts
 pnpm-lock.yaml
 docs/openapi.json
 
