@@ -254,7 +254,10 @@ export class DbService implements OnModuleDestroy {
       .where(where);
     const ids = before
       .map((row) => (row as Record<string, unknown>)[primaryProp])
-      .filter((value): value is number => typeof value === 'number');
+      .filter(
+        (value): value is string | number =>
+          typeof value === 'string' || typeof value === 'number',
+      );
     if (ids.length === 0) {
       return [];
     }
