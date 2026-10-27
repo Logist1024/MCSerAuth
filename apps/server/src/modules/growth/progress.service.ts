@@ -40,6 +40,7 @@ import {
   type UserTitleSummary,
 } from '@mcserauth/shared';
 import { and, count, desc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { nullsLast } from '../../common/helpers/order.js';
 import { DbService, type CanonicalDb } from '../../db/db.service.js';
 import {
   banner as bannerTable,
@@ -756,7 +757,7 @@ export class ProgressService implements OnModuleInit {
           or(isNull(bannerTable.endsAt), gte(bannerTable.endsAt, now)),
         ),
       )
-      .orderBy(desc(bannerTable.startsAt), desc(bannerTable.id))
+      .orderBy(nullsLast(bannerTable.startsAt), desc(bannerTable.startsAt), desc(bannerTable.id))
       .limit(Math.min((await this.rules()).bannerMaxActive, Math.max(1, limit)));
     return rows.map((row) => this.toBannerSummary(row.banner, row.ownerName));
   }

@@ -155,6 +155,30 @@ describe('SiteService home content', () => {
     expect(titles).toEqual(['上线中的 Banner']);
     expect((await site.getHome()).banners[0]?.ownerName).toBe('Actor');
   });
+  it('orders banners with an explicit start time before immediately-active ones', async () => {
+    // PostgreSQL sorts NULLs first for DESC while SQLite/MySQL sort them last,
+    // so `listActiveBanners` must use an explicit `IS NULL` sort key.
+    const now = new Date();
+    await ctx.db.db.insert(banner).values([
+      {
+        userId: 'actor',
+        title: '立即生效 Banner',
+        status: 'approved',
+        pointsSpent: 500,
+        startsAt: null,
+      },
+      {
+        userId: 'actor',
+        title: '定时 Banner',
+        status: 'approved',
+        pointsSpent: 500,
+        startsAt: new Date(now.getTime() - 60000),
+      },
+    ]);
+
+    const titles = (await site.getHome()).banners.map((row) => row.title);
+    expect(titles).toEqual(['定时 Banner', '立即生效 Banner']);
+  });
   it('writes an audit row for a content change', async () => {
     await site.updateSettings({ homeContent: content() }, 'actor');
     const stored = (
