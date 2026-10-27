@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AppConfigService } from '../../src/config/app-config.service.js';
-import type { DatabaseDialect } from '../../src/db/dialect.js';
+import { detectDialect, type DatabaseDialect } from '../../src/db/dialect.js';
 import { DbService } from '../../src/db/db.service.js';
 
 export interface TestContext {
@@ -85,16 +85,6 @@ async function migrate(db: DbService, dialect: DatabaseDialect): Promise<void> {
   }
   const { migrate: run } = await import('drizzle-orm/node-postgres/migrator');
   await run(db.db as never, { migrationsFolder });
-}
-
-function detectDialect(databaseUrl: string): DatabaseDialect {
-  if (/^mysql2?:\/\//i.test(databaseUrl)) {
-    return 'mysql';
-  }
-  if (/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
-    return 'postgres';
-  }
-  return 'sqlite';
 }
 
 async function createDatabase(
