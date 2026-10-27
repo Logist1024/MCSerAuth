@@ -3,7 +3,8 @@
 面向第三方 Minecraft: Java Edition 服务器的**一体化社区论坛 + 外置登录认证服务**。
 
 认证侧实现 Commons-Designs 服务端协议（启动器 HMCL/PCL2 直接可用），社区侧提供论坛与玩家档案；
-两块业务共用同一账号体系与基础设施，单体部署、单库 SQLite。
+两块业务共用同一账号体系与基础设施，单体部署；默认 SQLite，生产可切换
+MySQL 8.0+ / PostgreSQL 16+。
 
 > **当前阶段：M3 论坛 MVP + M4 运营能力**
 > 已接通：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、`/api/user/profiles/me`、
@@ -18,7 +19,7 @@
 | 层     | 选型                                                                                                   |
 | ------ | ------------------------------------------------------------------------------------------------------ |
 | 运行时 | Node.js 22 LTS · pnpm 9 · TypeScript 6（全仓 ESM）                                                     |
-| 后端   | NestJS 12 · better-auth（账号）· Drizzle ORM · better-sqlite3（SQLite + WAL）                          |
+| 后端   | NestJS 12 · better-auth（账号）· Drizzle ORM · SQLite / MySQL 8.0+ / PostgreSQL 16+                    |
 | 前端   | Next.js 16 App Router · React 19（只做渲染，业务全在后端）                                             |
 | 契约   | NestJS Swagger → `docs/openapi.json`；Commons-Designs 协议对照 [checklist](docs/protocol-checklist.md) |
 | 质量   | ESLint · Prettier · husky + lint-staged · GitHub Actions                                               |
@@ -31,9 +32,9 @@ MCSerAuth/
 │   ├── server/              NestJS 单体后端
 │   │   ├── src/config/      env 加载与 zod 校验（单一入口）
 │   │   ├── src/common/      过滤器/拦截器/管道/日志脱敏/Swagger 封装
-│   │   ├── src/db/          Drizzle 实例 + 全部 schema（17 张表）
+│   │   ├── src/db/          Drizzle 实例 + 单一逻辑模型 + 三套生成 schema（29 张表）
 │   │   ├── src/modules/     auth · session · profiles · forum · user · admin · health
-│   │   └── drizzle/         迁移 SQL（drizzle-kit 生成，禁止手改）
+│   │   └── drizzle/         按方言拆分的迁移 SQL（sqlite/ · mysql/ · postgres/）
 │   └── web/                 Next.js App Router（渲染层）
 ├── packages/
 │   └── shared/              跨端类型/DTO/错误码/zod schema（单一事实来源）
@@ -50,7 +51,7 @@ git clone <repo> && cd MCSerAuth
 corepack enable                 # 或使用 corepack pnpm <cmd>
 pnpm install
 cp .env.example apps/server/.env   # 可选：不复制也能跑（有开发默认值）
-pnpm db:migrate                    # 建库 + 全部迁移（SQLite WAL）
+pnpm db:migrate                    # 建库 + 全部迁移（按 DATABASE_URL 选择方言）
 pnpm dev                           # 同时拉起 server(:8000) 与 web(:3000)
 ```
 
@@ -229,8 +230,10 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `pnpm format` / `pnpm format:check` | Prettier                               |
 | `pnpm typecheck`                    | 全仓 `tsc --noEmit`                    |
 | `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                 |
-| `pnpm db:generate`                  | 依 schema 变更生成迁移 SQL             |
-| `pnpm db:migrate`                   | 应用迁移（自动建目录、开 WAL）         |
+| `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移 |
+| `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                     |
+| `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移     |
+| `pnpm db:copy-data`                 | SQLite → MySQL/PostgreSQL 一次性复制   |
 | `pnpm db:backup`                    | 迁移前备份 SQLite（含 WAL checkpoint） |
 | `pnpm db:studio`                    | Drizzle Studio 浏览数据                |
 | `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin    |
@@ -254,11 +257,20 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `OAUTH_AUTH_CODE_TTL_SECONDS`     | `300`                             | 授权码有效期（秒，单次使用）                     |
 | `SESSION_JOIN_TTL_SECONDS`        | `300`                             | joinServer 会话可被 hasJoined 兑换的窗口（秒）   |
 | `TEXTURE_URL_TTL_SECONDS`         | `300`                             | 签名纹理 URL 有效期（秒）                        |
-| `DATABASE_URL`                    | `./data/mcserauth.db`             | 相对路径按启动目录解析                           |
+| `DATABASE_URL`                    | `./data/mcserauth.db`             | SQLite 路径或 `mysql://` / `postgres://` 连接串  |
+| `DB_DIALECT`                      | 自动识别                          | 可选覆盖，必须与 `DATABASE_URL` 协议一致         |
+| `DB_POOL_MIN` / `DB_POOL_MAX`     | `0` / `10`                        | MySQL/PostgreSQL 连接池（SQLite 忽略）           |
+| `DB_CONNECTION_TIMEOUT_MS`        | `10000`                           | 建立连接超时（毫秒）                             |
+| `DB_IDLE_TIMEOUT_MS`              | `30000`                           | 空闲连接回收时间（毫秒）                         |
+| `DB_SSL`                          | `false`                           | MySQL/PostgreSQL 是否强制 TLS                    |
 | `UPLOAD_DIR`                      | `./data/uploads`                  | 皮肤/披风 PNG 存储目录                           |
 | `MAIL_*` / `SMTP_*`               | 占位                              | 默认发件配置；超级后台可覆盖（密码加密存储）     |
 | `CONSOLE_KEY`                     | 空（禁用）                        | 超级后台密钥（≥16 字符），空则 `/console` 不可用 |
 | `CONSOLE_SESSION_TTL_SECONDS`     | `28800`                           | 超级后台会话有效期（秒）                         |
+
+测试用 `TEST_DATABASE_URL` 切换到 MySQL/PostgreSQL；数据复制用
+`SOURCE_DATABASE_URL` / `TARGET_DATABASE_URL`（脚本变量，不由 server 读取），
+见 [`docs/database.md`](docs/database.md)。
 
 web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）、
 `NEXT_PUBLIC_SITE_URL`（默认 `http://localhost:3000`，用于 sitemap/robots）与
@@ -267,8 +279,17 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 ## 数据层
 
-- SQLite 开启 **WAL**、外键与 `busy_timeout`（`db.service.ts` 连接参数）。
-- 29 张表 schema 在 `apps/server/src/db/schema/`（用户与账号、玩家与令牌、OAuth 授权码、
+- **三库支持**：SQLite（默认，WAL + 外键 + `busy_timeout`）、MySQL 8.0+、PostgreSQL 16+。
+  方言由 `DATABASE_URL` 自动识别；完整配置、迁移与运维说明见
+  [`docs/database.md`](docs/database.md)，设计取舍见
+  [ADR 0006](docs/adr/0006-multi-database.md)。
+- **单一逻辑模型**：29 张表在 `apps/server/src/db/schema/model.ts` 声明一次，
+  `scripts/generate-schema.ts` 生成 SQLite/MySQL/PostgreSQL 三套 Drizzle schema 与运行时
+  facade。改表只改 `model.ts`，然后 `pnpm db:generate`；生成文件禁止手改。
+- **跨方言 helper**：业务代码通过 `DbService` 的 `insertReturning` / `updateReturning` /
+  `insertIgnore` / `upsert` / `transaction` 访问数据库，避免散落方言分支；MySQL 无
+  `RETURNING`、无部分唯一索引，`skin.active_slot` 判别列负责“每人每类仅一条 active”。
+- 29 张表覆盖用户与账号、玩家与令牌、OAuth 授权码、
   游戏会话、服务器白名单、皮肤披风、论坛版块/帖子/回复/投票/举报/通知/审计日志、
   站点配置，以及成长体系的 `user_progress`/`daily_checkin`/`point_transaction`/
   `title`/`user_title`/`title_application`/`banner`、`captcha_challenge`、
@@ -278,9 +299,12 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 纹理文件存于 `UPLOAD_DIR`，按 `textures/{kind}/{sha256}.png` 内容寻址；
   帖子图片存于 `UPLOAD_DIR/forum/{sha256}.{ext}`。
   `skin` 表按 `(player_uuid, kind, sha256)` 去重，同一类型仅一条 `is_active`。
-- **所有建表改动必须走 `pnpm db:generate` 生成迁移**，禁止手改库文件或运行时同步。
-- 迁移前先跑 `pnpm db:backup`；备份写入 `apps/server/data/backups/`。
-- 恢复步骤：停止 server → 再备份当前库 → 用备份文件覆盖 `DATABASE_URL` 指向的文件 → `pnpm db:migrate` 确认版本。
+- **所有建表改动必须走 `pnpm db:generate` 生成三套迁移**，禁止手改库文件或运行时同步。
+- SQLite 迁移前先跑 `pnpm db:backup`（写入 `apps/server/data/backups/`）；
+  MySQL/PostgreSQL 使用 `mysqldump` / `pg_dump`，详见数据库指南。
+- 恢复步骤：停止 server → 再备份当前库 → 用备份文件覆盖目标库 → `pnpm db:migrate` 确认版本。
+- 从 SQLite 切换到 MySQL/PostgreSQL：先对目标执行 `pnpm db:migrate`，再用
+  `pnpm db:copy-data -- --truncate` 复制并校验数据。
 - 昵称 30 天保留记录在 `nickname_reservation`；改名事务内写入，启动时幂等回填。
 - 上传配额按 `upload_usage(user_id, kind, day, count)` 按自然日计数；维护任务每小时清理过期授权码、游戏会话、过期会话与 90 天前的配额行。
 - 启动器令牌新增 `last_used_at`，设置页展示“最近使用”。
@@ -309,16 +333,19 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 提交遵循 [Conventional Commits](https://www.conventionalcommits.org/)（`feat:` `fix:` `docs:` `chore:` …）。
 - pre-commit 自动跑 lint-staged（ESLint + Prettier，见 `.husky/pre-commit`）。
 - 跨端 DTO/枚举/错误码只写在 `packages/shared`，应用内不得复制类型。
-- CI（`.github/workflows/ci.yml`）：install → lint → format:check → typecheck → test:coverage → build → 迁移冒烟。
+- CI（`.github/workflows/ci.yml`）：lint → format:check → typecheck → build；测试分 SQLite
+  与 MySQL/PostgreSQL service container 矩阵，两者都先对空库执行迁移冒烟。
 
 ## 里程碑与文档
 
-| 文档                                                           | 内容                                       |
-| -------------------------------------------------------------- | ------------------------------------------ |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                     | 产品范围、架构与全部已定稿决策（S1–S6 等） |
-| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md) | M0 交付物、验收结论与遗留事项              |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)     | 协议字段对照、启动器联调记录               |
-| [`docs/openapi.json`](docs/openapi.json)                       | OpenAPI 契约产物（`pnpm openapi:export`）  |
+| 文档                                                                 | 内容                                       |
+| -------------------------------------------------------------------- | ------------------------------------------ |
+| [`docs/项目策划案.md`](docs/项目策划案.md)                           | 产品范围、架构与全部已定稿决策（S1–S6 等） |
+| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)       | M0 交付物、验收结论与遗留事项              |
+| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)           | 协议字段对照、启动器联调记录               |
+| [`docs/database.md`](docs/database.md)                               | 三库配置、schema 工作流、迁移/复制/备份    |
+| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md) | 三库支持的设计取舍                         |
+| [`docs/openapi.json`](docs/openapi.json)                             | OpenAPI 契约产物（`pnpm openapi:export`）  |
 
 里程碑：M0 底座（已完成）→ M1 认证核心（已完成）→ M2 会话与形象（已完成）→ M3 论坛 MVP（已完成）→ M4 运营与加固（当前）→ M5 生产部署。
 Paper 插件与启动器修改**永不**实施。
