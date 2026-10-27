@@ -13,6 +13,9 @@ export default tseslint.config(
       '**/coverage/**',
       '**/data/**',
       'apps/server/drizzle/**',
+      // Generated from src/db/schema/model.ts by scripts/generate-schema.ts.
+      'apps/server/src/db/schema/generated/**',
+      'apps/server/src/db/schema/index.ts',
       'docs/openapi.json',
     ],
   },

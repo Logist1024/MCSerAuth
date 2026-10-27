@@ -6,8 +6,8 @@ const databaseUrl = process.env.DATABASE_URL ?? './data/mcserauth.db';
 
 export default defineConfig({
   dialect: 'sqlite',
-  schema: './src/db/schema/index.ts',
-  out: './drizzle',
+  schema: './src/db/schema/generated/sqlite.ts',
+  out: './drizzle/sqlite',
   dbCredentials: {
     url: path.resolve(process.cwd(), databaseUrl),
   },
