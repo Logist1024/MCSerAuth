@@ -168,8 +168,16 @@ class MySqlTarget implements Target {
     });
   }
 
+  private timezoneReady: Promise<void> | null = null;
+
   private async connect() {
-    return await this.connection;
+    const connection = await this.connection;
+    // Verification converts DATETIME to epoch with UNIX_TIMESTAMP(), which
+    // interprets the value in the session time zone. Pin it to UTC so the
+    // checksum matches the SQLite source regardless of the server's TZ.
+    this.timezoneReady ??= connection.query("SET time_zone = '+00:00'").then(() => undefined);
+    await this.timezoneReady;
+    return connection;
   }
 
   async query(sql: string, params: SqlValue[] = []): Promise<Record<string, unknown>[]> {
