@@ -35,6 +35,8 @@ DATABASE_URL=postgres://user:pass@127.0.0.1:5432/mcserauth
 生产环境建议：`DB_POOL_MAX` 按实例数与数据库最大连接数分配；
 托管数据库通常要求 `DB_SSL=true`。开启后会校验证书；使用私有 CA 时通过
 `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` 提供根证书，不要关闭校验。
+`pnpm db:migrate` 与 `pnpm db:copy-data` 读取同一个 `DB_SSL`，迁移或复制到
+托管数据库时不需要额外的 TLS 参数。
 
 ## Schema 工作流
 
@@ -87,6 +89,16 @@ pnpm db:migrate
 - SQLite：自动创建父目录、开启 WAL 与外键，并执行历史数据修复
   （`mod` → `reviewer`、pending 纹理转 approved、`active_slot` 回填）。
 - MySQL / PostgreSQL：直接执行 `drizzle/<dialect>` 下的迁移。
+
+MySQL 建库时显式指定 `utf8mb4`。MySQL 8 默认就是该字符集，但自建实例或旧配置
+可能不是：
+
+```sql
+CREATE DATABASE mcserauth CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
+
+迁移只建表，不会修改已存在数据库的字符集；字符集不一致会导致昵称、帖子中的
+emoji 写入失败。
 
 ### SQLite 0010 / 0011 的特殊处理
 
@@ -197,7 +209,12 @@ pg_dump --format=custom mcserauth > mcserauth.dump
   会把源库秒值统一转换为毫秒再写入目标库。跨库比较时不要依赖数据库本地时区。
 - **布尔值**：SQLite 以 0/1 存储，MySQL 使用 `tinyint(1)`，PostgreSQL 使用 `boolean`；
   应用层类型保持一致。
-- **JSON**：站点配置等字段以文本存储并显式 `JSON.parse`，不依赖方言 JSON 类型。
+- **排序**：SQLite/MySQL 把 NULL 视为最小值，PostgreSQL 视为最大值，同一个 `desc()`
+  在可空列上的 NULL 位置会不同。对可空列排序时先加 `nullsLast()`
+  （`src/common/helpers/order.ts`），不要依赖数据库默认的 NULL 位置。
+- **JSON**：`player.nickname_history` 使用方言 JSON 类型（PostgreSQL `jsonb`、MySQL
+  `JSON`、SQLite `TEXT` + Drizzle `mode: 'json'`），三种驱动都返回已解析的数组；
+  `site_setting.value` 等历史字段仍是文本，由应用显式 `JSON.parse`。
 - **MySQL 返回值**：`updateReturning` 采用“查-改-查”，高并发下返回值可能包含
   其他事务的更新；需要强一致返回值的场景优先使用 PostgreSQL。
 - **唯一约束**：MySQL 没有部分唯一索引，`skin.active_slot` 是跨库统一方案；

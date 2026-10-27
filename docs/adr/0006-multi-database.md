@@ -62,6 +62,9 @@
 - MySQL 没有部分唯一索引，因此 `skin` 增加 `active_slot` 判别列：
   活跃纹理写 `player_uuid:kind`，非活跃写 `NULL`，配合普通唯一索引实现
   “每个玩家每种纹理最多一条 active”。
+- 可空列的排序不依赖数据库默认的 NULL 位置：SQLite/MySQL 把 NULL 当最小值，
+  PostgreSQL 当最大值。统一使用 `nullsLast()`（`src/common/helpers/order.ts`）
+  作为第一排序键。
 
 ### 迁移
 
@@ -83,6 +86,10 @@
   MySQL / PostgreSQL。每个测试文件创建并销毁独立数据库，可并行运行。
 - CI 分为 SQLite 测试与 MySQL/PostgreSQL service container 矩阵；
   两者都会先对空库执行 `pnpm db:migrate`，再跑同一套测试。
+- `test/schema.model.test.ts` 在没有真实 MySQL/PostgreSQL 时也能提前拦住方言
+  问题：索引/外键列必须声明长度（MySQL 不能索引无长度 TEXT）、索引键不超过
+  3072 字节（utf8mb4）、外键目标必须是主键或唯一列（PostgreSQL 要求）、
+  `SET NULL` 外键必须可空，以及所有权外键不得缺失。
 
 ### 一次性数据迁移
 
