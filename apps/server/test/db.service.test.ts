@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { siteSetting, title } from '../src/db/schema/index.js';
+import { player, siteSetting, title, user } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
 
 let ctx: TestContext;
@@ -42,6 +42,38 @@ describe('DbService cross-dialect helpers', () => {
 
     expect(updated?.id).toBe(row?.id);
     expect(updated?.description).toBe('updated through helper');
+  });
+
+  it('updateReturning returns no rows when the condition no longer matches', async () => {
+    const [row] = await ctx.db.insertReturning(title, {
+      name: 'helper-claim',
+      kind: 'special',
+      color: '#123456',
+    });
+
+    const first = await ctx.db.updateReturning(
+      title,
+      { description: 'claimed once' },
+      and(eq(title.id, row!.id), isNull(title.description)),
+    );
+    expect(first).toHaveLength(1);
+
+    // Compare-and-swap: the second claim must not return the row again.
+    const second = await ctx.db.updateReturning(
+      title,
+      { description: 'claimed twice' },
+      and(eq(title.id, row!.id), isNull(title.description)),
+    );
+    expect(second).toHaveLength(0);
+  });
+
+  it('updateReturning returns no rows for a missing row', async () => {
+    const rows = await ctx.db.updateReturning(
+      title,
+      { description: 'nothing' },
+      eq(title.id, 999999),
+    );
+    expect(rows).toHaveLength(0);
   });
 
   it('insertIgnore keeps the first row on conflict', async () => {
@@ -172,5 +204,33 @@ describe('DbService cross-dialect helpers', () => {
 
     const rows = await ctx.db.db.select().from(title).where(eq(title.name, 'helper-nested'));
     expect(rows).toHaveLength(1);
+  });
+
+  it('enforces the foreign keys restored by the migrations', async () => {
+    await expect(
+      ctx.db.insertReturning(player, {
+        uuid: 'fk-orphan-player',
+        userId: 'missing-user',
+        nickname: 'fk-orphan-player',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('cascades user deletes to owned players', async () => {
+    await ctx.db.insertReturning(user, {
+      id: 'fk-owner',
+      email: 'fk-owner@example.com',
+      name: 'fk-owner',
+    });
+    await ctx.db.insertReturning(player, {
+      uuid: 'fk-owned-player',
+      userId: 'fk-owner',
+      nickname: 'fk-owned-player',
+    });
+
+    await ctx.db.db.delete(user).where(eq(user.id, 'fk-owner'));
+
+    const rows = await ctx.db.db.select().from(player).where(eq(player.uuid, 'fk-owned-player'));
+    expect(rows).toHaveLength(0);
   });
 });

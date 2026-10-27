@@ -76,6 +76,25 @@ describe('schema model invariants', () => {
     }
   });
 
+  it('uses the same type and length on both sides of every foreign key', () => {
+    for (const table of tables) {
+      for (const column of table.columns) {
+        if (column.references === undefined) continue;
+        const target = tables.find((candidate) => candidate.name === column.references?.table);
+        const targetColumn = target?.columns.find(
+          (candidate) =>
+            candidate.prop === column.references?.column ||
+            candidate.column === column.references?.column,
+        );
+        expect(targetColumn, `${table.name}.${column.column} has no target column`).toBeDefined();
+        expect(
+          { type: column.type, length: column.length ?? null },
+          `${table.name}.${column.column} does not match ${target?.name}.${targetColumn?.column}`,
+        ).toEqual({ type: targetColumn?.type, length: targetColumn?.length ?? null });
+      }
+    }
+  });
+
   it('only auto-increments integer primary keys', () => {
     for (const table of tables) {
       for (const column of table.columns) {

@@ -20,6 +20,16 @@ const portFromEnv = z.preprocess(
   z.coerce.number().int().min(1).max(65535).default(587),
 );
 
+const dialectFromEnv = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === '') return undefined;
+    return normalized === 'postgresql' ? 'postgres' : normalized;
+  },
+  z.enum(['sqlite', 'mysql', 'postgres']).optional(),
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
@@ -59,7 +69,7 @@ export const envSchema = z.object({
    */
   DATABASE_URL: z.string().min(1).default('./data/mcserauth.db'),
   /** Optional explicit dialect; must agree with the DATABASE_URL scheme when both are set. */
-  DB_DIALECT: z.enum(['sqlite', 'mysql', 'postgres']).optional(),
+  DB_DIALECT: dialectFromEnv,
   /** Server-database connection pool bounds (ignored by SQLite). */
   DB_POOL_MIN: z.coerce.number().int().min(0).max(100).default(0),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),

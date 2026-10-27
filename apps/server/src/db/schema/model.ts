@@ -105,11 +105,46 @@ const id = (): ColumnModel => ({
 });
 
 /** A 191-char surrogate key keeps MySQL utf8mb4 indexes within 3072 bytes. */
-const userId = (prop = 'userId', column = 'user_id'): ColumnModel =>
-  text(prop, column, { length: 191, notNull: true });
+const userId = (
+  prop = 'userId',
+  column = 'user_id',
+  extra: Partial<ColumnModel> = {},
+): ColumnModel => text(prop, column, { length: 191, notNull: true, ...extra });
 
-const playerUuid = (prop = 'playerUuid', column = 'player_uuid'): ColumnModel =>
-  text(prop, column, { length: 64, notNull: true });
+const playerUuid = (
+  prop = 'playerUuid',
+  column = 'player_uuid',
+  extra: Partial<ColumnModel> = {},
+): ColumnModel => text(prop, column, { length: 64, notNull: true, ...extra });
+
+/** A nullable user reference (`SET NULL` on delete). */
+const optionalUserId = (prop: string, column: string): ColumnModel =>
+  text(prop, column, {
+    length: 191,
+    references: { table: 'user', column: 'id', onDelete: 'set null' },
+  });
+
+/** A required user owner (`CASCADE` on delete). */
+const userOwner = (
+  prop = 'userId',
+  column = 'user_id',
+  extra: Partial<ColumnModel> = {},
+): ColumnModel =>
+  userId(prop, column, {
+    references: { table: 'user', column: 'id', onDelete: 'cascade' },
+    ...extra,
+  });
+
+/** A required player owner (`CASCADE` on delete). */
+const playerOwner = (
+  prop = 'playerUuid',
+  column = 'player_uuid',
+  extra: Partial<ColumnModel> = {},
+): ColumnModel =>
+  playerUuid(prop, column, {
+    references: { table: 'player', column: 'uuid', onDelete: 'cascade' },
+    ...extra,
+  });
 
 /** Enum-typed VARCHAR column. */
 const enumText = (
@@ -150,7 +185,7 @@ export const tables: TableModel[] = [
       now('updatedAt', 'updated_at', { defaultFn: undefined }),
       text('ipAddress', 'ip_address', { length: 64 }),
       text('userAgent', 'user_agent'),
-      userId(),
+      userOwner(),
     ],
     indexes: [{ name: 'session_user_id_idx', columns: ['userId'] }],
   },
@@ -160,7 +195,7 @@ export const tables: TableModel[] = [
       text('id', 'id', { length: 191, primaryKey: true }),
       text('accountId', 'account_id', { length: 191, notNull: true }),
       text('providerId', 'provider_id', { length: 64, notNull: true }),
-      userId(),
+      userOwner(),
       text('accessToken', 'access_token'),
       text('refreshToken', 'refresh_token'),
       text('idToken', 'id_token'),
@@ -191,7 +226,7 @@ export const tables: TableModel[] = [
     name: 'player',
     columns: [
       text('uuid', 'uuid', { length: 64, primaryKey: true }),
-      text('userId', 'user_id', { length: 191, notNull: true, unique: true }),
+      userOwner('userId', 'user_id', { unique: true }),
       text('nickname', 'nickname', { length: 64, notNull: true, unique: true }),
       {
         prop: 'nicknameHistory',
@@ -211,7 +246,7 @@ export const tables: TableModel[] = [
     name: 'nickname_reservation',
     columns: [
       text('nickname', 'nickname', { length: 64, primaryKey: true }),
-      playerUuid(),
+      playerOwner(),
       now('reservedUntil', 'reserved_until', { defaultFn: undefined }),
       now('createdAt', 'created_at'),
     ],
@@ -224,7 +259,7 @@ export const tables: TableModel[] = [
     name: 'token',
     columns: [
       id(),
-      playerUuid(),
+      playerOwner(),
       text('accessTokenHash', 'access_token_hash', { length: 128, notNull: true, unique: true }),
       text('refreshTokenHash', 'refresh_token_hash', { length: 128, notNull: true, unique: true }),
       text('clientTokenHash', 'client_token_hash', { length: 128 }),
@@ -245,7 +280,7 @@ export const tables: TableModel[] = [
     columns: [
       id(),
       text('codeHash', 'code_hash', { length: 128, notNull: true, unique: true }),
-      userId(),
+      userOwner(),
       text('clientId', 'client_id', { length: 191 }),
       text('redirectUri', 'redirect_uri', { notNull: true }),
       text('scope', 'scope'),
@@ -264,7 +299,7 @@ export const tables: TableModel[] = [
     name: 'game_session',
     columns: [
       id(),
-      playerUuid(),
+      playerOwner(),
       text('serverId', 'server_id', { length: 128, notNull: true }),
       text('ip', 'ip', { length: 64 }),
       now('createdAt', 'created_at'),
@@ -295,7 +330,7 @@ export const tables: TableModel[] = [
     name: 'skin',
     columns: [
       id(),
-      playerUuid(),
+      playerOwner(),
       enumText('kind', 'kind', '(typeof SKIN_KINDS)[number]', { notNull: true }),
       enumText('variant', 'variant', '(typeof SKIN_VARIANTS)[number]'),
       text('filePath', 'file_path', { notNull: true }),
@@ -314,7 +349,7 @@ export const tables: TableModel[] = [
        */
       text('activeSlot', 'active_slot', { length: 128 }),
       now('uploadedAt', 'uploaded_at'),
-      text('reviewedBy', 'reviewed_by', { length: 191 }),
+      optionalUserId('reviewedBy', 'reviewed_by'),
     ],
     indexes: [
       { name: 'skin_player_uuid_idx', columns: ['playerUuid'] },
@@ -359,7 +394,7 @@ export const tables: TableModel[] = [
         notNull: true,
         references: { table: 'category', column: 'id', onDelete: 'restrict' },
       }),
-      userId('authorId', 'author_id'),
+      userOwner('authorId', 'author_id'),
       text('title', 'title', { length: 255, notNull: true }),
       text('contentMd', 'content_md', { notNull: true }),
       enumText('status', 'status', '(typeof POST_STATUSES)[number]', {
@@ -393,7 +428,7 @@ export const tables: TableModel[] = [
         notNull: true,
         references: { table: 'post', column: 'id', onDelete: 'cascade' },
       }),
-      userId('authorId', 'author_id'),
+      userOwner('authorId', 'author_id'),
       text('contentMd', 'content_md', { notNull: true }),
       enumText('status', 'status', '(typeof REPLY_STATUSES)[number]', {
         notNull: true,
@@ -413,7 +448,7 @@ export const tables: TableModel[] = [
     name: 'vote',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       enumText('targetType', 'target_type', '(typeof VOTE_TARGET_TYPES)[number]', {
         notNull: true,
       }),
@@ -437,13 +472,13 @@ export const tables: TableModel[] = [
         notNull: true,
       }),
       text('targetId', 'target_id', { length: 191, notNull: true }),
-      userId('reporterId', 'reporter_id'),
+      userOwner('reporterId', 'reporter_id'),
       text('reason', 'reason', { notNull: true }),
       enumText('status', 'status', '(typeof REPORT_STATUSES)[number]', {
         notNull: true,
         default: 'pending',
       }),
-      text('handledBy', 'handled_by', { length: 191 }),
+      optionalUserId('handledBy', 'handled_by'),
       now('createdAt', 'created_at'),
     ],
     indexes: [{ name: 'report_status_idx', columns: ['status'] }],
@@ -452,9 +487,9 @@ export const tables: TableModel[] = [
     name: 'notification',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       enumText('type', 'type', '(typeof NOTIFICATION_TYPES)[number]', { notNull: true }),
-      text('actorId', 'actor_id', { length: 191 }),
+      optionalUserId('actorId', 'actor_id'),
       text('message', 'message'),
       text('link', 'link', { length: 255 }),
       text('readAt', 'read_at', { type: 'timestamp' }),
@@ -474,7 +509,7 @@ export const tables: TableModel[] = [
     name: 'moderation_log',
     columns: [
       id(),
-      text('actorId', 'actor_id', { length: 191 }),
+      optionalUserId('actorId', 'actor_id'),
       enumText('action', 'action', '(typeof MODERATION_ACTIONS)[number]', { notNull: true }),
       text('targetType', 'target_type', { length: 32, notNull: true }),
       text('targetId', 'target_id', { length: 191, notNull: true }),
@@ -485,7 +520,7 @@ export const tables: TableModel[] = [
   {
     name: 'upload_usage',
     columns: [
-      userId(),
+      userOwner(),
       enumText('kind', 'kind', '(typeof UPLOAD_KINDS)[number]', { notNull: true }),
       text('day', 'day', { length: 10, notNull: true }),
       int('count', 'count', { notNull: true, default: 0 }),
@@ -500,13 +535,13 @@ export const tables: TableModel[] = [
       text('key', 'key', { length: 128, primaryKey: true }),
       text('value', 'value', { notNull: true }),
       now('updatedAt', 'updated_at'),
-      text('updatedBy', 'updated_by', { length: 191 }),
+      optionalUserId('updatedBy', 'updated_by'),
     ],
   },
   {
     name: 'user_progress',
     columns: [
-      text('userId', 'user_id', { length: 191, primaryKey: true }),
+      userOwner('userId', 'user_id', { primaryKey: true }),
       int('xp', 'xp', { notNull: true, default: 0 }),
       int('level', 'level', { notNull: true, default: 1 }),
       int('points', 'points', { notNull: true, default: 0 }),
@@ -527,7 +562,7 @@ export const tables: TableModel[] = [
     name: 'daily_checkin',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       text('checkinOn', 'checkin_on', { length: 10, notNull: true }),
       int('streak', 'streak', { notNull: true, default: 1 }),
       int('xpAwarded', 'xp_awarded', { notNull: true, default: 0 }),
@@ -543,7 +578,7 @@ export const tables: TableModel[] = [
     name: 'point_transaction',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       int('amount', 'amount', { notNull: true }),
       int('balanceAfter', 'balance_after', { notNull: true }),
       enumText('reason', 'reason', '(typeof POINT_REASONS)[number]', { notNull: true }),
@@ -567,7 +602,7 @@ export const tables: TableModel[] = [
       }),
       text('description', 'description'),
       text('color', 'color', { length: 16, notNull: true, default: '#8b5cf6' }),
-      text('createdBy', 'created_by', { length: 191 }),
+      optionalUserId('createdBy', 'created_by'),
       now('createdAt', 'created_at'),
     ],
   },
@@ -575,12 +610,15 @@ export const tables: TableModel[] = [
     name: 'user_title',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       int('titleId', 'title_id', {
         notNull: true,
         references: { table: 'title', column: 'id', onDelete: 'cascade' },
       }),
-      text('grantedBy', 'granted_by', { length: 191 }),
+      text('grantedBy', 'granted_by', {
+        length: 191,
+        references: { table: 'user', column: 'id', onDelete: 'set null' },
+      }),
       now('grantedAt', 'granted_at'),
     ],
     indexes: [
@@ -596,7 +634,7 @@ export const tables: TableModel[] = [
     name: 'title_application',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       text('proposedName', 'proposed_name', { length: 64, notNull: true }),
       text('reason', 'reason', { notNull: true }),
       enumText('status', 'status', '(typeof TITLE_APPLICATION_STATUSES)[number]', {
@@ -606,7 +644,7 @@ export const tables: TableModel[] = [
       int('resultTitleId', 'result_title_id', {
         references: { table: 'title', column: 'id', onDelete: 'set null' },
       }),
-      text('reviewedBy', 'reviewed_by', { length: 191 }),
+      optionalUserId('reviewedBy', 'reviewed_by'),
       text('reviewedAt', 'reviewed_at', { type: 'timestamp' }),
       now('createdAt', 'created_at'),
     ],
@@ -619,7 +657,7 @@ export const tables: TableModel[] = [
     name: 'banner',
     columns: [
       id(),
-      userId(),
+      userOwner(),
       text('title', 'title', { length: 64, notNull: true }),
       text('description', 'description'),
       text('href', 'href', { length: 255 }),
@@ -630,7 +668,7 @@ export const tables: TableModel[] = [
       int('pointsSpent', 'points_spent', { notNull: true, default: 0 }),
       text('startsAt', 'starts_at', { type: 'timestamp' }),
       text('endsAt', 'ends_at', { type: 'timestamp' }),
-      text('reviewedBy', 'reviewed_by', { length: 191 }),
+      optionalUserId('reviewedBy', 'reviewed_by'),
       text('reviewedAt', 'reviewed_at', { type: 'timestamp' }),
       now('createdAt', 'created_at'),
     ],
@@ -662,11 +700,14 @@ export const tables: TableModel[] = [
   {
     name: 'user_permission',
     columns: [
-      userId(),
+      userOwner(),
       enumText('permission', 'permission', '(typeof ADMIN_PERMISSIONS)[number]', {
         notNull: true,
       }),
-      text('grantedBy', 'granted_by', { length: 191 }),
+      text('grantedBy', 'granted_by', {
+        length: 191,
+        references: { table: 'user', column: 'id', onDelete: 'set null' },
+      }),
       now('grantedAt', 'granted_at'),
     ],
     primaryKey: ['userId', 'permission'],

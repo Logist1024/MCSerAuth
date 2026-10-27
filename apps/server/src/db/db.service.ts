@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import {
   getTableColumns,
   inArray,
+  sql,
   type InferInsertModel,
   type InferSelectModel,
   type SQL,
@@ -34,7 +35,6 @@ export type CanonicalDb = NodePgDatabase<Schema>;
 /** Minimal structural view of the MySQL insert builder used by helpers. */
 interface MySqlInsertLike {
   values(values: unknown): MySqlInsertLike;
-  ignore(): MySqlInsertLike;
   onDuplicateKeyUpdate(config: { set: Record<string, unknown> }): MySqlInsertLike;
   $returningId(): Promise<Array<Record<string, number>>>;
 }
@@ -110,15 +110,22 @@ export class DbService implements OnModuleDestroy {
       this.mysqlPool = createMySqlPool({
         ...parseMySqlUrl(config.databaseUrl),
         connectionLimit: config.dbPoolMax,
-        maxIdle: Math.max(config.dbPoolMin, 1),
+        // mysql2 has no "minimum idle" option; keep the pool warm up to the
+        // configured maximum and let idleTimeout reap it.
+        maxIdle: config.dbPoolMax,
         idleTimeout: config.dbIdleTimeoutMs,
         connectTimeout: config.dbConnectionTimeoutMs,
         waitForConnections: true,
         timezone: 'Z',
         dateStrings: false,
+        // Keep BIGINT/DECIMAL safe, but do not force every big number to a
+        // string: `count()` returns BIGINT on MySQL and the API exposes those
+        // values as numbers. mysql2 still falls back to strings when a value
+        // cannot be represented exactly.
         supportBigNumbers: true,
-        bigNumberStrings: true,
-        ssl: config.dbSsl ? { rejectUnauthorized: false } : undefined,
+        // Verify the server certificate when TLS is enabled. Private CAs can
+        // be supplied through NODE_EXTRA_CA_CERTS.
+        ssl: config.dbSsl ? { rejectUnauthorized: true } : undefined,
       });
       this.db = drizzleMysql(this.mysqlPool, {
         schema: this.schema as never,
@@ -129,10 +136,11 @@ export class DbService implements OnModuleDestroy {
 
     this.pgPool = new PgPool({
       connectionString: config.databaseUrl,
+      min: config.dbPoolMin,
       max: config.dbPoolMax,
       connectionTimeoutMillis: config.dbConnectionTimeoutMs,
       idleTimeoutMillis: config.dbIdleTimeoutMs,
-      ssl: config.dbSsl ? { rejectUnauthorized: false } : undefined,
+      ssl: config.dbSsl ? { rejectUnauthorized: true } : undefined,
     });
     this.db = drizzlePg(this.pgPool, { schema: this.schema as never });
   }
@@ -221,12 +229,43 @@ export class DbService implements OnModuleDestroy {
       .values(values)
       .$returningId();
 
-    const { primaryProp, primaryColumn } = primaryKeyOf(table);
-    const ids = inserted
-      .map((row) => row[primaryProp])
-      .filter((value): value is number => typeof value === 'number');
-    if (ids.length === 0) {
+    const primary = primaryKeyOf(table);
+    if (primary.primaryCount > 1) {
+      throw new Error(
+        'insertReturning() on MySQL does not support composite primary keys; use insert() and select() instead.',
+      );
+    }
+    const { primaryProp, primaryColumn } = primary;
+
+    // MySQL's `$returningId()` only reports auto-increment keys. When the
+    // caller supplied the primary key explicitly (for example a text id),
+    // reuse those values so the row can still be re-selected.
+    const inputRows = (Array.isArray(values) ? values : [values]) as Array<Record<string, unknown>>;
+    if (inputRows.length === 0) {
       return [];
+    }
+    const explicitIds = inputRows
+      .map((row) => row[primaryProp])
+      .filter(
+        (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+      );
+
+    let ids: Array<string | number>;
+    if (explicitIds.length === inputRows.length) {
+      ids = explicitIds;
+    } else if (explicitIds.length > 0) {
+      throw new Error(
+        'insertReturning() on MySQL does not support mixing explicit and generated primary keys.',
+      );
+    } else {
+      ids = inserted
+        .map((row) => row[primaryProp])
+        .filter((value): value is number => typeof value === 'number');
+      if (ids.length === 0) {
+        throw new Error(
+          'insertReturning() on MySQL requires an auto-increment primary key or explicit primary key values.',
+        );
+      }
     }
 
     const rows = await executor
@@ -259,15 +298,29 @@ export class DbService implements OnModuleDestroy {
       return rows as InferSelectModel<TTable>[];
     }
 
-    const { primaryProp, primaryColumn } = primaryKeyOf(table);
+    const { primaryProp, primaryColumn, primaryCount } = primaryKeyOf(table);
+    if (primaryCount > 1) {
+      throw new Error(
+        'updateReturning() on MySQL does not support composite primary keys; use update() and select() instead.',
+      );
+    }
     const before = await executor
       .select()
       .from(table as PgTable)
       .where(where);
-    await executor
+    if (before.length === 0) {
+      return [];
+    }
+    const result = await executor
       .update(table)
       .set(values as never)
       .where(where);
+    // MySQL has no UPDATE ... RETURNING, so callers that rely on a
+    // compare-and-swap (claiming an OAuth code or rotating a refresh token)
+    // must not get a row back when the conditional update matched nothing.
+    if (this.affectedRows(result) === 0) {
+      return [];
+    }
     const ids = before
       .map((row) => (row as Record<string, unknown>)[primaryProp])
       .filter(
@@ -282,14 +335,21 @@ export class DbService implements OnModuleDestroy {
       .where(inArray(primaryColumn as PgColumn, ids))) as InferSelectModel<TTable>[];
   }
 
-  /** INSERT ... ON CONFLICT DO NOTHING / INSERT IGNORE. */
+  /** INSERT ... ON CONFLICT DO NOTHING (MySQL: no-op ON DUPLICATE KEY UPDATE). */
   async insertIgnore<TTable extends PgTable>(
     table: TTable,
     values: InferInsertModel<TTable> | InferInsertModel<TTable>[],
     executor: CanonicalDb = this.db,
   ): Promise<void> {
     if (this.dialect === 'mysql') {
-      await (executor as unknown as MySqlExecutorLike).insert(table).values(values).ignore();
+      // `INSERT IGNORE` also downgrades foreign-key and data errors to
+      // warnings. A self-assignment on the primary key only ignores duplicate
+      // keys, matching PostgreSQL's `ON CONFLICT DO NOTHING`.
+      const { primaryProp, primaryColumn } = primaryKeyOf(table);
+      await (executor as unknown as MySqlExecutorLike)
+        .insert(table)
+        .values(values)
+        .onDuplicateKeyUpdate({ set: { [primaryProp]: sql`${primaryColumn}` } });
       return;
     }
     await executor
@@ -362,13 +422,22 @@ export class DbService implements OnModuleDestroy {
   }
 }
 
-function primaryKeyOf(table: PgTable): { primaryProp: string; primaryColumn: PgColumn } {
+function primaryKeyOf(table: PgTable): {
+  primaryProp: string;
+  primaryColumn: PgColumn;
+  primaryCount: number;
+} {
   const columns = getTableColumns(table);
-  const primary = Object.entries(columns).find(([, column]) => column.primary);
-  if (primary === undefined) {
+  const primary = Object.entries(columns).filter(([, column]) => column.primary);
+  const first = primary[0];
+  if (first === undefined) {
     throw new Error('The table must have a primary key.');
   }
-  return { primaryProp: primary[0], primaryColumn: primary[1] as PgColumn };
+  return {
+    primaryProp: first[0],
+    primaryColumn: first[1] as PgColumn,
+    primaryCount: primary.length,
+  };
 }
 
 function parseMySqlUrl(databaseUrl: string): {

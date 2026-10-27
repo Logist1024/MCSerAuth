@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Allows running the full three-database matrix from a feature branch
+  # without opening a pull request first.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

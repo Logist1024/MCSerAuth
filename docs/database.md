@@ -24,16 +24,17 @@ DATABASE_URL=postgres://user:pass@127.0.0.1:5432/mcserauth
 方言由 URL 协议自动识别。`DB_DIALECT` 只用于显式覆盖，且必须与 URL 一致，
 否则启动直接失败。其余连接参数：
 
-| 变量                       | 默认    | 说明                            |
-| -------------------------- | ------- | ------------------------------- |
-| `DB_POOL_MIN`              | `0`     | 连接池最小连接数（SQLite 忽略） |
-| `DB_POOL_MAX`              | `10`    | 连接池最大连接数（SQLite 忽略） |
-| `DB_CONNECTION_TIMEOUT_MS` | `10000` | 建立连接超时                    |
-| `DB_IDLE_TIMEOUT_MS`       | `30000` | 空闲连接回收时间                |
-| `DB_SSL`                   | `false` | MySQL/PostgreSQL 是否强制 TLS   |
+| 变量                       | 默认    | 说明                                                        |
+| -------------------------- | ------- | ----------------------------------------------------------- |
+| `DB_POOL_MIN`              | `0`     | 连接池最小连接数（PostgreSQL；MySQL 无此设置，SQLite 忽略） |
+| `DB_POOL_MAX`              | `10`    | 连接池最大连接数（SQLite 忽略）                             |
+| `DB_CONNECTION_TIMEOUT_MS` | `10000` | 建立连接超时                                                |
+| `DB_IDLE_TIMEOUT_MS`       | `30000` | 空闲连接回收时间                                            |
+| `DB_SSL`                   | `false` | MySQL/PostgreSQL 是否强制 TLS                               |
 
 生产环境建议：`DB_POOL_MAX` 按实例数与数据库最大连接数分配；
-托管数据库通常要求 `DB_SSL=true`。
+托管数据库通常要求 `DB_SSL=true`。开启后会校验证书；使用私有 CA 时通过
+`NODE_EXTRA_CA_CERTS=/path/to/ca.pem` 提供根证书，不要关闭校验。
 
 ## Schema 工作流
 
@@ -67,7 +68,7 @@ apps/server/src/db/schema/
     └── postgres.ts          # 生成
 
 apps/server/drizzle/
-├── sqlite/                  # 历史迁移 + 0010
+├── sqlite/                  # 历史迁移 + 0010 / 0011
 ├── mysql/                   # 0000 初始迁移
 └── postgres/                # 0000 初始迁移
 ```
@@ -87,10 +88,12 @@ pnpm db:migrate
   （`mod` → `reviewer`、pending 纹理转 approved、`active_slot` 回填）。
 - MySQL / PostgreSQL：直接执行 `drizzle/<dialect>` 下的迁移。
 
-### SQLite 0010 的特殊处理
+### SQLite 0010 / 0011 的特殊处理
 
-`0010` 为 `skin` 增加 MySQL 兼容的 `active_slot` 判别列，需要重建表。
-由于 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不会生效，迁移采用备份表方案：
+`0010` 为 `skin` 增加 MySQL 兼容的 `active_slot` 判别列；`0011` 恢复 `model.ts`
+中声明的全部外键（SQLite 不支持 `ALTER TABLE ... ADD CONSTRAINT`，只能重建表）。
+两次迁移都需要重建表。由于 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不会生效，
+迁移采用备份表方案：
 
 1. 将旧表复制为 `__bak_*`；
 2. 建新表；
@@ -100,8 +103,11 @@ pnpm db:migrate
 6. 建索引；
 7. 删除备份表。
 
+`0011` 还会先按子表 → 父表顺序删除旧表，再按父表 → 子表顺序建表与回填，
+避免级联删除已经重建的子表数据。
+
 **不要调整这个顺序**，否则删除旧表会触发级联删除。迁移完成后库中不应残留
-`__bak_*` 表。
+`__bak_*` 表。`pnpm db:check` 与测试会校验外键数量与级联行为。
 
 ## 从 SQLite 迁移到 MySQL / PostgreSQL
 

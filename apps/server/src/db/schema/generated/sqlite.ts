@@ -66,7 +66,7 @@ export const session = sqliteTable('session', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (t) => [
   index('session_user_id_idx').on(t.userId),
 ]);
@@ -75,7 +75,7 @@ export const account = sqliteTable('account', {
   id: text('id').primaryKey(),
   accountId: text('account_id').notNull(),
   providerId: text('provider_id').notNull(),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
@@ -91,7 +91,7 @@ export const account = sqliteTable('account', {
 
 export const player = sqliteTable('player', {
   uuid: text('uuid').primaryKey(),
-  userId: text('user_id').notNull().unique(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }).unique(),
   nickname: text('nickname').notNull().unique(),
   nicknameHistory: text('nickname_history', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
   previousNickname: text('previous_nickname'),
@@ -103,7 +103,7 @@ export const player = sqliteTable('player', {
 export const oauthCode = sqliteTable('oauth_code', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   codeHash: text('code_hash').notNull().unique(),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   clientId: text('client_id'),
   redirectUri: text('redirect_uri').notNull(),
   scope: text('scope'),
@@ -128,7 +128,7 @@ export const category = sqliteTable('category', {
 
 export const nicknameReservation = sqliteTable('nickname_reservation', {
   nickname: text('nickname').primaryKey(),
-  playerUuid: text('player_uuid').notNull(),
+  playerUuid: text('player_uuid').notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   reservedUntil: integer('reserved_until', { mode: 'timestamp' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -138,7 +138,7 @@ export const nicknameReservation = sqliteTable('nickname_reservation', {
 
 export const token = sqliteTable('token', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  playerUuid: text('player_uuid').notNull(),
+  playerUuid: text('player_uuid').notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   accessTokenHash: text('access_token_hash').notNull().unique(),
   refreshTokenHash: text('refresh_token_hash').notNull().unique(),
   clientTokenHash: text('client_token_hash'),
@@ -155,7 +155,7 @@ export const token = sqliteTable('token', {
 
 export const gameSession = sqliteTable('game_session', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  playerUuid: text('player_uuid').notNull(),
+  playerUuid: text('player_uuid').notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   serverId: text('server_id').notNull(),
   ip: text('ip'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
@@ -168,7 +168,7 @@ export const gameSession = sqliteTable('game_session', {
 
 export const skin = sqliteTable('skin', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  playerUuid: text('player_uuid').notNull(),
+  playerUuid: text('player_uuid').notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   kind: text('kind').$type<(typeof SKIN_KINDS)[number]>().notNull(),
   variant: text('variant').$type<(typeof SKIN_VARIANTS)[number]>(),
   filePath: text('file_path').notNull(),
@@ -178,7 +178,7 @@ export const skin = sqliteTable('skin', {
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
   activeSlot: text('active_slot'),
   uploadedAt: integer('uploaded_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  reviewedBy: text('reviewed_by'),
+  reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
 }, (t) => [
   index('skin_player_uuid_idx').on(t.playerUuid),
   index('skin_sha256_idx').on(t.sha256),
@@ -191,7 +191,7 @@ export const skin = sqliteTable('skin', {
 export const post = sqliteTable('post', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   categoryId: integer('category_id').notNull().references(() => category.id, { onDelete: 'restrict' }),
-  authorId: text('author_id').notNull(),
+  authorId: text('author_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   contentMd: text('content_md').notNull(),
   status: text('status').$type<(typeof POST_STATUSES)[number]>().notNull().default('published'),
@@ -213,7 +213,7 @@ export const post = sqliteTable('post', {
 export const reply = sqliteTable('reply', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   postId: integer('post_id').notNull().references(() => post.id, { onDelete: 'cascade' }),
-  authorId: text('author_id').notNull(),
+  authorId: text('author_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   contentMd: text('content_md').notNull(),
   status: text('status').$type<(typeof REPLY_STATUSES)[number]>().notNull().default('published'),
   floor: integer('floor').notNull(),
@@ -227,7 +227,7 @@ export const reply = sqliteTable('reply', {
 
 export const vote = sqliteTable('vote', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   targetType: text('target_type').$type<(typeof VOTE_TARGET_TYPES)[number]>().notNull(),
   targetId: integer('target_id').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
@@ -240,10 +240,10 @@ export const report = sqliteTable('report', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   targetType: text('target_type').$type<(typeof REPORT_TARGET_TYPES)[number]>().notNull(),
   targetId: text('target_id').notNull(),
-  reporterId: text('reporter_id').notNull(),
+  reporterId: text('reporter_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   reason: text('reason').notNull(),
   status: text('status').$type<(typeof REPORT_STATUSES)[number]>().notNull().default('pending'),
-  handledBy: text('handled_by'),
+  handledBy: text('handled_by').references(() => user.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   index('report_status_idx').on(t.status),
@@ -251,9 +251,9 @@ export const report = sqliteTable('report', {
 
 export const notification = sqliteTable('notification', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   type: text('type').$type<(typeof NOTIFICATION_TYPES)[number]>().notNull(),
-  actorId: text('actor_id'),
+  actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
   message: text('message'),
   link: text('link'),
   readAt: integer('read_at', { mode: 'timestamp' }),
@@ -267,7 +267,7 @@ export const notification = sqliteTable('notification', {
 
 export const moderationLog = sqliteTable('moderation_log', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  actorId: text('actor_id'),
+  actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
   action: text('action').$type<(typeof MODERATION_ACTIONS)[number]>().notNull(),
   targetType: text('target_type').notNull(),
   targetId: text('target_id').notNull(),
@@ -276,7 +276,7 @@ export const moderationLog = sqliteTable('moderation_log', {
 });
 
 export const uploadUsage = sqliteTable('upload_usage', {
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   kind: text('kind').$type<(typeof UPLOAD_KINDS)[number]>().notNull(),
   day: text('day').notNull(),
   count: integer('count').notNull().default(0),
@@ -288,11 +288,11 @@ export const siteSetting = sqliteTable('site_setting', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  updatedBy: text('updated_by'),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
 });
 
 export const userProgress = sqliteTable('user_progress', {
-  userId: text('user_id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }).primaryKey(),
   xp: integer('xp').notNull().default(0),
   level: integer('level').notNull().default(1),
   points: integer('points').notNull().default(0),
@@ -310,7 +310,7 @@ export const userProgress = sqliteTable('user_progress', {
 
 export const dailyCheckin = sqliteTable('daily_checkin', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   checkinOn: text('checkin_on').notNull(),
   streak: integer('streak').notNull().default(1),
   xpAwarded: integer('xp_awarded').notNull().default(0),
@@ -323,7 +323,7 @@ export const dailyCheckin = sqliteTable('daily_checkin', {
 
 export const pointTransaction = sqliteTable('point_transaction', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   amount: integer('amount').notNull(),
   balanceAfter: integer('balance_after').notNull(),
   reason: text('reason').$type<(typeof POINT_REASONS)[number]>().notNull(),
@@ -341,15 +341,15 @@ export const title = sqliteTable('title', {
   kind: text('kind').$type<(typeof TITLE_KINDS)[number]>().notNull().default('special'),
   description: text('description'),
   color: text('color').notNull().default('#8b5cf6'),
-  createdBy: text('created_by'),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
 export const userTitle = sqliteTable('user_title', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   titleId: integer('title_id').notNull().references(() => title.id, { onDelete: 'cascade' }),
-  grantedBy: text('granted_by'),
+  grantedBy: text('granted_by').references(() => user.id, { onDelete: 'set null' }),
   grantedAt: integer('granted_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   uniqueIndex('user_title_user_title_unique').on(t.userId, t.titleId),
@@ -358,12 +358,12 @@ export const userTitle = sqliteTable('user_title', {
 
 export const titleApplication = sqliteTable('title_application', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   proposedName: text('proposed_name').notNull(),
   reason: text('reason').notNull(),
   status: text('status').$type<(typeof TITLE_APPLICATION_STATUSES)[number]>().notNull().default('pending'),
   resultTitleId: integer('result_title_id').references(() => title.id, { onDelete: 'set null' }),
-  reviewedBy: text('reviewed_by'),
+  reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
   reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -373,7 +373,7 @@ export const titleApplication = sqliteTable('title_application', {
 
 export const banner = sqliteTable('banner', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description'),
   href: text('href'),
@@ -381,7 +381,7 @@ export const banner = sqliteTable('banner', {
   pointsSpent: integer('points_spent').notNull().default(0),
   startsAt: integer('starts_at', { mode: 'timestamp' }),
   endsAt: integer('ends_at', { mode: 'timestamp' }),
-  reviewedBy: text('reviewed_by'),
+  reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
   reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -391,9 +391,9 @@ export const banner = sqliteTable('banner', {
 ]);
 
 export const userPermission = sqliteTable('user_permission', {
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   permission: text('permission').$type<(typeof ADMIN_PERMISSIONS)[number]>().notNull(),
-  grantedBy: text('granted_by'),
+  grantedBy: text('granted_by').references(() => user.id, { onDelete: 'set null' }),
   grantedAt: integer('granted_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   index('user_permission_user_idx').on(t.userId),

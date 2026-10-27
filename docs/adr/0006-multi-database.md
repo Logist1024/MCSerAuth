@@ -44,9 +44,9 @@
 
 | Helper            | SQLite / PostgreSQL         | MySQL                                    |
 | ----------------- | --------------------------- | ---------------------------------------- |
-| `insertReturning` | 原生 `RETURNING`            | `$returningId()` + 按主键回查            |
-| `updateReturning` | 原生 `RETURNING`            | 先查 → 更新 → 再查                       |
-| `insertIgnore`    | `ON CONFLICT DO NOTHING`    | `INSERT IGNORE`                          |
+| `insertReturning` | 原生 `RETURNING`            | `$returningId()` / 显式主键 + 按主键回查 |
+| `updateReturning` | 原生 `RETURNING`            | 先查 → 更新 → 按主键再查（校验影响行数） |
+| `insertIgnore`    | `ON CONFLICT DO NOTHING`    | 主键自赋值的 `ON DUPLICATE KEY UPDATE`   |
 | `upsert`          | `ON CONFLICT ... DO UPDATE` | `ON DUPLICATE KEY UPDATE`（忽略 target） |
 | `affectedRows`    | 驱动返回值归一              | 驱动返回值归一                           |
 | `primaryKeyOf`    | 读取表模型主键              | 读取表模型主键                           |
@@ -54,6 +54,9 @@
 
 - 事务使用 `AsyncLocalStorage<CanonicalDb>` 传递当前事务连接，而不是全局深度计数；
   并发请求不会串用彼此的事务。
+- MySQL 的 `insertReturning` / `updateReturning` 依赖单一主键：支持自增主键或调用方
+  显式提供的主键；复合主键会明确报错，避免静默返回错误行。`updateReturning` 在
+  MySQL 上会检查实际影响行数，保证 OAuth 授权码/刷新令牌的 compare-and-swap 语义。
 - SQLite 只有一个连接和一个写者，顶层事务通过 Promise 队列串行化，避免并发请求在
   同一连接上重复 `BEGIN IMMEDIATE`；MySQL / PostgreSQL 使用连接池事务，可并行执行。
 - MySQL 没有部分唯一索引，因此 `skin` 增加 `active_slot` 判别列：
@@ -63,11 +66,15 @@
 ### 迁移
 
 - 迁移目录按方言拆分：`drizzle/sqlite/`、`drizzle/mysql/`、`drizzle/postgres/`。
-- SQLite 保留历史迁移并新增 `0010`；MySQL 与 PostgreSQL 各自只有一份初始迁移 `0000`。
+- SQLite 保留历史迁移并新增 `0010`（`active_slot`）与 `0011`（恢复全部外键）；
+  MySQL 与 PostgreSQL 各自只有一份初始迁移 `0000`，包含完整外键。
 - `pnpm db:migrate` 根据 `DATABASE_URL` 自动选择目录与驱动。
-- SQLite `0010` 是全表重建（加入 `active_slot`）。由于 `PRAGMA foreign_keys=OFF`
-  在 Drizzle 事务内不会生效，迁移采用“备份旧表 → 建新表 → 删旧表 → 重命名 →
-  从备份回填 → 建索引 → 删备份”的顺序，确保不触发级联删除。
+- SQLite 不支持 `ALTER TABLE ... ADD CONSTRAINT`，`0010` / `0011` 都需要全表重建。
+  由于 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不会生效，迁移采用
+  “备份旧表 → 删除旧表 → 建新表 → 重命名 → 从备份回填 → 建索引 → 删备份”的顺序；
+  `0011` 按子表先删、父表先建/先回填，确保不触发级联删除。
+- `model.ts` 中的每个 `references` 都会生成到三套 schema 与迁移；测试会校验
+  外键目标列类型一致、无效外键被拒绝、用户删除级联到玩家。
 - `pnpm db:generate` 一次生成三套迁移；`pnpm db:generate:sqlite` 只生成 SQLite。
 
 ### 测试与 CI

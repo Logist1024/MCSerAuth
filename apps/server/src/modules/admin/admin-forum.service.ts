@@ -25,9 +25,10 @@ import {
   type UnbanUserRequest,
   type UnmuteUserRequest,
 } from '@mcserauth/shared';
-import { and, count, desc, eq, gt, inArray, isNull, like, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import { alias, type PgTable } from 'drizzle-orm/pg-core';
 import { firstOrThrow } from '../../common/helpers/rows.js';
+import { containsIgnoreCase } from '../../common/helpers/search.js';
 import { DbService } from '../../db/db.service.js';
 import {
   category as categoryTable,
@@ -118,7 +119,10 @@ export class AdminForumService {
     const condition =
       search === undefined || search === ''
         ? undefined
-        : or(like(userTable.name, `%${search}%`), like(userTable.email, `%${search}%`));
+        : or(
+            containsIgnoreCase(userTable.name, search),
+            containsIgnoreCase(userTable.email, search),
+          );
     const total = await this.countWhere(userTable, condition);
     const rows = await this.db.db
       .select({ user: userTable, player: playerTable })

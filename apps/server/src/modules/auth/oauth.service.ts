@@ -157,11 +157,11 @@ export class OAuthService {
       }
     }
     const claimed = (
-      await this.db.db
-        .update(oauthCode)
-        .set({ usedAt: new Date() })
-        .where(and(eq(oauthCode.id, codeRow.id), isNull(oauthCode.usedAt)))
-        .returning({ id: oauthCode.id })
+      await this.db.updateReturning(
+        oauthCode,
+        { usedAt: new Date() },
+        and(eq(oauthCode.id, codeRow.id), isNull(oauthCode.usedAt)),
+      )
     )[0];
     if (!claimed) {
       throw new UnauthorizedException('授权码无效或已使用');
@@ -206,24 +206,22 @@ export class OAuthService {
     const now = new Date();
     // Rotation is optimistic: the old refresh hash must still be current.
     const updated = (
-      await this.db.db
-        .update(tokenTable)
-        .set({
+      await this.db.updateReturning(
+        tokenTable,
+        {
           accessTokenHash: sha256(accessToken),
           refreshTokenHash: sha256(nextRefreshToken),
           deviceName: this.deviceName(meta),
           ip: meta.ip ?? null,
           lastUsedAt: now,
           expiresAt: new Date(now.getTime() + this.config.oauthAccessTokenTtlSeconds * 1000),
-        })
-        .where(
-          and(
-            eq(tokenTable.id, row.token.id),
-            isNull(tokenTable.revokedAt),
-            eq(tokenTable.refreshTokenHash, currentHash),
-          ),
-        )
-        .returning({ id: tokenTable.id })
+        },
+        and(
+          eq(tokenTable.id, row.token.id),
+          isNull(tokenTable.revokedAt),
+          eq(tokenTable.refreshTokenHash, currentHash),
+        ),
+      )
     )[0];
     if (!updated) {
       throw new UnauthorizedException('刷新令牌已被使用，请重新授权');

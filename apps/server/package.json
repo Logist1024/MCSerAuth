@@ -21,7 +21,7 @@
     "db:copy-data": "tsx scripts/copy-data.ts",
     "db:backup": "node scripts/backup.mjs",
     "db:studio": "drizzle-kit studio --config drizzle.config.sqlite.ts",
-    "admin:grant": "node scripts/grant-role.mjs",
+    "admin:grant": "tsx scripts/grant-role.ts",
     "openapi:export": "nest build && node dist/scripts/export-openapi.js"
   },
   "dependencies": {

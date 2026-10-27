@@ -66,7 +66,7 @@ export const session = pgTable('session', {
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: false }).notNull(),
   ipAddress: varchar('ip_address', { length: 64 }),
   userAgent: text('user_agent'),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (t) => [
   index('session_user_id_idx').on(t.userId),
 ]);
@@ -75,7 +75,7 @@ export const account = pgTable('account', {
   id: varchar('id', { length: 191 }).primaryKey(),
   accountId: varchar('account_id', { length: 191 }).notNull(),
   providerId: varchar('provider_id', { length: 64 }).notNull(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
@@ -91,7 +91,7 @@ export const account = pgTable('account', {
 
 export const player = pgTable('player', {
   uuid: varchar('uuid', { length: 64 }).primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull().unique(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }).unique(),
   nickname: varchar('nickname', { length: 64 }).notNull().unique(),
   nicknameHistory: jsonb('nickname_history').$type<string[]>().notNull().$defaultFn(() => []),
   previousNickname: varchar('previous_nickname', { length: 64 }),
@@ -103,7 +103,7 @@ export const player = pgTable('player', {
 export const oauthCode = pgTable('oauth_code', {
   id: serial('id').primaryKey(),
   codeHash: varchar('code_hash', { length: 128 }).notNull().unique(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   clientId: varchar('client_id', { length: 191 }),
   redirectUri: text('redirect_uri').notNull(),
   scope: text('scope'),
@@ -128,7 +128,7 @@ export const category = pgTable('category', {
 
 export const nicknameReservation = pgTable('nickname_reservation', {
   nickname: varchar('nickname', { length: 64 }).primaryKey(),
-  playerUuid: varchar('player_uuid', { length: 64 }).notNull(),
+  playerUuid: varchar('player_uuid', { length: 64 }).notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   reservedUntil: timestamp('reserved_until', { mode: 'date', withTimezone: false }).notNull(),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -138,7 +138,7 @@ export const nicknameReservation = pgTable('nickname_reservation', {
 
 export const token = pgTable('token', {
   id: serial('id').primaryKey(),
-  playerUuid: varchar('player_uuid', { length: 64 }).notNull(),
+  playerUuid: varchar('player_uuid', { length: 64 }).notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   accessTokenHash: varchar('access_token_hash', { length: 128 }).notNull().unique(),
   refreshTokenHash: varchar('refresh_token_hash', { length: 128 }).notNull().unique(),
   clientTokenHash: varchar('client_token_hash', { length: 128 }),
@@ -155,7 +155,7 @@ export const token = pgTable('token', {
 
 export const gameSession = pgTable('game_session', {
   id: serial('id').primaryKey(),
-  playerUuid: varchar('player_uuid', { length: 64 }).notNull(),
+  playerUuid: varchar('player_uuid', { length: 64 }).notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   serverId: varchar('server_id', { length: 128 }).notNull(),
   ip: varchar('ip', { length: 64 }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
@@ -168,7 +168,7 @@ export const gameSession = pgTable('game_session', {
 
 export const skin = pgTable('skin', {
   id: serial('id').primaryKey(),
-  playerUuid: varchar('player_uuid', { length: 64 }).notNull(),
+  playerUuid: varchar('player_uuid', { length: 64 }).notNull().references(() => player.uuid, { onDelete: 'cascade' }),
   kind: varchar('kind', { length: 32 }).$type<(typeof SKIN_KINDS)[number]>().notNull(),
   variant: varchar('variant', { length: 32 }).$type<(typeof SKIN_VARIANTS)[number]>(),
   filePath: text('file_path').notNull(),
@@ -178,7 +178,7 @@ export const skin = pgTable('skin', {
   isActive: boolean('is_active').notNull().default(false),
   activeSlot: varchar('active_slot', { length: 128 }),
   uploadedAt: timestamp('uploaded_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
-  reviewedBy: varchar('reviewed_by', { length: 191 }),
+  reviewedBy: varchar('reviewed_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
 }, (t) => [
   index('skin_player_uuid_idx').on(t.playerUuid),
   index('skin_sha256_idx').on(t.sha256),
@@ -191,7 +191,7 @@ export const skin = pgTable('skin', {
 export const post = pgTable('post', {
   id: serial('id').primaryKey(),
   categoryId: integer('category_id').notNull().references(() => category.id, { onDelete: 'restrict' }),
-  authorId: varchar('author_id', { length: 191 }).notNull(),
+  authorId: varchar('author_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 255 }).notNull(),
   contentMd: text('content_md').notNull(),
   status: varchar('status', { length: 32 }).$type<(typeof POST_STATUSES)[number]>().notNull().default('published'),
@@ -213,7 +213,7 @@ export const post = pgTable('post', {
 export const reply = pgTable('reply', {
   id: serial('id').primaryKey(),
   postId: integer('post_id').notNull().references(() => post.id, { onDelete: 'cascade' }),
-  authorId: varchar('author_id', { length: 191 }).notNull(),
+  authorId: varchar('author_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   contentMd: text('content_md').notNull(),
   status: varchar('status', { length: 32 }).$type<(typeof REPLY_STATUSES)[number]>().notNull().default('published'),
   floor: integer('floor').notNull(),
@@ -227,7 +227,7 @@ export const reply = pgTable('reply', {
 
 export const vote = pgTable('vote', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   targetType: varchar('target_type', { length: 32 }).$type<(typeof VOTE_TARGET_TYPES)[number]>().notNull(),
   targetId: integer('target_id').notNull(),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
@@ -240,10 +240,10 @@ export const report = pgTable('report', {
   id: serial('id').primaryKey(),
   targetType: varchar('target_type', { length: 32 }).$type<(typeof REPORT_TARGET_TYPES)[number]>().notNull(),
   targetId: varchar('target_id', { length: 191 }).notNull(),
-  reporterId: varchar('reporter_id', { length: 191 }).notNull(),
+  reporterId: varchar('reporter_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   reason: text('reason').notNull(),
   status: varchar('status', { length: 32 }).$type<(typeof REPORT_STATUSES)[number]>().notNull().default('pending'),
-  handledBy: varchar('handled_by', { length: 191 }),
+  handledBy: varchar('handled_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   index('report_status_idx').on(t.status),
@@ -251,9 +251,9 @@ export const report = pgTable('report', {
 
 export const notification = pgTable('notification', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   type: varchar('type', { length: 32 }).$type<(typeof NOTIFICATION_TYPES)[number]>().notNull(),
-  actorId: varchar('actor_id', { length: 191 }),
+  actorId: varchar('actor_id', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   message: text('message'),
   link: varchar('link', { length: 255 }),
   readAt: timestamp('read_at', { mode: 'date', withTimezone: false }),
@@ -267,7 +267,7 @@ export const notification = pgTable('notification', {
 
 export const moderationLog = pgTable('moderation_log', {
   id: serial('id').primaryKey(),
-  actorId: varchar('actor_id', { length: 191 }),
+  actorId: varchar('actor_id', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   action: varchar('action', { length: 32 }).$type<(typeof MODERATION_ACTIONS)[number]>().notNull(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
   targetId: varchar('target_id', { length: 191 }).notNull(),
@@ -276,7 +276,7 @@ export const moderationLog = pgTable('moderation_log', {
 });
 
 export const uploadUsage = pgTable('upload_usage', {
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   kind: varchar('kind', { length: 32 }).$type<(typeof UPLOAD_KINDS)[number]>().notNull(),
   day: varchar('day', { length: 10 }).notNull(),
   count: integer('count').notNull().default(0),
@@ -288,11 +288,11 @@ export const siteSetting = pgTable('site_setting', {
   key: varchar('key', { length: 128 }).primaryKey(),
   value: text('value').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
-  updatedBy: varchar('updated_by', { length: 191 }),
+  updatedBy: varchar('updated_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
 });
 
 export const userProgress = pgTable('user_progress', {
-  userId: varchar('user_id', { length: 191 }).primaryKey(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }).primaryKey(),
   xp: integer('xp').notNull().default(0),
   level: integer('level').notNull().default(1),
   points: integer('points').notNull().default(0),
@@ -310,7 +310,7 @@ export const userProgress = pgTable('user_progress', {
 
 export const dailyCheckin = pgTable('daily_checkin', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   checkinOn: varchar('checkin_on', { length: 10 }).notNull(),
   streak: integer('streak').notNull().default(1),
   xpAwarded: integer('xp_awarded').notNull().default(0),
@@ -323,7 +323,7 @@ export const dailyCheckin = pgTable('daily_checkin', {
 
 export const pointTransaction = pgTable('point_transaction', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   amount: integer('amount').notNull(),
   balanceAfter: integer('balance_after').notNull(),
   reason: varchar('reason', { length: 32 }).$type<(typeof POINT_REASONS)[number]>().notNull(),
@@ -341,15 +341,15 @@ export const title = pgTable('title', {
   kind: varchar('kind', { length: 32 }).$type<(typeof TITLE_KINDS)[number]>().notNull().default('special'),
   description: text('description'),
   color: varchar('color', { length: 16 }).notNull().default('#8b5cf6'),
-  createdBy: varchar('created_by', { length: 191 }),
+  createdBy: varchar('created_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 });
 
 export const userTitle = pgTable('user_title', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   titleId: integer('title_id').notNull().references(() => title.id, { onDelete: 'cascade' }),
-  grantedBy: varchar('granted_by', { length: 191 }),
+  grantedBy: varchar('granted_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   grantedAt: timestamp('granted_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   uniqueIndex('user_title_user_title_unique').on(t.userId, t.titleId),
@@ -358,12 +358,12 @@ export const userTitle = pgTable('user_title', {
 
 export const titleApplication = pgTable('title_application', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   proposedName: varchar('proposed_name', { length: 64 }).notNull(),
   reason: text('reason').notNull(),
   status: varchar('status', { length: 32 }).$type<(typeof TITLE_APPLICATION_STATUSES)[number]>().notNull().default('pending'),
   resultTitleId: integer('result_title_id').references(() => title.id, { onDelete: 'set null' }),
-  reviewedBy: varchar('reviewed_by', { length: 191 }),
+  reviewedBy: varchar('reviewed_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   reviewedAt: timestamp('reviewed_at', { mode: 'date', withTimezone: false }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -373,7 +373,7 @@ export const titleApplication = pgTable('title_application', {
 
 export const banner = pgTable('banner', {
   id: serial('id').primaryKey(),
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 64 }).notNull(),
   description: text('description'),
   href: varchar('href', { length: 255 }),
@@ -381,7 +381,7 @@ export const banner = pgTable('banner', {
   pointsSpent: integer('points_spent').notNull().default(0),
   startsAt: timestamp('starts_at', { mode: 'date', withTimezone: false }),
   endsAt: timestamp('ends_at', { mode: 'date', withTimezone: false }),
-  reviewedBy: varchar('reviewed_by', { length: 191 }),
+  reviewedBy: varchar('reviewed_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   reviewedAt: timestamp('reviewed_at', { mode: 'date', withTimezone: false }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
@@ -391,9 +391,9 @@ export const banner = pgTable('banner', {
 ]);
 
 export const userPermission = pgTable('user_permission', {
-  userId: varchar('user_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
   permission: varchar('permission', { length: 32 }).$type<(typeof ADMIN_PERMISSIONS)[number]>().notNull(),
-  grantedBy: varchar('granted_by', { length: 191 }),
+  grantedBy: varchar('granted_by', { length: 191 }).references(() => user.id, { onDelete: 'set null' }),
   grantedAt: timestamp('granted_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   index('user_permission_user_idx').on(t.userId),

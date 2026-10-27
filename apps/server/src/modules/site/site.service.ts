@@ -20,13 +20,14 @@ import {
   type UpdateSiteSettingsRequest,
   type UserRole,
 } from '@mcserauth/shared';
-import { count, desc, eq, inArray, like, or } from 'drizzle-orm';
+import { count, desc, eq, inArray, or } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { decryptSiteSecret, encryptSiteSecret } from '../../common/crypto/site-secret.js';
+import { containsIgnoreCase } from '../../common/helpers/search.js';
 import { DbService } from '../../db/db.service.js';
 import { moderationLog, siteSetting, user as userTable } from '../../db/schema/index.js';
 import { ProgressService } from '../growth/progress.service.js';
@@ -291,7 +292,7 @@ export class SiteService {
     const condition =
       term === ''
         ? undefined
-        : or(like(userTable.name, `%${term}%`), like(userTable.email, `%${term}%`));
+        : or(containsIgnoreCase(userTable.name, term), containsIgnoreCase(userTable.email, term));
     return (
       await this.db.db
         .select()

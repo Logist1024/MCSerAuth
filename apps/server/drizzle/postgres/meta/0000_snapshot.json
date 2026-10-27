@@ -1,5 +1,5 @@
 {
-  "id": "07fc8271-9ce1-4703-9d7f-4d1f728f706f",
+  "id": "e19c8d34-8fa3-4583-8a2d-b6362cad814c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -104,7 +104,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "account_user_id_user_id_fk": {
+          "name": "account_user_id_user_id_fk",
+          "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -243,7 +257,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "banner_user_id_user_id_fk": {
+          "name": "banner_user_id_user_id_fk",
+          "tableFrom": "banner",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "banner_reviewed_by_user_id_fk": {
+          "name": "banner_reviewed_by_user_id_fk",
+          "tableFrom": "banner",
+          "tableTo": "user",
+          "columnsFrom": [
+            "reviewed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -504,7 +545,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "daily_checkin_user_id_user_id_fk": {
+          "name": "daily_checkin_user_id_user_id_fk",
+          "tableFrom": "daily_checkin",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -605,7 +660,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "game_session_player_uuid_player_uuid_fk": {
+          "name": "game_session_player_uuid_player_uuid_fk",
+          "tableFrom": "game_session",
+          "tableTo": "player",
+          "columnsFrom": [
+            "player_uuid"
+          ],
+          "columnsTo": [
+            "uuid"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -660,7 +729,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "moderation_log_actor_id_user_id_fk": {
+          "name": "moderation_log_actor_id_user_id_fk",
+          "tableFrom": "moderation_log",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -728,7 +811,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "nickname_reservation_player_uuid_player_uuid_fk": {
+          "name": "nickname_reservation_player_uuid_player_uuid_fk",
+          "tableFrom": "nickname_reservation",
+          "tableTo": "player",
+          "columnsFrom": [
+            "player_uuid"
+          ],
+          "columnsTo": [
+            "uuid"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -868,7 +965,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "notification_user_id_user_id_fk": {
+          "name": "notification_user_id_user_id_fk",
+          "tableFrom": "notification",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notification_actor_id_user_id_fk": {
+          "name": "notification_actor_id_user_id_fk",
+          "tableFrom": "notification",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -978,7 +1102,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "oauth_code_user_id_user_id_fk": {
+          "name": "oauth_code_user_id_user_id_fk",
+          "tableFrom": "oauth_code",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "oauth_code_code_hash_unique": {
@@ -1048,7 +1186,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "player_user_id_user_id_fk": {
+          "name": "player_user_id_user_id_fk",
+          "tableFrom": "player",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "player_user_id_unique": {
@@ -1155,7 +1307,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "point_transaction_user_id_user_id_fk": {
+          "name": "point_transaction_user_id_user_id_fk",
+          "tableFrom": "point_transaction",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1375,6 +1541,19 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "post_author_id_user_id_fk": {
+          "name": "post_author_id_user_id_fk",
+          "tableFrom": "post",
+          "tableTo": "user",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1524,6 +1703,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "reply_author_id_user_id_fk": {
+          "name": "reply_author_id_user_id_fk",
+          "tableFrom": "reply",
+          "tableTo": "user",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1603,7 +1795,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "report_reporter_id_user_id_fk": {
+          "name": "report_reporter_id_user_id_fk",
+          "tableFrom": "report",
+          "tableTo": "user",
+          "columnsFrom": [
+            "reporter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "report_handled_by_user_id_fk": {
+          "name": "report_handled_by_user_id_fk",
+          "tableFrom": "report",
+          "tableTo": "user",
+          "columnsFrom": [
+            "handled_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1738,7 +1957,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "session_token_unique": {
@@ -1783,7 +2016,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "site_setting_updated_by_user_id_fk": {
+          "name": "site_setting_updated_by_user_id_fk",
+          "tableFrom": "site_setting",
+          "tableTo": "user",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1985,7 +2232,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "skin_player_uuid_player_uuid_fk": {
+          "name": "skin_player_uuid_player_uuid_fk",
+          "tableFrom": "skin",
+          "tableTo": "player",
+          "columnsFrom": [
+            "player_uuid"
+          ],
+          "columnsTo": [
+            "uuid"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "skin_reviewed_by_user_id_fk": {
+          "name": "skin_reviewed_by_user_id_fk",
+          "tableFrom": "skin",
+          "tableTo": "user",
+          "columnsFrom": [
+            "reviewed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2042,7 +2316,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "title_created_by_user_id_fk": {
+          "name": "title_created_by_user_id_fk",
+          "tableFrom": "title",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "title_name_unique": {
@@ -2150,12 +2438,38 @@
         }
       },
       "foreignKeys": {
+        "title_application_user_id_user_id_fk": {
+          "name": "title_application_user_id_user_id_fk",
+          "tableFrom": "title_application",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "title_application_result_title_id_title_id_fk": {
           "name": "title_application_result_title_id_title_id_fk",
           "tableFrom": "title_application",
           "tableTo": "title",
           "columnsFrom": [
             "result_title_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "title_application_reviewed_by_user_id_fk": {
+          "name": "title_application_reviewed_by_user_id_fk",
+          "tableFrom": "title_application",
+          "tableTo": "user",
+          "columnsFrom": [
+            "reviewed_by"
           ],
           "columnsTo": [
             "id"
@@ -2273,7 +2587,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "token_player_uuid_player_uuid_fk": {
+          "name": "token_player_uuid_player_uuid_fk",
+          "tableFrom": "token",
+          "tableTo": "player",
+          "columnsFrom": [
+            "player_uuid"
+          ],
+          "columnsTo": [
+            "uuid"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "token_access_token_hash_unique": {
@@ -2326,7 +2654,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "upload_usage_user_id_user_id_fk": {
+          "name": "upload_usage_user_id_user_id_fk",
+          "tableFrom": "upload_usage",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
         "upload_usage_user_id_kind_day_pk": {
           "name": "upload_usage_user_id_kind_day_pk",
@@ -2485,7 +2827,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "user_permission_user_id_user_id_fk": {
+          "name": "user_permission_user_id_user_id_fk",
+          "tableFrom": "user_permission",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_permission_granted_by_user_id_fk": {
+          "name": "user_permission_granted_by_user_id_fk",
+          "tableFrom": "user_permission",
+          "tableTo": "user",
+          "columnsFrom": [
+            "granted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
         "user_permission_user_id_permission_pk": {
           "name": "user_permission_user_id_permission_pk",
@@ -2608,7 +2977,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "user_progress_user_id_user_id_fk": {
+          "name": "user_progress_user_id_user_id_fk",
+          "tableFrom": "user_progress",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2689,6 +3072,19 @@
         }
       },
       "foreignKeys": {
+        "user_title_user_id_user_id_fk": {
+          "name": "user_title_user_id_user_id_fk",
+          "tableFrom": "user_title",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "user_title_title_id_title_id_fk": {
           "name": "user_title_title_id_title_id_fk",
           "tableFrom": "user_title",
@@ -2700,6 +3096,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_title_granted_by_user_id_fk": {
+          "name": "user_title_granted_by_user_id_fk",
+          "tableFrom": "user_title",
+          "tableTo": "user",
+          "columnsFrom": [
+            "granted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2859,7 +3268,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "vote_user_id_user_id_fk": {
+          "name": "vote_user_id_user_id_fk",
+          "tableFrom": "vote",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

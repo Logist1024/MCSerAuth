@@ -124,22 +124,20 @@ export class YggdrasilService {
     const accessToken = generateOpaqueToken('mcs_at_');
     const now = new Date();
     const updated = (
-      await this.db.db
-        .update(tokenTable)
-        .set({
+      await this.db.updateReturning(
+        tokenTable,
+        {
           accessTokenHash: sha256(accessToken),
           deviceName: this.deviceName(meta),
           ip: meta.ip ?? null,
           expiresAt: new Date(now.getTime() + this.config.oauthAccessTokenTtlSeconds * 1000),
-        })
-        .where(
-          and(
-            eq(tokenTable.id, row.token.id),
-            isNull(tokenTable.revokedAt),
-            eq(tokenTable.accessTokenHash, sha256(input.accessToken)),
-          ),
-        )
-        .returning({ id: tokenTable.id })
+        },
+        and(
+          eq(tokenTable.id, row.token.id),
+          isNull(tokenTable.revokedAt),
+          eq(tokenTable.accessTokenHash, sha256(input.accessToken)),
+        ),
+      )
     )[0];
     if (!updated) {
       throw new ForbiddenException(INVALID_TOKEN);

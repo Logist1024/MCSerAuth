@@ -23,6 +23,7 @@ import 'dotenv/config';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
 import { createConnection } from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
@@ -39,8 +40,8 @@ import {
   type TableModel,
 } from '../src/db/schema/model.js';
 
-type TargetDialect = Extract<DatabaseDialect, 'mysql' | 'postgres'>;
-type SqlValue = string | number | boolean | null;
+export type TargetDialect = Extract<DatabaseDialect, 'mysql' | 'postgres'>;
+export type SqlValue = string | number | boolean | null;
 
 interface Options {
   sourceUrl: string;
@@ -289,10 +290,16 @@ function quoteSqlite(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-function sourceSelect(table: TableModel, sourceColumns: Set<string>): string {
+export function sourceSelect(table: TableModel, sourceColumns: Set<string>): string {
   return table.columns
     .map((column) => {
-      if (sourceColumns.has(column.column)) return quoteSqlite(column.column);
+      if (sourceColumns.has(column.column)) {
+        const reference = quoteSqlite(column.column);
+        // Drizzle's SQLite `timestamp` mode stores epoch **seconds** while the
+        // target-side expressions below produce epoch milliseconds. Normalize
+        // here so inserts and checksums use the same unit.
+        return column.type === 'timestamp' ? `${reference} * 1000 AS ${reference}` : reference;
+      }
       if (table.name === 'skin' && column.column === 'active_slot') {
         return (
           `CASE WHEN ${quoteSqlite('is_active')} = 1 THEN ` +
@@ -396,7 +403,7 @@ async function clearTarget(target: Target): Promise<void> {
   );
 }
 
-function formatTimestamp(value: unknown): string {
+export function formatTimestamp(value: unknown): string {
   const date = new Date(Number(value));
   if (Number.isNaN(date.getTime())) {
     throw new Error(`Invalid timestamp value: ${String(value)}`);
@@ -404,7 +411,7 @@ function formatTimestamp(value: unknown): string {
   return date.toISOString().slice(0, 23).replace('T', ' ');
 }
 
-function toTargetValues(
+export function toTargetValues(
   table: TableModel,
   row: Record<string, unknown>,
   dialect: TargetDialect,
@@ -483,7 +490,7 @@ function normalizeValue(column: ColumnModel, value: unknown): unknown {
   }
 }
 
-function rowHash(table: TableModel, row: Record<string, unknown>): string {
+export function rowHash(table: TableModel, row: Record<string, unknown>): string {
   const normalized = table.columns.map((column) => normalizeValue(column, row[column.column]));
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
@@ -494,6 +501,72 @@ function tableChecksum(hashes: string[]): string {
   return digest.digest('hex');
 }
 
+/**
+ * Orders rows of a self-referencing table (for example `category.parent_id`)
+ * so that parents are inserted before their children. Rows that point at a
+ * missing key are left in place; the target foreign key reports them.
+ */
+export function orderSelfReferencedRows(
+  table: TableModel,
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const selfReferences = table.columns.filter((column) => column.references?.table === table.name);
+  if (selfReferences.length === 0) return rows;
+
+  const primary = table.columns.find((column) => column.primaryKey);
+  if (primary === undefined) {
+    throw new Error(`Self-referencing table ${table.name} must have a primary key.`);
+  }
+
+  const knownKeys = new Set(rows.map((row) => String(row[primary.column])));
+  const placed = new Set<string>();
+  const pending = [...rows];
+  const ordered: Record<string, unknown>[] = [];
+
+  while (pending.length > 0) {
+    let progressed = false;
+    for (let index = 0; index < pending.length;) {
+      const row = pending[index]!;
+      const ready = selfReferences.every((column) => {
+        const value = row[column.column];
+        if (value === null || value === undefined) return true;
+        const key = String(value);
+        return !knownKeys.has(key) || placed.has(key);
+      });
+      if (!ready) {
+        index += 1;
+        continue;
+      }
+      ordered.push(row);
+      placed.add(String(row[primary.column]));
+      pending.splice(index, 1);
+      progressed = true;
+    }
+    if (!progressed) {
+      throw new Error(
+        `Cannot order ${table.name} rows: the self-reference contains a cycle. ` +
+          'Fix the source data before copying.',
+      );
+    }
+  }
+
+  return ordered;
+}
+
+function* sourceRows(
+  sqlite: Database.Database,
+  table: TableModel,
+  sourceColumnsSet: Set<string>,
+): Iterable<Record<string, unknown>> {
+  const select = `SELECT ${sourceSelect(table, sourceColumnsSet)} FROM ${quoteSqlite(table.name)}`;
+  const rows = sqlite.prepare(select).iterate() as Iterable<Record<string, unknown>>;
+  if (table.columns.every((column) => column.references?.table !== table.name)) {
+    yield* rows;
+    return;
+  }
+  yield* orderSelfReferencedRows(table, [...rows]);
+}
+
 async function copyTable(
   sqlite: Database.Database,
   target: Target,
@@ -501,10 +574,9 @@ async function copyTable(
   sourceColumnsSet: Set<string>,
   batchSize: number,
 ): Promise<number> {
-  const select = `SELECT ${sourceSelect(table, sourceColumnsSet)} FROM ${quoteSqlite(table.name)}`;
   let count = 0;
   let batch: SqlValue[][] = [];
-  for (const row of sqlite.prepare(select).iterate() as Iterable<Record<string, unknown>>) {
+  for (const row of sourceRows(sqlite, table, sourceColumnsSet)) {
     batch.push(toTargetValues(table, row, target.dialect));
     count += 1;
     if (batch.length >= batchSize) {
@@ -653,7 +725,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(`\nCopy failed: ${error instanceof Error ? error.message : String(error)}`);
-  process.exitCode = 1;
-});
+const invokedDirectly =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((error: unknown) => {
+    console.error(`\nCopy failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  });
+}
