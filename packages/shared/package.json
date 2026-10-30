@@ -1,6 +1,6 @@
 {
   "name": "@mcserauth/shared",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Cross-app TypeScript types, protocol DTO contracts, enums, error codes and zod schemas",
   "type": "module",

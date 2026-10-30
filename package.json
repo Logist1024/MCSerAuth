@@ -1,6 +1,6 @@
 {
   "name": "mcserauth",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "MCSerAuth — integrated forum and external login authentication system for third-party Minecraft: Java Edition servers",
   "license": "MIT",

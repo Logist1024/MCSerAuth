@@ -1,6 +1,6 @@
 {
   "name": "@mcserauth/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Next.js App Router frontend — rendering only, all business logic lives in NestJS",
   "scripts": {
