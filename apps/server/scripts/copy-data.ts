@@ -1,11 +1,14 @@
 /**
- * One-time SQLite → MySQL/PostgreSQL data copy.
+ * One-time SQLite → SQLite/MySQL/PostgreSQL data copy.
  *
  * The target schema must already exist (`pnpm db:migrate` against the target).
  * The script refuses to write into a non-empty target unless `--truncate` is
  * explicitly passed. Rows are copied in foreign-key order, auto-increment
  * sequences are repaired on PostgreSQL, and every table is verified by row
  * count plus a full-row SHA-256 checksum after the copy.
+ *
+ * A SQLite target is how an existing database is moved onto a regenerated
+ * migration baseline (see ADR 0007): migrate a fresh file, then copy into it.
  *
  * Usage:
  *   SOURCE_DATABASE_URL=./data/mcserauth.db \
@@ -14,7 +17,7 @@
  *
  * Options:
  *   --source <url>       Source SQLite URL/path (default: SOURCE_DATABASE_URL or DATABASE_URL)
- *   --target <url>       Target MySQL/PostgreSQL URL (required)
+ *   --target <url>       Target SQLite/MySQL/PostgreSQL URL (required)
  *   --truncate           Clear the target tables before copying
  *   --dry-run            Validate schema and print counts without writing
  *   --batch-size <n>     Rows per INSERT batch (default: 200)
@@ -40,7 +43,7 @@ import {
   type TableModel,
 } from '../src/db/schema/model.js';
 
-export type TargetDialect = Extract<DatabaseDialect, 'mysql' | 'postgres'>;
+export type TargetDialect = DatabaseDialect;
 export type SqlValue = string | number | boolean | null;
 
 interface Options {
@@ -68,7 +71,7 @@ const HELP = `Usage: pnpm db:copy-data -- --target <url> [options]
 
 Options:
   --source <url>       Source SQLite URL/path (default: SOURCE_DATABASE_URL or DATABASE_URL)
-  --target <url>       Target MySQL/PostgreSQL URL (required)
+  --target <url>       Target SQLite/MySQL/PostgreSQL URL (required)
   --truncate           Clear the target tables before copying
   --dry-run            Validate schema and print counts without writing
   --batch-size <n>     Rows per INSERT batch (default: 200)
@@ -146,6 +149,7 @@ function openSource(databaseUrl: string): Database.Database {
 
 function createTarget(dialect: TargetDialect, databaseUrl: string): Target {
   if (dialect === 'mysql') return new MySqlTarget(databaseUrl);
+  if (dialect === 'sqlite') return new SqliteTarget(databaseUrl);
   return new PostgresTarget(databaseUrl);
 }
 
@@ -226,6 +230,71 @@ class MySqlTarget implements Target {
 
   quote(identifier: string): string {
     return `\`${identifier.replaceAll('`', '``')}\``;
+  }
+
+  placeholder(): string {
+    return '?';
+  }
+}
+
+class SqliteTarget implements Target {
+  readonly dialect = 'sqlite' as const;
+  private readonly sqlite: Database.Database;
+
+  constructor(databaseUrl: string) {
+    const file = sqliteFilePath(databaseUrl);
+    if (file === ':memory:') {
+      throw new Error('TARGET_DATABASE_URL must point at a file-based SQLite database.');
+    }
+    const absolute = path.resolve(process.cwd(), file);
+    if (!fs.existsSync(absolute)) {
+      throw new Error(
+        `Target SQLite database not found: ${absolute}. Run pnpm db:migrate against it first.`,
+      );
+    }
+    this.sqlite = new Database(absolute);
+    // tableOrder already inserts parents first; the constraint turns any
+    // ordering regression into a hard error instead of dangling references.
+    this.sqlite.pragma('foreign_keys = ON');
+  }
+
+  async query(sql: string, params: SqlValue[] = []): Promise<Record<string, unknown>[]> {
+    return this.sqlite.prepare(sql).all(...params) as Record<string, unknown>[];
+  }
+
+  async execute(sql: string, params: SqlValue[] = []): Promise<void> {
+    if (params.length === 0) {
+      this.sqlite.exec(sql);
+      return;
+    }
+    this.sqlite.prepare(sql).run(...params);
+  }
+
+  async columns(table: string): Promise<Set<string>> {
+    const rows = (await this.query(`PRAGMA table_info(${quoteSqlite(table)})`)) as Array<{
+      name: string;
+    }>;
+    return new Set(rows.map((row) => row.name));
+  }
+
+  async begin(): Promise<void> {
+    await this.execute('BEGIN');
+  }
+
+  async commit(): Promise<void> {
+    await this.execute('COMMIT');
+  }
+
+  async rollback(): Promise<void> {
+    await this.execute('ROLLBACK');
+  }
+
+  async close(): Promise<void> {
+    this.sqlite.close();
+  }
+
+  quote(identifier: string): string {
+    return quoteSqlite(identifier);
   }
 
   placeholder(): string {
@@ -330,7 +399,9 @@ function targetSelect(table: TableModel, target: Target): string {
       const expression =
         target.dialect === 'mysql'
           ? `CAST(UNIX_TIMESTAMP(${target.quote(column.column)}) * 1000 AS SIGNED)`
-          : `CAST(EXTRACT(EPOCH FROM ${target.quote(column.column)}) * 1000 AS BIGINT)`;
+          : target.dialect === 'postgres'
+            ? `CAST(EXTRACT(EPOCH FROM ${target.quote(column.column)}) * 1000 AS BIGINT)`
+            : `${target.quote(column.column)} * 1000`;
       return `${expression} AS ${target.quote(column.column)}`;
     })
     .join(', ');
@@ -408,6 +479,24 @@ async function clearTarget(target: Target): Promise<void> {
     }
     return;
   }
+  if (target.dialect === 'sqlite') {
+    await target.execute('PRAGMA foreign_keys = OFF');
+    try {
+      for (const table of [...tables].reverse()) {
+        await target.execute(`DELETE FROM ${target.quote(table.name)}`);
+      }
+      const sequence = await target.query(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'",
+      );
+      if (sequence.length > 0) {
+        const names = tables.map((table) => `'${table.name.replaceAll("'", "''")}'`).join(', ');
+        await target.execute(`DELETE FROM sqlite_sequence WHERE name IN (${names})`);
+      }
+    } finally {
+      await target.execute('PRAGMA foreign_keys = ON');
+    }
+    return;
+  }
   await target.execute(
     `TRUNCATE TABLE ${tables.map((table) => target.quote(table.name)).join(', ')} ` +
       'RESTART IDENTITY CASCADE',
@@ -432,9 +521,13 @@ export function toTargetValues(
     if (raw === null || raw === undefined) return null;
     switch (column.type) {
       case 'timestamp':
+        // SQLite stores Drizzle `timestamp` mode as epoch seconds, not the
+        // UTC wall-clock string the server databases expect.
+        if (dialect === 'sqlite') return Math.floor(Number(raw) / 1000);
         return formatTimestamp(raw);
       case 'boolean':
-        return dialect === 'mysql' ? (raw ? 1 : 0) : raw === true || raw === 1 || raw === '1';
+        if (dialect === 'postgres') return raw === true || raw === 1 || raw === '1';
+        return raw === true || raw === 1 || raw === '1' ? 1 : 0;
       case 'json':
         return typeof raw === 'string' ? raw : JSON.stringify(raw);
       default:
@@ -654,20 +747,18 @@ async function verify(
   }
 }
 
-async function main(): Promise<void> {
-  const options = parseArgs(process.argv.slice(2));
-  if (options === null) {
-    console.log(HELP);
-    return;
-  }
-
+export async function copyDatabase(options: Options): Promise<void> {
   const sourceDialect = detectDialect(options.sourceUrl);
   const targetDialect = detectDialect(options.targetUrl);
   if (sourceDialect !== 'sqlite') {
     throw new Error('Source database must be SQLite.');
   }
-  if (targetDialect !== 'mysql' && targetDialect !== 'postgres') {
-    throw new Error('Target database must be MySQL or PostgreSQL.');
+  if (
+    targetDialect === 'sqlite' &&
+    path.resolve(process.cwd(), sqliteFilePath(options.sourceUrl)) ===
+      path.resolve(process.cwd(), sqliteFilePath(options.targetUrl))
+  ) {
+    throw new Error('Source and target SQLite databases must be different files.');
   }
 
   console.log(`Source: ${redactDatabaseUrl(options.sourceUrl)}`);
@@ -734,6 +825,16 @@ async function main(): Promise<void> {
     sqlite.close();
     await target.close();
   }
+}
+
+async function main(): Promise<void> {
+  const options = parseArgs(process.argv.slice(2));
+  if (options === null) {
+    console.log(HELP);
+    return;
+  }
+
+  await copyDatabase(options);
 }
 
 const invokedDirectly =

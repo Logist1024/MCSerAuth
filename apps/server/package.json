@@ -19,6 +19,7 @@
     "db:generate:all": "pnpm db:generate:schemas && drizzle-kit generate --config drizzle.config.sqlite.ts && drizzle-kit generate --config drizzle.config.mysql.ts && drizzle-kit generate --config drizzle.config.postgres.ts",
     "db:migrate": "node scripts/migrate.mjs",
     "db:copy-data": "tsx scripts/copy-data.ts",
+    "db:seed": "tsx scripts/seed.ts",
     "db:backup": "node scripts/backup.mjs",
     "db:studio": "drizzle-kit studio --config drizzle.config.sqlite.ts",
     "admin:grant": "tsx scripts/grant-role.ts",

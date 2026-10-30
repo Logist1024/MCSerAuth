@@ -25,6 +25,7 @@
     "db:check": "pnpm db:generate && git diff --exit-code -- apps/server/src/db/schema apps/server/drizzle",
     "db:migrate": "pnpm --filter @mcserauth/server db:migrate",
     "db:copy-data": "pnpm --filter @mcserauth/server db:copy-data",
+    "db:seed": "pnpm --filter @mcserauth/server db:seed",
     "db:backup": "pnpm --filter @mcserauth/server db:backup",
     "db:studio": "pnpm --filter @mcserauth/server db:studio",
     "admin:grant": "pnpm --filter @mcserauth/server admin:grant",
