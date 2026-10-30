@@ -5,85 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1792328049580,
-      "tag": "0000_yielding_valeria_richards",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1792499306808,
-      "tag": "0001_marvelous_wong",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1792500789454,
-      "tag": "0002_sturdy_overlord",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1792502515422,
-      "tag": "0003_brainy_namor",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1792817634671,
-      "tag": "0004_heavy_firebrand",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1792848156228,
-      "tag": "0005_left_unicorn",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1792849657589,
-      "tag": "0006_late_golden_guardian",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1792851919919,
-      "tag": "0007_heavy_mother_askani",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1792918654908,
-      "tag": "0008_normal_skrulls",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "6",
-      "when": 1792919300053,
-      "tag": "0009_low_wolverine",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "6",
-      "when": 1793075437663,
-      "tag": "0010_cute_toxin",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "6",
-      "when": 1793079224515,
-      "tag": "0011_closed_lizard",
+      "when": 1793404405313,
+      "tag": "0000_calm_aqueduct",
       "breakpoints": true
     }
   ]

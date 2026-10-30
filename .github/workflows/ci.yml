@@ -91,6 +91,17 @@ jobs:
       - name: Database migration smoke test
         run: pnpm db:migrate
 
+      # End-to-end copy evidence (ADR 0007): seed a source database, migrate a
+      # fresh target onto the same baseline, copy and verify by checksum, then
+      # re-run migrations to prove idempotency.
+      - name: Copy-data end-to-end (SQLite → SQLite)
+        working-directory: apps/server
+        run: |
+          pnpm db:seed
+          DATABASE_URL=./data/copy-target.db pnpm db:migrate
+          SOURCE_DATABASE_URL=./data/mcserauth.db TARGET_DATABASE_URL=./data/copy-target.db pnpm db:copy-data
+          pnpm db:migrate
+
   # Runs the same server test suite against real MySQL and PostgreSQL servers.
   # Each test file creates and drops its own database, so the suite exercises
   # dialect-specific SQL (RETURNING, upserts, insert-ignore, transactions)
@@ -162,3 +173,16 @@ jobs:
         env:
           TEST_DATABASE_URL: ${{ matrix.test-database-url }}
         run: pnpm --filter @mcserauth/server test
+
+      # Real multi-database copy evidence (ADR 0007): seed the SQLite default
+      # database, then copy into the service-container database and re-run
+      # migrations there to prove idempotency.
+      - name: Copy-data end-to-end (SQLite → ${{ matrix.dialect }})
+        working-directory: apps/server
+        env:
+          TARGET_DATABASE_URL: ${{ matrix.database-url }}
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm db:copy-data -- --truncate
+          DATABASE_URL=$TARGET_DATABASE_URL pnpm db:migrate

@@ -86,6 +86,28 @@
 3. `pnpm db:copy-data -- --dry-run` 与 `--truncate` 的端到端复制和校验。
 4. 推送分支并观察 GitHub Actions 的三个 job。
 
+### 2.0 验证进展（F2 基线对齐，2026-10-31）
+
+[ADR 0007](adr/0007-migration-baseline-alignment.md) 对齐三库迁移基线后：
+
+**本机已验证（SQLite）**：
+
+- 三方 0000 基线各含 29 张 `CREATE TABLE`（`drizzle/{sqlite,mysql,postgres}/0000_*.sql`）。
+- 存量库搬迁演练：以旧 12 版基线构建的开发库（seed 数据）→ 新基线空库
+  `db:copy-data`，29 表逐表 `verified`、全行 SHA-256 校验通过；`db:migrate`
+  重跑幂等；迁移后数据可读。
+- `pnpm --filter @mcserauth/server test`：166 用例全绿（每个测试文件在全新库上
+  跑新 0000 基线）。
+- `db:seed` 幂等写入占位用户/版块/站点设置，重复执行不报错。
+
+**归 CI 验证**（`test-databases` 矩阵已加 copy-data 端到端步骤，推送后首跑）：
+
+1. 真实 MySQL / PostgreSQL 上的 `db:migrate` 与幂等重跑。
+2. SQLite → MySQL / PG 的 `db:copy-data --truncate` 端到端（seed 数据源）。
+3. `TEST_DATABASE_URL` 三库测试矩阵常绿。
+
+CI 首跑结果回填到本节后，「待验证」清单即视为关闭。
+
 建议按以下顺序补验：
 
 ```bash

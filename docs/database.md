@@ -70,10 +70,15 @@ apps/server/src/db/schema/
     └── postgres.ts          # 生成
 
 apps/server/drizzle/
-├── sqlite/                  # 历史迁移 + 0010 / 0011
-├── mysql/                   # 0000 初始迁移
-└── postgres/                # 0000 初始迁移
+├── sqlite/                  # 0000 基线（与 MySQL/PG 对齐，见 ADR 0007）
+├── mysql/                   # 0000 基线
+└── postgres/                # 0000 基线
 ```
+
+三个方言的迁移历史自 2.0 起共同对齐到 29 表基线：改 `model.ts` 后
+`pnpm db:generate` 会在三个目录**同时**追加一个同语义版本；任何一侧单独出现
+新版本都说明生成流程被跳过。1.x 的 SQLite 12 版历史已移除（git 历史可考），
+存量库升级见下文「迁移基线对齐升级」。
 
 生成文件带 `/* eslint-disable */`，diff 中应只出现由 `model.ts` 推导出的变化。
 提交前至少运行一次 `pnpm --filter @mcserauth/server typecheck` 与三库测试。
@@ -100,52 +105,79 @@ CREATE DATABASE mcserauth CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 迁移只建表，不会修改已存在数据库的字符集；字符集不一致会导致昵称、帖子中的
 emoji 写入失败。
 
-### SQLite 0010 / 0011 的特殊处理
+### SQLite 0010 / 0011 的历史处理（已移除）
 
-`0010` 为 `skin` 增加 MySQL 兼容的 `active_slot` 判别列；`0011` 恢复 `model.ts`
-中声明的全部外键（SQLite 不支持 `ALTER TABLE ... ADD CONSTRAINT`，只能重建表）。
-两次迁移都需要重建表。由于 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不会生效，
-迁移采用备份表方案：
+1.x 的 SQLite 迁移历史（含两次重建表的 `0010`/`0011`）已在 2.0 基线对齐中移除，
+见 [ADR 0007](adr/0007-migration-baseline-alignment.md)。其中的数据修复逻辑
+（`mod` → `reviewer`、pending 纹理转 approved、`active_slot` 回填）保留在
+`scripts/migrate.mjs` 的幂等后处理里，对所有方言的全新库同样安全。
+历史迁移采用过备份表方案（`__bak_*` → 重建 → 回填），如果需要在 git 历史中
+考古，注意 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不生效，重建表必须
+按「子表先删、父表先建」的顺序操作。
 
-1. 将旧表复制为 `__bak_*`；
-2. 建新表；
-3. 删除旧表；
-4. 新表重命名为正式名；
-5. 从 `__bak_*` 回填数据；
-6. 建索引；
-7. 删除备份表。
-
-`0011` 还会先按子表 → 父表顺序删除旧表，再按父表 → 子表顺序建表与回填，
-避免级联删除已经重建的子表数据。
-
-**不要调整这个顺序**，否则删除旧表会触发级联删除。迁移完成后库中不应残留
-`__bak_*` 表。`pnpm db:check` 与测试会校验外键数量与级联行为。
-
-## 从 SQLite 迁移到 MySQL / PostgreSQL
-
-一次性脚本，适合把现有开发库或小规模生产库搬到服务型数据库。
+## 引导数据（seed）
 
 ```bash
-# 1. 先在目标库建好 schema
-DATABASE_URL=mysql://user:pass@host/mcserauth pnpm db:migrate
-
-# 2. 预检：只校验 schema 与行数，不写入
-SOURCE_DATABASE_URL=./data/mcserauth.db \
-TARGET_DATABASE_URL=mysql://user:pass@host/mcserauth \
-pnpm db:copy-data -- --dry-run
-
-# 3. 正式复制（目标非空时必须显式 --truncate）
-SOURCE_DATABASE_URL=./data/mcserauth.db \
-TARGET_DATABASE_URL=mysql://user:pass@host/mcserauth \
-pnpm db:copy-data -- --truncate
+pnpm db:seed
 ```
 
-脚本行为：
+向目标库幂等写入最小数据集：1 个占位 superadmin（`seed-admin@localhost`）、
+2 个默认版块（`general` / `servers`）、`siteName` 站点设置。用途：
 
-- 源库只读打开；目标 schema 必须已存在，列不匹配会提前失败。
+- `db:copy-data` 验证与 CI 证据的非空数据源；
+- 本地冒烟 / 开发时先有一点点数据可看。
+
+**seed 出的账号不能登录**（没有凭据行）。首个真实 superadmin 仍按部署文档走
+注册 → `pnpm admin:grant <email> superadmin`。
+
+## 数据搬迁（SQLite → SQLite / MySQL / PostgreSQL）
+
+一次性脚本。两个典型场景：
+
+1. **存量 1.x SQLite 库升级到 2.0 基线**（SQLite → SQLite，见
+   [ADR 0007](adr/0007-migration-baseline-alignment.md)）：
+
+   ```bash
+   # 1. 新基线空库
+   DATABASE_URL=./data/new-baseline.db pnpm db:migrate
+
+   # 2. 预检：只校验 schema 与行数，不写入
+   SOURCE_DATABASE_URL=./data/mcserauth.db \
+   TARGET_DATABASE_URL=./data/new-baseline.db \
+   pnpm db:copy-data -- --dry-run
+
+   # 3. 正式复制（目标非空时必须显式 --truncate）
+   SOURCE_DATABASE_URL=./data/mcserauth.db \
+   TARGET_DATABASE_URL=./data/new-baseline.db \
+   pnpm db:copy-data
+   ```
+
+   校验输出逐表 `verified <table>: n rows` 后，把 `DATABASE_URL` 换成新文件并
+   重启。脚本拒绝源/目标为同一文件。
+
+2. **切换到 MySQL / PostgreSQL**：
+
+   ```bash
+   # 1. 先在目标库建好 schema（MySQL 建库请显式 utf8mb4，见上文）
+   DATABASE_URL=mysql://user:pass@host/mcserauth pnpm db:migrate
+
+   # 2. 预检
+   SOURCE_DATABASE_URL=./data/mcserauth.db \
+   TARGET_DATABASE_URL=mysql://user:pass@host/mcserauth \
+   pnpm db:copy-data -- --dry-run
+
+   # 3. 正式复制
+   SOURCE_DATABASE_URL=./data/mcserauth.db \
+   TARGET_DATABASE_URL=mysql://user:pass@host/mcserauth \
+   pnpm db:copy-data -- --truncate
+   ```
+
+脚本行为（三方言一致）：
+
+- 源库（SQLite）只读打开；目标 schema 必须已存在，列不匹配会提前失败。
 - 目标非空时默认拒绝写入；`--truncate` 才会清空目标表。
 - 按外键顺序分批插入，默认每批 200 行（`--batch-size` 可调）。
-- PostgreSQL 复制后修复自增 sequence。
+- PostgreSQL 复制后修复自增 sequence；SQLite 清库后重置 `sqlite_sequence`。
 - 复制完成后逐表校验行数与全行 SHA-256；校验失败回滚。
 - 校验使用目标端时间戳 epoch 表达式，避免驱动时区差异。
 

@@ -1,1 +1,0 @@
-ALTER TABLE `token` ADD `client_token_hash` text;
