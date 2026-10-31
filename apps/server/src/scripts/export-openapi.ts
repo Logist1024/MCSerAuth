@@ -1,9 +1,9 @@
 import 'reflect-metadata';
-import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { AppModule } from '../app.module.js';
+import { PREFIX_EXCLUDED_ROUTES } from '../app.constants.js';
 import { createOpenApiDocument } from '../swagger.js';
 
 /**
@@ -12,7 +12,7 @@ import { createOpenApiDocument } from '../swagger.js';
  */
 async function main(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false, logger: false });
-  app.setGlobalPrefix('api', { exclude: [{ path: 'health', method: RequestMethod.GET }] });
+  app.setGlobalPrefix('api', { exclude: PREFIX_EXCLUDED_ROUTES });
   await app.init();
 
   const document = createOpenApiDocument(app);

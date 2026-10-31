@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import rateLimit from 'express-rate-limit';
@@ -13,6 +12,7 @@ import {
   type Response,
 } from 'express';
 import { AppModule } from './app.module.js';
+import { PREFIX_EXCLUDED_ROUTES } from './app.constants.js';
 import { docsCsp, generateCspNonce, isDocsPath, strictCsp, CSP_NONCE_KEY } from './common/csp.js';
 import { AppConfigService } from './config/app-config.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
@@ -104,13 +104,7 @@ async function bootstrap(): Promise<void> {
       urlencodedParser(req, res, next);
     });
   });
-  app.setGlobalPrefix('api', {
-    exclude: [
-      { path: 'health', method: RequestMethod.GET },
-      { path: 'health/live', method: RequestMethod.GET },
-      { path: 'health/ready', method: RequestMethod.GET },
-    ],
-  });
+  app.setGlobalPrefix('api', { exclude: PREFIX_EXCLUDED_ROUTES });
   setupSwagger(app);
   app.enableShutdownHooks();
   await app.listen(config.port);
