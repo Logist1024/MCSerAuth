@@ -6,11 +6,14 @@
 两块业务共用同一账号体系与基础设施，单体部署；默认 SQLite，生产可切换
 MySQL 8.0+ / PostgreSQL 16+。
 
-> **当前阶段：M3 论坛 MVP + M4 运营能力**
+> **当前阶段：1.x 功能收官（`v1.0.0`）→ 2.0 M5 生产就绪进行中**
 > 已接通：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、`/api/user/profiles/me`、
-> 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传审核与签名分发；
-> M3/M4 新增论坛（版块/帖子/回复/点赞/通知/举报）、公开个人主页、游戏账号管理
-> （资料/改名/纹理切换）、管理后台（用户/内容/举报/版块/公告/纹理/服务器）与 RSS/sitemap。
+> 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
+> 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览）、公开个人主页、游戏账号管理
+> （资料/改名/纹理切换）、四级角色 + 8 项能力下放 + 密钥超级后台、人机验证、成长体系
+> （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
+> 2.0 进度：F2 多库真实验证（CI 矩阵全绿）· F3 CSP 与安全头 · F5 探针与慢查询日志 ·
+> F6 文档同步已完成；**F1 协议真机联调、F4 部署与备份未开始**，M6/M7 未启动。
 > 逐字段核对与联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)，
 > M0 交付物见 [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)。
 
@@ -57,16 +60,17 @@ pnpm dev                           # 同时拉起 server(:8000) 与 web(:3000)
 
 启动后：
 
-| 地址                                                   | 说明                                      |
-| ------------------------------------------------------ | ----------------------------------------- |
-| <http://localhost:3000>                                | 服务器展示页（论坛 / 游戏账号入口）       |
-| <http://localhost:3000/forum>                          | 论坛（版块、帖子、发帖、回帖、点赞）      |
-| <http://localhost:3000/textures>                       | 游戏账号管理（角色 / 皮肤 / 披风 / 设备） |
-| <http://localhost:3000/admin>                          | 管理后台（审核员 / 管理员 / 超级管理员）  |
-| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO 与 RSS                                |
-| <http://localhost:8000/health>                         | 服务探活（统一封装 `{code:0,data}`）      |
-| <http://localhost:8000/docs>                           | Swagger UI（全部端点契约）                |
-| <http://localhost:8000/docs/json>                      | OpenAPI JSON                              |
+| 地址                                                   | 说明                                              |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| <http://localhost:3000>                                | 服务器展示页（论坛 / 游戏账号入口）               |
+| <http://localhost:3000/forum>                          | 论坛（版块、帖子、发帖、回帖、点赞）              |
+| <http://localhost:3000/textures>                       | 游戏账号管理（角色 / 皮肤 / 披风 / 登录指南）     |
+| <http://localhost:3000/admin>                          | 管理后台（审核员 / 管理员 / 超级管理员）          |
+| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO 与 RSS                                        |
+| <http://localhost:8000/health>                         | 服务探活（统一封装 `{code:0,data}`）              |
+| <http://localhost:8000/health/live> · `/health/ready`  | liveness（进程）· readiness（数据库不可用返 503） |
+| <http://localhost:8000/docs>                           | Swagger UI（全部端点契约）                        |
+| <http://localhost:8000/docs/json>                      | OpenAPI JSON                                      |
 
 冒烟（注册 → 登录 → 会话）：
 
@@ -234,7 +238,8 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                     |
 | `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）     |
 | `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移     |
-| `pnpm db:copy-data`                 | SQLite → MySQL/PostgreSQL 一次性复制   |
+| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置         |
+| `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）     |
 | `pnpm db:backup`                    | 迁移前备份 SQLite（含 WAL checkpoint） |
 | `pnpm db:studio`                    | Drizzle Studio 浏览数据                |
 | `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin    |
@@ -250,7 +255,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `NODE_ENV`                        | `development`                     | `production` 时强制校验 secret 与 Cookie         |
 | `PORT`                            | `8000`                            | server 端口                                      |
 | `LOG_LEVEL`                       | `debug`（模板）                   | pino 级别；敏感字段自动脱敏                      |
-| `APP_URL` / `AUTH_URL`            | `http://localhost:3000` / `:8000` | 站点域 / 认证域分离占位（T2）                    |
+| `APP_URL` / `AUTH_URL`            | `http://localhost:3000` / `:8000` | 站点域 / 认证域；CORS 与 OriginGuard 白名单来源  |
 | `COOKIE_SECURE`                   | `false`                           | 生产必须 `true`（Secure/HttpOnly/SameSite=Lax）  |
 | `BETTER_AUTH_SECRET`              | 开发默认值                        | 生产必填（≥32 字符），`openssl rand -base64 48`  |
 | `OAUTH_ACCESS_TOKEN_TTL_SECONDS`  | `2592000`                         | 启动器 access token 有效期（秒，默认 30 天）     |
@@ -283,7 +288,8 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - **三库支持**：SQLite（默认，WAL + 外键 + `busy_timeout`）、MySQL 8.0+、PostgreSQL 16+。
   方言由 `DATABASE_URL` 自动识别；完整配置、迁移与运维说明见
   [`docs/database.md`](docs/database.md)，设计取舍见
-  [ADR 0006](docs/adr/0006-multi-database.md)。
+  [ADR 0006](docs/adr/0006-multi-database.md)；三方言各一份 29 表 `0000` 基线（旧 SQLite 12 版
+  历史已移除），见 [ADR 0007](docs/adr/0007-migration-baseline-alignment.md)。
 - **单一逻辑模型**：29 张表在 `apps/server/src/db/schema/model.ts` 声明一次，
   `scripts/generate-schema.ts` 生成 SQLite/MySQL/PostgreSQL 三套 Drizzle schema 与运行时
   facade。改表只改 `model.ts`，然后 `pnpm db:generate`；生成文件禁止手改。
@@ -308,7 +314,10 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
   `pnpm db:copy-data -- --truncate` 复制并校验数据。
 - 昵称 30 天保留记录在 `nickname_reservation`；改名事务内写入，启动时幂等回填。
 - 上传配额按 `upload_usage(user_id, kind, day, count)` 按自然日计数；维护任务每小时清理过期授权码、游戏会话、过期会话与 90 天前的配额行。
-- 启动器令牌新增 `last_used_at`，设置页展示“最近使用”。
+- 启动器令牌记录 `device_name` / `ip` / `expires_at` / `last_used_at` / `revoked_at`（令牌本体只存哈希）。
+  玩家侧「已授权设备」页与 `/api/user/tokens` **已于 2026-10-25 移除**，当前吊销入口只有启动器侧
+  `POST /api/authserver/invalidate`；网页自助面板排期为 2.0 F14（见
+  [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)）。
 - 已定稿决策（S1 玩家 1:1、S2 皮肤披风同表、S4 别名 JSON、S5 软删除、S6 实时计数、S3 角色枚举）
   均已在 schema 中落地。
 
@@ -334,24 +343,33 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 提交遵循 [Conventional Commits](https://www.conventionalcommits.org/)（`feat:` `fix:` `docs:` `chore:` …）。
 - pre-commit 自动跑 lint-staged（ESLint + Prettier，见 `.husky/pre-commit`）。
 - 跨端 DTO/枚举/错误码只写在 `packages/shared`，应用内不得复制类型。
-- CI（`.github/workflows/ci.yml`）：lint → format:check → typecheck → build；测试分 SQLite
-  与 MySQL/PostgreSQL service container 矩阵，两者都先对空库执行迁移冒烟。
+- CI（`.github/workflows/ci.yml`）：`quality`（lint → format:check → typecheck → `db:check`
+  → build）+ `test-sqlite` + `test-databases`（MySQL 8.0 / PostgreSQL 16 service container 矩阵）。
+  两个测试 job 都先对空库执行迁移冒烟，再跑同一套 server 测试，最后走 `db:seed` →
+  `db:copy-data --truncate`（行数 + 全行 SHA-256 校验）→ 目标库幂等重跑。
+  首次于真实 MySQL/PG 全绿：2026-10-31（`dc503db`，run 41162131163），证据归档在
+  [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)。
 
 ## 里程碑与文档
 
-| 文档                                                                   | 内容                                       |
-| ---------------------------------------------------------------------- | ------------------------------------------ |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                             | 产品范围、架构与全部已定稿决策（S1–S6 等） |
-| [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                         | 2.0 版本规划：工作项、验收标准与发布清单   |
-| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)         | M0 交付物、验收结论与遗留事项              |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)             | 协议字段对照、启动器联调记录               |
-| [`docs/database.md`](docs/database.md)                                 | 三库配置、schema 工作流、迁移/复制/备份    |
-| [`docs/security.md`](docs/security.md)                                 | 安全基线：CSP、安全响应头、审计豁免与哈希  |
-| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md) | 三库重构的度量、缺陷修复与待验证项         |
-| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)   | 三库支持的设计取舍                         |
-| [`docs/openapi.json`](docs/openapi.json)                               | OpenAPI 契约产物（`pnpm openapi:export`）  |
+| 文档                                                                                             | 内容                                       |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等） |
+| [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单   |
+| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)                                   | M0 交付物、验收结论与遗留事项              |
+| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录               |
+| [`docs/database.md`](docs/database.md)                                                           | 三库配置、schema 工作流、迁移/复制/备份    |
+| [`docs/security.md`](docs/security.md)                                                           | 安全基线：CSP、安全响应头、审计豁免与哈希  |
+| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)                           | 三库重构的度量、缺陷修复与待验证项         |
+| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)                             | 三库支持的设计取舍                         |
+| [`docs/adr/0007-migration-baseline-alignment.md`](docs/adr/0007-migration-baseline-alignment.md) | 三方言迁移基线对齐与存量搬迁               |
+| [`docs/openapi.json`](docs/openapi.json)                                                         | OpenAPI 契约产物（`pnpm openapi:export`）  |
 
-里程碑：M0 底座（已完成）→ M1 认证核心（已完成）→ M2 会话与形象（已完成）→ M3 论坛 MVP（已完成）→ M4 运营与加固（当前）→ M5 生产部署。
+里程碑：1.x 已收官 —— M0 底座 → M1 认证核心 → M2 会话与形象 → M3 论坛 MVP → M4 运营与加固
+→ M4.5 人机验证与成长体系（策划案之外的扩展），发布基线 `v1.0.0`。
+2.0 进行中 —— **M5 生产就绪与协议可信化**（F2 多库验证、F3 安全加固、F5 可观测性、F6 文档同步已落；
+F1 协议真机联调、F4 部署与备份未完成）→ M6 架构还债与质量 → M7 生态与运营扩展。
+工作项、验收标准与发布清单见 [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)。
 Paper 插件与启动器修改**永不**实施。
 
 ## License
