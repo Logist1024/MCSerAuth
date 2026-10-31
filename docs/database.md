@@ -208,31 +208,33 @@ CI 使用 SQLite 与 MySQL 8.0 / PostgreSQL 16 service container 矩阵，
 
 ## 备份与恢复
 
-### SQLite
+`pnpm db:backup` 按 `DATABASE_URL` 的协议选引擎，三库共用同一套输出约定
+（`apps/server/data/backups/mcserauth-<时间戳>.<db|sql>`）：
 
 ```bash
-pnpm db:backup                 # 写入 apps/server/data/backups/
-pnpm db:backup -- ./copy.db    # 指定目标
+pnpm db:backup                                  # 备份当前配置的库
+pnpm db:backup -- ./copy.db                     # 指定目标文件
+pnpm db:backup -- --dry-run                     # 只打印执行计划（账号掩为 <user>，不含密码）
+DATABASE_URL=mysql://… pnpm db:backup           # mysqldump 包装
+DATABASE_URL=postgres://… pnpm db:backup        # pg_dump 包装
 ```
 
-脚本先 checkpoint WAL，再用 better-sqlite3 在线备份 API 复制，不长时间阻塞服务。
-恢复：停止 server → 再备份当前库 → 用备份文件覆盖 `DATABASE_URL` 指向的文件 →
-`pnpm db:migrate` 确认版本。
+- **SQLite**：先 `wal_checkpoint(TRUNCATE)`，再用 better-sqlite3 在线备份 API 复制，
+  不长时间阻塞服务。
+- **MySQL**：`--no-tablespaces --single-transaction --routines --triggers --hex-blob
+--default-character-set=utf8mb4`，可在托管实例（无 TABLESPACE 权限）上直接使用。
+- **PostgreSQL**：`--format=plain --no-owner --no-acl`。
+- 凭据通过 `MYSQL_PWD` / `PGPASSWORD` 传给子进程，**不出现在命令行**（`ps` 可见），
+  也不打印到日志；`DB_SSL=true` 时 MySQL 加 `--ssl-mode`、PostgreSQL 走 `PGSSLMODE=verify-full`，
+  私有 CA 用 `DB_SSL_CA` 传根证书。
+- 缺 `mysqldump` / `pg_dump` 时报出需要安装的客户端包名，并删除写了一半的产物。
 
-### MySQL / PostgreSQL
+恢复顺序：**停服 → 再备份当前现场 → 覆盖 → `pnpm db:migrate` 确认版本 → 起服 → 冒烟**。
+第二份现场备份用于「覆盖本身出错」时回退，别省。各引擎的具体命令、PostgreSQL 必须带
+`ON_ERROR_STOP=1` 的原因、上传目录的单独归档、定时任务与每周还原演练都在
+[`deploy.md`](deploy.md) 的 §4/§5。
 
-使用数据库自带的工具，例如：
-
-```bash
-# MySQL
-mysqldump --single-transaction --routines --triggers mcserauth > mcserauth.sql
-
-# PostgreSQL
-pg_dump --format=custom mcserauth > mcserauth.dump
-```
-
-`pnpm db:backup` 只支持 SQLite。服务型数据库请纳入现有备份平台，
-并定期演练恢复。
+服务型数据库同样可以纳入现有备份平台（对象存储快照等）；本项目不自带异地传输。
 
 ## 运维注意事项
 

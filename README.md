@@ -36,12 +36,14 @@ MCSerAuth/
 │   │   ├── src/config/      env 加载与 zod 校验（单一入口）
 │   │   ├── src/common/      过滤器/拦截器/管道/日志脱敏/Swagger 封装
 │   │   ├── src/db/          Drizzle 实例 + 单一逻辑模型 + 三套生成 schema（29 张表）
-│   │   ├── src/modules/     auth · session · profiles · forum · user · admin · health
+│   │   ├── src/modules/     auth · session · profiles · forum · user · admin · site
+│   │   │                    · growth · captcha · mail · maintenance · health
 │   │   └── drizzle/         按方言拆分的迁移 SQL（sqlite/ · mysql/ · postgres/）
 │   └── web/                 Next.js App Router（渲染层）
 ├── packages/
 │   └── shared/              跨端类型/DTO/错误码/zod schema（单一事实来源）
-├── docs/                    策划案、开发指南、协议 checklist、OpenAPI 产物
+├── deploy/                  Caddy / pm2 / cron / logrotate 生产配置实例
+├── docs/                    策划案、开发与部署指南、协议 checklist、OpenAPI 产物
 └── .github/workflows/ci.yml
 ```
 
@@ -226,24 +228,24 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 
 根目录执行（`package.json` → `scripts`）：
 
-| 命令                                | 作用                                   |
-| ----------------------------------- | -------------------------------------- |
-| `pnpm dev`                          | 并行启动 server + web（先构建 shared） |
-| `pnpm build`                        | shared → server → web 全量构建         |
-| `pnpm lint` / `pnpm lint:fix`       | 全仓 ESLint                            |
-| `pnpm format` / `pnpm format:check` | Prettier                               |
-| `pnpm typecheck`                    | 全仓 `tsc --noEmit`                    |
-| `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                 |
-| `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移 |
-| `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                     |
-| `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）     |
-| `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移     |
-| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置         |
-| `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）     |
-| `pnpm db:backup`                    | 迁移前备份 SQLite（含 WAL checkpoint） |
-| `pnpm db:studio`                    | Drizzle Studio 浏览数据                |
-| `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin    |
-| `pnpm openapi:export`               | 构建并刷新 `docs/openapi.json`         |
+| 命令                                | 作用                                     |
+| ----------------------------------- | ---------------------------------------- |
+| `pnpm dev`                          | 并行启动 server + web（先构建 shared）   |
+| `pnpm build`                        | shared → server → web 全量构建           |
+| `pnpm lint` / `pnpm lint:fix`       | 全仓 ESLint                              |
+| `pnpm format` / `pnpm format:check` | Prettier                                 |
+| `pnpm typecheck`                    | 全仓 `tsc --noEmit`                      |
+| `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                   |
+| `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移   |
+| `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                       |
+| `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）       |
+| `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移       |
+| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置           |
+| `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）       |
+| `pnpm db:backup`                    | 备份当前库（三库；`--dry-run` 打印计划） |
+| `pnpm db:studio`                    | Drizzle Studio 浏览数据                  |
+| `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin      |
+| `pnpm openapi:export`               | 构建并刷新 `docs/openapi.json`           |
 
 ## 环境变量
 
@@ -307,8 +309,10 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
   帖子图片存于 `UPLOAD_DIR/forum/{sha256}.{ext}`。
   `skin` 表按 `(player_uuid, kind, sha256)` 去重，同一类型仅一条 `is_active`。
 - **所有建表改动必须走 `pnpm db:generate` 生成三套迁移**，禁止手改库文件或运行时同步。
-- SQLite 迁移前先跑 `pnpm db:backup`（写入 `apps/server/data/backups/`）；
-  MySQL/PostgreSQL 使用 `mysqldump` / `pg_dump`，详见数据库指南。
+- 迁移前先跑 `pnpm db:backup`：按 `DATABASE_URL` 选引擎，三库统一写入
+  `apps/server/data/backups/`（MySQL/PostgreSQL 包装 `mysqldump` / `pg_dump`，
+  凭据只经环境变量传递、不进命令行），详见数据库指南与
+  [`docs/deploy.md`](docs/deploy.md)。
 - 恢复步骤：停止 server → 再备份当前库 → 用备份文件覆盖目标库 → `pnpm db:migrate` 确认版本。
 - 从 SQLite 切换到 MySQL/PostgreSQL：先对目标执行 `pnpm db:migrate`，再用
   `pnpm db:copy-data -- --truncate` 复制并校验数据。
@@ -352,18 +356,19 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 ## 里程碑与文档
 
-| 文档                                                                                             | 内容                                       |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等） |
-| [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单   |
-| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)                                   | M0 交付物、验收结论与遗留事项              |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录               |
-| [`docs/database.md`](docs/database.md)                                                           | 三库配置、schema 工作流、迁移/复制/备份    |
-| [`docs/security.md`](docs/security.md)                                                           | 安全基线：CSP、安全响应头、审计豁免与哈希  |
-| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)                           | 三库重构的度量、缺陷修复与待验证项         |
-| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)                             | 三库支持的设计取舍                         |
-| [`docs/adr/0007-migration-baseline-alignment.md`](docs/adr/0007-migration-baseline-alignment.md) | 三方言迁移基线对齐与存量搬迁               |
-| [`docs/openapi.json`](docs/openapi.json)                                                         | OpenAPI 契约产物（`pnpm openapi:export`）  |
+| 文档                                                                                             | 内容                                                                       |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等）                                 |
+| [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单                                   |
+| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)                                   | M0 交付物、验收结论与遗留事项                                              |
+| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录                                               |
+| [`docs/database.md`](docs/database.md)                                                           | 三库配置、schema 工作流、迁移/复制/备份                                    |
+| [`docs/deploy.md`](docs/deploy.md)                                                               | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
+| [`docs/security.md`](docs/security.md)                                                           | 安全基线：CSP、安全响应头、审计豁免与哈希                                  |
+| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)                           | 三库重构的度量、缺陷修复与待验证项                                         |
+| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)                             | 三库支持的设计取舍                                                         |
+| [`docs/adr/0007-migration-baseline-alignment.md`](docs/adr/0007-migration-baseline-alignment.md) | 三方言迁移基线对齐与存量搬迁                                               |
+| [`docs/openapi.json`](docs/openapi.json)                                                         | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
 
 里程碑：1.x 已收官 —— M0 底座 → M1 认证核心 → M2 会话与形象 → M3 论坛 MVP → M4 运营与加固
 → M4.5 人机验证与成长体系（策划案之外的扩展），发布基线 `v1.0.0`。

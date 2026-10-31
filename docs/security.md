@@ -29,7 +29,10 @@ helmet 继续负责其余安全响应头（CSP 由上述中间件接管）：
 | Cross-Origin-Opener-Policy   | `same-origin`                                        |
 | Cross-Origin-Resource-Policy | `cross-origin`（纹理分发需要）                       |
 
-web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等既有配置。
+web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等既有配置；
+它**不含** HSTS，所以生产由 [`deploy/Caddyfile`](../deploy/Caddyfile) 在两个 vhost 上补
+`Strict-Transport-Security: max-age=31536000; includeSubDomains`（与上表 helmet 实测值一致，
+两处不要写成不同的 max-age）。
 
 ## 依赖审计（pnpm audit）
 
