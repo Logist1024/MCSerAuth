@@ -97,13 +97,13 @@ describe('DbService cross-dialect helpers', () => {
     });
     await ctx.db.insertIgnore(uploadUsage, {
       userId: 'helper-u1',
-      kind: 'skin',
+      kind: 'texture',
       day: '2030-01-01',
       count: 0,
     });
     await ctx.db.insertIgnore(uploadUsage, {
       userId: 'helper-u1',
-      kind: 'skin',
+      kind: 'texture',
       day: '2030-01-01',
       count: 5,
     });
