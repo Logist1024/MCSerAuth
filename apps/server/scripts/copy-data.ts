@@ -89,6 +89,9 @@ function parseArgs(argv: string[]): Options | null {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === undefined) continue;
+    // pnpm forwards a literal `--` to the script (unlike npm, which strips
+    // it): `pnpm db:copy-data -- --truncate` arrives as ['--', '--truncate'].
+    if (arg === '--') continue;
     if (arg === '--help' || arg === '-h') return null;
     if (arg === '--truncate') {
       options.truncate = true;

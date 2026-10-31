@@ -184,5 +184,5 @@ jobs:
         run: |
           pnpm db:migrate
           pnpm db:seed
-          pnpm db:copy-data -- --truncate
+          pnpm db:copy-data --truncate
           DATABASE_URL=$TARGET_DATABASE_URL pnpm db:migrate
