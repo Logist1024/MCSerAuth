@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import Database from 'better-sqlite3';
 import {
@@ -70,6 +70,9 @@ export class DbService implements OnModuleDestroy {
 
   private readonly mysqlPool: MySqlPool | null = null;
   private readonly pgPool: PgPool | null = null;
+  /** Single queries slower than this are logged as warnings (F5 observability). */
+  private static readonly SLOW_QUERY_MS = 200;
+  private readonly slowQueryLogger = new Logger(DbService.name);
   /**
    * The active transaction executor for the current async call chain. A plain
    * depth counter would let one request observe another request's transaction
@@ -100,6 +103,7 @@ export class DbService implements OnModuleDestroy {
       this.sqlite.pragma('journal_mode = WAL');
       this.sqlite.pragma('foreign_keys = ON');
       this.sqlite.pragma('busy_timeout = 5000');
+      this.instrumentSqlite(this.sqlite);
       this.db = drizzleSqlite(this.sqlite, {
         schema: this.schema as never,
       }) as unknown as CanonicalDb;
@@ -131,6 +135,7 @@ export class DbService implements OnModuleDestroy {
         schema: this.schema as never,
         mode: 'default',
       }) as unknown as CanonicalDb;
+      this.instrumentMySqlPool(this.mysqlPool);
       return;
     }
 
@@ -143,6 +148,93 @@ export class DbService implements OnModuleDestroy {
       ssl: config.dbSsl ? { rejectUnauthorized: true } : undefined,
     });
     this.db = drizzlePg(this.pgPool, { schema: this.schema as never });
+    this.instrumentPgPool(this.pgPool);
+  }
+
+  /**
+   * Slow-query instrumentation (F5): every dialect's driver calls are timed at
+   * this single entry point and anything over `SLOW_QUERY_MS` is logged as a
+   * warning, so production logs surface missing indexes and full scans.
+   */
+  private warnSlowQuery(dialect: DatabaseDialect, durationMs: number, statement: string): void {
+    this.slowQueryLogger.warn(
+      `slow query on ${dialect}: ${durationMs.toFixed(0)}ms — ${statement.slice(0, 500)}`,
+    );
+  }
+
+  private timedPromise<T>(
+    dialect: DatabaseDialect,
+    statement: string,
+    startedAt: number,
+    pending: Promise<T>,
+  ): Promise<T> {
+    return pending.finally(() => {
+      const durationMs = performance.now() - startedAt;
+      if (durationMs > DbService.SLOW_QUERY_MS) {
+        this.warnSlowQuery(dialect, durationMs, statement);
+      }
+    });
+  }
+
+  /** better-sqlite3 has one connection: time every prepared statement's reads and writes. */
+  private instrumentSqlite(sqlite: Database.Database): void {
+    const originalPrepare = sqlite.prepare.bind(sqlite);
+    const methods = ['all', 'get', 'run'] as const;
+    sqlite.prepare = ((...parameters: Parameters<Database.Database['prepare']>) => {
+      const statement = originalPrepare(...parameters);
+      const target = statement as unknown as Record<string, (...args: never[]) => unknown>;
+      for (const method of methods) {
+        const original = target[method]!.bind(statement);
+        target[method] = (...invocation: never[]) => {
+          const startedAt = performance.now();
+          const result = original(...invocation);
+          const durationMs = performance.now() - startedAt;
+          if (durationMs > DbService.SLOW_QUERY_MS) {
+            this.warnSlowQuery('sqlite', durationMs, statement.source);
+          }
+          return result;
+        };
+      }
+      return statement;
+    }) as Database.Database['prepare'];
+  }
+
+  /** mysql2 borrows connections for each query; wrap every new connection. */
+  private instrumentMySqlPool(pool: MySqlPool): void {
+    pool.on('connection', (connection) => {
+      const target = connection as unknown as Record<string, (...args: unknown[]) => unknown>;
+      for (const method of ['query', 'execute']) {
+        const original = target[method]!.bind(connection);
+        target[method] = (...parameters: unknown[]) => {
+          const statement = typeof parameters[0] === 'string' ? parameters[0] : 'named statement';
+          const startedAt = performance.now();
+          return this.timedPromise(
+            'mysql',
+            statement,
+            startedAt,
+            Promise.resolve(original(...parameters)),
+          );
+        };
+      }
+    });
+  }
+
+  /** node-postgres routes every pool query through a connected client. */
+  private instrumentPgPool(pool: PgPool): void {
+    pool.on('connect', (client) => {
+      const target = client as unknown as Record<string, (...args: unknown[]) => unknown>;
+      const original = target.query!.bind(client);
+      target.query = (...parameters: unknown[]) => {
+        const statement = typeof parameters[0] === 'string' ? parameters[0] : 'parameterized query';
+        const startedAt = performance.now();
+        return this.timedPromise(
+          'postgres',
+          statement,
+          startedAt,
+          Promise.resolve(original(...parameters)),
+        );
+      };
+    });
   }
 
   /** Cheap readiness probe used by GET /health. */
