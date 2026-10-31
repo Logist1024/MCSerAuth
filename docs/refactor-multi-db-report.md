@@ -1,7 +1,7 @@
 # 三库重构交付报告
 
 - 分支：`refactor-multi-db`
-- 日期：2026-10-27
+- 日期：2026-10-27　｜　更新：2026-11-01（2.0 F2 关闭，真实多库 CI 证据回填）
 - 范围：在保持 monorepo / NestJS / Next.js / Drizzle / better-auth 架构不变的前提下，
   为 MCSerAuth 增加 MySQL 8.0+ 与 PostgreSQL 16+ 支持，并降低数据层缺陷率。
 
@@ -10,16 +10,16 @@
 
 ## 交付内容
 
-| 领域     | 交付物                                                                                    |
-| -------- | ----------------------------------------------------------------------------------------- |
-| 逻辑模型 | `apps/server/src/db/schema/model.ts`：29 张表、36 个外键、索引与默认值                    |
-| 代码生成 | `scripts/generate-schema.ts` 生成 SQLite / MySQL / PostgreSQL 三套 schema                 |
-| 运行时   | `DbService` 方言识别、连接池、事务、跨库 helper、`AsyncLocalStorage`                      |
-| 迁移     | `drizzle/sqlite`（历史 + `0010` / `0011`）、`drizzle/mysql/0000`、`drizzle/postgres/0000` |
-| 数据搬迁 | `pnpm db:copy-data`：只读源库、分批复制、行数与全行 SHA-256 校验                          |
-| 工具链   | `pnpm db:generate` / `db:check` / `db:migrate` / `db:backup` / `admin:grant`              |
-| 测试     | 方言切换测试、helper 测试、schema 不变量、迁移与复制回归测试                              |
-| CI       | `quality`、`test-sqlite`、`test-databases`（MySQL 8.0 / PostgreSQL 16）                   |
+| 领域     | 交付物                                                                                   |
+| -------- | ---------------------------------------------------------------------------------------- |
+| 逻辑模型 | `apps/server/src/db/schema/model.ts`：29 张表、36 个外键、索引与默认值                   |
+| 代码生成 | `scripts/generate-schema.ts` 生成 SQLite / MySQL / PostgreSQL 三套 schema                |
+| 运行时   | `DbService` 方言识别、连接池、事务、跨库 helper、`AsyncLocalStorage`                     |
+| 迁移     | 三方言各一份 `0000` 基线（29 表，[ADR 0007](adr/0007-migration-baseline-alignment.md)）  |
+| 数据搬迁 | `pnpm db:copy-data`：只读源库、分批复制、行数与全行 SHA-256 校验，源/目标均支持三库      |
+| 工具链   | `pnpm db:generate` / `db:check` / `db:migrate` / `db:seed` / `db:backup` / `admin:grant` |
+| 测试     | 方言切换测试、helper 测试、schema 不变量、迁移与复制回归测试                             |
+| CI       | `quality`、`test-sqlite`、`test-databases`（MySQL 8.0 / PostgreSQL 16）                  |
 
 ## 度量
 
@@ -27,8 +27,10 @@
 
 | 套件          | 文件 | 用例 |
 | ------------- | ---- | ---- |
-| `apps/server` | 15   | 162  |
+| `apps/server` | 17   | 187  |
 | `apps/web`    | 1    | 6    |
+
+> 用例数为 2026-11-01 复核（F2 关闭时点）；10-27 重构收官时为 server 15 文件 / 162 例。
 
 本轮新增/重写的重点测试：
 
@@ -72,14 +74,17 @@
 ### 已验证（本机）
 
 - `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`。
-- `pnpm test`：server 162 个用例、web 6 个用例全部通过。
+- `pnpm test`：server 与 web 全部用例通过（用例数见上表）。
 - `pnpm db:check`：生成物与 `model.ts` 同步，工作区无差异。
 - SQLite 全新库与真实开发库副本的迁移、外键、行数与幂等性检查。
 - `admin:grant` 在 SQLite 上的实际授权流程。
 
 ### 待验证（需要真实服务或 CI）
 
-本环境没有 Docker、MySQL、PostgreSQL 与 GitHub 凭据，以下项目尚未执行：
+> **本节已于 2026-11-01 全部关闭**，见下方「2.0 验证进展」与「CI 真实多库首跑证据」。
+> 保留原始清单以说明当初的缺口：
+
+本环境没有 Docker、MySQL、PostgreSQL 与 GitHub 凭据，以下项目当时尚未执行：
 
 1. 在真实 MySQL / PostgreSQL 上运行 `pnpm db:migrate`。
 2. `TEST_DATABASE_URL=... pnpm --filter @mcserauth/server test`。
@@ -96,19 +101,32 @@
 - 存量库搬迁演练：以旧 12 版基线构建的开发库（seed 数据）→ 新基线空库
   `db:copy-data`，29 表逐表 `verified`、全行 SHA-256 校验通过；`db:migrate`
   重跑幂等；迁移后数据可读。
-- `pnpm --filter @mcserauth/server test`：166 用例全绿（每个测试文件在全新库上
+- `pnpm --filter @mcserauth/server test`：187 用例全绿（每个测试文件在全新库上
   跑新 0000 基线）。
 - `db:seed` 幂等写入占位用户/版块/站点设置，重复执行不报错。
 
-**归 CI 验证**（`test-databases` 矩阵已加 copy-data 端到端步骤，推送后首跑）：
+**CI 真实多库首跑证据（关闭 T2 / T3，F2 验收）**：
 
-1. 真实 MySQL / PostgreSQL 上的 `db:migrate` 与幂等重跑。
-2. SQLite → MySQL / PG 的 `db:copy-data --truncate` 端到端（seed 数据源）。
-3. `TEST_DATABASE_URL` 三库测试矩阵常绿。
+| 项         | 证据                                                                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 运行       | [Actions run 41162131163](https://github.com/Logist1024/MCSerAuth/actions/runs/41162131163) · commit `dc503db` · 2026-10-31T02:55:47Z → 02:58:18Z · **4 job 全 success**                                                        |
+| 空库迁移   | `test · mysql`（`mysql:8.0` service container）与 `test · postgres`（`postgres:16`）的 _Database migration smoke test_ 步骤从空库应用新 `0000` 基线，均通过                                                                     |
+| 全量测试   | 两库的 _Test_ 步骤以 `TEST_DATABASE_URL` 跑同一套 server 用例，均通过（真实库上的行为与本机 SQLite 一致）                                                                                                                       |
+| 端到端搬迁 | _Copy-data end-to-end (SQLite → mysql / postgres)_：`db:migrate` → `db:seed` → `db:copy-data --truncate`（含行数 + 全行 SHA-256 校验）→ 目标库 `db:migrate` 幂等重跑，均通过；SQLite→SQLite 同路径亦在 `test · sqlite` job 通过 |
+| 质量闸门   | `lint · typecheck · build`（含 `db:check` 生成物同步校验）通过                                                                                                                                                                  |
 
-CI 首跑结果回填到本节后，「待验证」清单即视为关闭。
+首跑并不是一次就绿：`0b555cf` → `c5e2ccd` 连续四次推送在 MySQL/PG 上失败，暴露并修复了
+**只有真实服务才能发现的三个缺陷**——这正是 T2「仅断言级自洽」风险的实证：
 
-建议按以下顺序补验：
+| 缺陷                              | 表现                                                                                                                    | 修复                                                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 慢查询包装器吞掉驱动返回值        | 为统计耗时包装 `mysql2` 连接方法后，`update()` 返回的 `OkPacket` 变成 Promise，`affectedRows` 判定与 `.then` 链行为异常 | `fix(db): preserve driver return values in the slow-query wrapper`（`58bc7eb`）                           |
+| `db:copy-data` 参数解析吃掉分隔符 | `pnpm db:copy-data -- --truncate` 传入的字面量 `--` 被当成选项终止符丢弃，`--truncate` 失效                             | `fix(db): tolerate literal -- in db:copy-data args and never touch mysql2's .then`（`7a41eb3`）           |
+| 复合主键解析遗漏 table extras     | `primaryKey([...])` 声明的复合主键未被 `primaryKeyOf` 识别，MySQL `insertReturning` 走错分支                            | `fix(db): resolve composite primary keys declared via table extras`（`c5e2ccd`）+ 补真实用例（`57a119d`） |
+
+此后 `test-databases` 矩阵进入常绿要求（GA 清单：三 job 连续两周全绿，起算 2026-10-31）。
+
+复现命令（本机有真实库时）：
 
 ```bash
 # 1. 空库迁移
