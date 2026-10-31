@@ -539,22 +539,89 @@ export class DbService implements OnModuleDestroy {
   }
 }
 
-function primaryKeyOf(table: PgTable): {
+/**
+ * Resolves the primary key of a canonical table.
+ *
+ * Handles both inline `.primaryKey()` columns and composite keys declared via
+ * table-level extras (which are not flagged on the individual columns).
+ * Exported for schema-introspection unit tests.
+ */
+export function primaryKeyOf(table: PgTable): {
   primaryProp: string;
   primaryColumn: PgColumn;
   primaryCount: number;
 } {
   const columns = getTableColumns(table);
   const primary = Object.entries(columns).filter(([, column]) => column.primary);
-  const first = primary[0];
-  if (first === undefined) {
-    throw new Error('The table must have a primary key.');
+  const inlineFirst = primary[0];
+  if (inlineFirst !== undefined) {
+    return {
+      primaryProp: inlineFirst[0],
+      primaryColumn: inlineFirst[1] as PgColumn,
+      primaryCount: primary.length,
+    };
   }
-  return {
-    primaryProp: first[0],
-    primaryColumn: first[1] as PgColumn,
-    primaryCount: primary.length,
-  };
+  // Composite primary keys are declared as table-level extras and are not
+  // flagged on the individual columns, so resolve them from the schema.
+  const fromExtras = compositePrimaryKeyOf(table, columns);
+  const firstComposite = fromExtras[0];
+  if (firstComposite !== undefined) {
+    return {
+      primaryProp: firstComposite.prop,
+      primaryColumn: firstComposite.column,
+      primaryCount: fromExtras.length,
+    };
+  }
+  throw new Error('The table must have a primary key.');
+}
+
+/** Ordered primary-key columns of a composite key declared via table extras. */
+function compositePrimaryKeyOf(
+  table: PgTable,
+  columns: ReturnType<typeof getTableColumns>,
+): Array<{ prop: string; column: PgColumn }> {
+  // 0.45 no longer exposes `Table.Symbol` in its typings; the runtime keys are
+  // stable `Symbol.for` registrations, so reference them by value.
+  const extraConfigBuilder = Symbol.for('drizzle:ExtraConfigBuilder');
+  const extraConfigColumns = Symbol.for('drizzle:ExtraConfigColumns');
+  const extrasBuilder = (table as unknown as Record<symbol, unknown>)[extraConfigBuilder];
+  if (typeof extrasBuilder !== 'function') {
+    return [];
+  }
+  const built = (extrasBuilder as (self: unknown) => unknown)(
+    (table as unknown as Record<symbol, unknown>)[extraConfigColumns] ?? table,
+  );
+  const entries = Array.isArray(built) ? built : Object.values(built ?? {});
+  const pkEntityKind = Symbol.for('drizzle:entityKind');
+  const columnByRef = new Map(
+    Object.entries(columns).map(([prop, column]) => [column, prop] as const),
+  );
+  const columnByName = new Map(
+    Object.entries(columns).map(([prop, column]) => [
+      (column as unknown as { name: string }).name,
+      prop,
+    ]),
+  );
+  const result: Array<{ prop: string; column: PgColumn }> = [];
+  for (const entry of entries) {
+    const ctor = (entry as { constructor?: Record<symbol, unknown> } | undefined)?.constructor;
+    const kind = ctor?.[pkEntityKind];
+    if (typeof kind !== 'string' || !kind.includes('PrimaryKeyBuilder')) {
+      continue;
+    }
+    for (const column of ((entry as { columns?: unknown }).columns ?? []) as unknown[]) {
+      const pgColumn = column as PgColumn;
+      const name = (column as { name?: string }).name;
+      const prop =
+        columnByRef.get(pgColumn) ?? (name === undefined ? undefined : columnByName.get(name));
+      if (prop !== undefined) {
+        // Map back to the main column instance so `sql` interpolation in the
+        // upsert helpers references the table's canonical column object.
+        result.push({ prop, column: columns[prop] as PgColumn });
+      }
+    }
+  }
+  return result;
 }
 
 function parseMySqlUrl(databaseUrl: string): {

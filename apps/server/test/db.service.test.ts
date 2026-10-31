@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { player, siteSetting, title, user } from '../src/db/schema/index.js';
+import { player, siteSetting, title, uploadUsage, user } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
 
 let ctx: TestContext;
@@ -87,6 +87,34 @@ describe('DbService cross-dialect helpers', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.value).toBe('first');
+  });
+
+  it('insertIgnore resolves composite primary keys on upload_usage', async () => {
+    await ctx.db.db.insert(user).values({
+      id: 'helper-u1',
+      email: 'helper-u1@example.com',
+      name: 'Helper U1',
+    });
+    await ctx.db.insertIgnore(uploadUsage, {
+      userId: 'helper-u1',
+      kind: 'skin',
+      day: '2030-01-01',
+      count: 0,
+    });
+    await ctx.db.insertIgnore(uploadUsage, {
+      userId: 'helper-u1',
+      kind: 'skin',
+      day: '2030-01-01',
+      count: 5,
+    });
+
+    const rows = await ctx.db.db
+      .select()
+      .from(uploadUsage)
+      .where(eq(uploadUsage.userId, 'helper-u1'));
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.count).toBe(0);
   });
 
   it('upsert inserts and then updates the same row', async () => {
