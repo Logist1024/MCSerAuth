@@ -13,6 +13,7 @@ import {
   type Response,
 } from 'express';
 import { AppModule } from './app.module.js';
+import { docsCsp, generateCspNonce, isDocsPath, strictCsp, CSP_NONCE_KEY } from './common/csp.js';
 import { AppConfigService } from './config/app-config.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
 import { setupSwagger } from './swagger.js';
@@ -32,12 +33,23 @@ async function bootstrap(): Promise<void> {
   app.enableCors({ origin: [config.appUrl, config.authUrl], credentials: true });
   app.use(
     helmet({
-      // The consent page ships inline styles/script; CSP is added once that
-      // page moves to a nonce-based template.
+      // CSP is set per request below: the OAuth entry pages need a fresh nonce
+      // for their inline styles/script, which helmet's static config can't do.
       contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
+  // Per-request CSP (src/common/csp.ts): strict nonce-based policy for the
+  // HTML this server renders, a relaxed one for swagger-ui's inline bootstrap.
+  app.use((request: Request, response: Response, next: NextFunction): void => {
+    const nonce = generateCspNonce();
+    response.locals[CSP_NONCE_KEY] = nonce;
+    response.setHeader(
+      'Content-Security-Policy',
+      isDocsPath(request.path) ? docsCsp() : strictCsp(nonce),
+    );
+    next();
+  });
   const tooManyRequests = (
     _request: Request,
     response: Response,
@@ -92,7 +104,13 @@ async function bootstrap(): Promise<void> {
       urlencodedParser(req, res, next);
     });
   });
-  app.setGlobalPrefix('api', { exclude: [{ path: 'health', method: RequestMethod.GET }] });
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'health', method: RequestMethod.GET },
+      { path: 'health/live', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
+    ],
+  });
   setupSwagger(app);
   app.enableShutdownHooks();
   await app.listen(config.port);

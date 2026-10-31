@@ -28,6 +28,7 @@ import type {
 } from '@mcserauth/shared';
 import type { Request, Response } from 'express';
 import { ProtocolApi } from '../../common/decorators/protocol-api.decorator.js';
+import { CSP_NONCE_KEY } from '../../common/csp.js';
 import { ProtocolErrorDto } from '../../common/dto/protocol-error.dto.js';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { AuthService } from './auth.service.js';
@@ -99,7 +100,10 @@ export class OAuthController {
   ): Promise<void> {
     const session = await this.auth.getSession(request.headers);
     if (!session) {
-      const html = renderEntryLoginPage({ appUrl: this.config.appUrl, query });
+      const html = renderEntryLoginPage(
+        { appUrl: this.config.appUrl, query },
+        response.locals[CSP_NONCE_KEY],
+      );
       response.setHeader('Cache-Control', 'no-store');
       response.status(HttpStatus.OK).type('html').send(html);
       return;
@@ -114,7 +118,7 @@ export class OAuthController {
         : null,
       redirectUriError: this.describeAuthorizationProblem(query),
     };
-    const html = renderEntryConsentPage(context);
+    const html = renderEntryConsentPage(context, response.locals[CSP_NONCE_KEY]);
     response.setHeader('Cache-Control', 'no-store');
     response.status(HttpStatus.OK).type('html').send(html);
   }

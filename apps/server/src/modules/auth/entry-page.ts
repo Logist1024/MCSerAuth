@@ -52,18 +52,24 @@ function styles(): string {
       .captcha-status { margin: 0.5rem 0 0; font-size: 0.78rem; color: #94a3b8; min-height: 1rem; }
       .captcha-status.ok { color: #6ee7b7; }
       .captcha-status.bad { color: #fca5a5; }
+      .banned { color: #fca5a5; }
       footer { color: #64748b; font-size: 0.75rem; margin-top: 1.5rem; }
   `;
 }
 
-function shell(title: string, body: string): string {
+/**
+ * `nonce` comes from the per-request CSP middleware (src/common/csp.ts) and
+ * must be attached to every inline <style>/<script> this page renders — the
+ * strict policy has no `unsafe-inline` fallback.
+ */
+function shell(title: string, body: string, nonce: string): string {
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MCSerAuth · ${escapeHtml(title)}</title>
-    <style>${styles()}</style>
+    <style nonce="${nonce}">${styles()}</style>
   </head>
   <body>
     <main>${body}</main>
@@ -347,7 +353,7 @@ const ENTRY_LOGIN_SCRIPT = String.raw`
 `;
 
 /** Shown when the launcher opened the consent page without a website session. */
-export function renderEntryLoginPage(context: EntryPageContext): string {
+export function renderEntryLoginPage(context: EntryPageContext, nonce: string): string {
   const details = parameterRows(context.query);
 
   return shell(
@@ -370,18 +376,19 @@ export function renderEntryLoginPage(context: EntryPageContext): string {
       ${details ? `<table><tbody>${details}</tbody></table>` : '<p>未收到授权参数。</p>'}
       <p class="muted">还没有账号？请先前往 <a href="${escapeHtml(context.appUrl)}">${escapeHtml(context.appUrl)}</a> 注册。</p>
       <footer>协议：Commons-Designs（OAuth 授权码 + PKCE）</footer>
-      <script>${ENTRY_LOGIN_SCRIPT}</script>`,
+      <script nonce="${nonce}">${ENTRY_LOGIN_SCRIPT}</script>`,
+    nonce,
   );
 }
 
 /** Shown to a logged-in account; submitting issues the authorization code. */
-export function renderEntryConsentPage(context: ConsentPageContext): string {
+export function renderEntryConsentPage(context: ConsentPageContext, nonce: string): string {
   const details = parameterRows(context.query);
   const redirectBlocked = context.redirectUriError !== undefined;
 
   const playerLine = context.player
     ? `<div>游戏角色：<strong>${escapeHtml(context.player.nickname)}</strong>（<code>${escapeHtml(context.player.uuid)}</code>）${
-        context.player.banned ? ' <span style="color:#fca5a5">已被封禁</span>' : ''
+        context.player.banned ? ' <span class="banned">已被封禁</span>' : ''
       }</div>`
     : '<div class="muted">当前账号还没有游戏角色；首次完成授权时会自动创建。</div>';
 
@@ -417,5 +424,6 @@ export function renderEntryConsentPage(context: ConsentPageContext): string {
           : `<form method="post" action="/api/oauth/entry">${hiddenFields}<button type="submit">授权并返回启动器</button></form>`
       }
       <footer>授权码单次使用且短时有效；回调只允许 HTTPS 或本机 HTTP 地址。</footer>`,
+    nonce,
   );
 }

@@ -346,6 +346,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 | [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)         | M0 交付物、验收结论与遗留事项              |
 | [`docs/protocol-checklist.md`](docs/protocol-checklist.md)             | 协议字段对照、启动器联调记录               |
 | [`docs/database.md`](docs/database.md)                                 | 三库配置、schema 工作流、迁移/复制/备份    |
+| [`docs/security.md`](docs/security.md)                                 | 安全基线：CSP、安全响应头、审计豁免与哈希  |
 | [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md) | 三库重构的度量、缺陷修复与待验证项         |
 | [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)   | 三库支持的设计取舍                         |
 | [`docs/openapi.json`](docs/openapi.json)                               | OpenAPI 契约产物（`pnpm openapi:export`）  |

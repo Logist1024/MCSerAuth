@@ -53,5 +53,11 @@
     "*.{json,md,yml,yaml,css}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "body-parser": "^2.4.0",
+      "multer": "^2.5.0"
+    }
   }
 }
