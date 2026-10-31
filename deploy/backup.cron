@@ -1,0 +1,52 @@
+# MCSerAuth database backup schedule (2.0 F4).
+#
+# Install as /etc/cron.d/mcserauth-backup (root owns the file, mode 644).
+# `pnpm db:backup` picks the engine from DATABASE_URL in apps/server/.env and
+# writes to apps/server/data/backups/mcserauth-<timestamp>.<db|sql>.
+#
+# Prerequisites:
+#   - a dedicated unprivileged account (here: `deployer`) that can run pnpm
+#   - corepack/pnpm on PATH for that account (`corepack enable` as deployer)
+#   - mysqldump / pg_dump installed when the target engine is MySQL/PostgreSQL
+#   - `mkdir -p /var/log/mcserauth && chown deployer /var/log/mcserauth`
+#   - server credentials for the dump tool and for the rehearsal commands: MySQL via
+#     ~/.my.cnf ([client] user/password/socket), PostgreSQL via ~/.pgpass
+#     (host:port:db:user:password). Both files must be mode 600. `pnpm db:backup`
+#     itself needs neither: it reads DATABASE_URL and passes the password through the
+#     environment, never on the command line.
+#
+# Verify the schedule without waiting for midnight:
+#   sudo -u deployer cd /opt/mcserauth && pnpm db:backup -- --dry-run
+
+SHELL=/bin/bash
+# /home/deployer/.local/bin is where `corepack enable --install-directory` puts pnpm
+# for a non-root account (docs/deploy.md §2.1 step 1).
+PATH=/home/deployer/.local/bin:/usr/local/bin:/usr/bin:/bin
+MCSERAUTH_ROOT=/opt/mcserauth
+BACKUP_DIR=/opt/mcserauth/apps/server/data/backups
+RETENTION_DAYS=14
+
+# Daily dump at 03:17 (off the hour, so a co-located MySQL cron does not collide),
+# then drop artifacts older than the retention window. The backup runs while the
+# server is up: mysqldump takes a consistent InnoDB snapshot with
+# --single-transaction, pg_dump reads a consistent snapshot, and the SQLite branch
+# checkpoints the WAL and uses the online backup API.
+17 3 * * * deployer cd $MCSERAUTH_ROOT && pnpm db:backup >> /var/log/mcserauth/backup.log 2>&1 && find $BACKUP_DIR -name 'mcserauth-*' -type f -mtime +$RETENTION_DAYS -delete
+
+# Weekly restore rehearsal (Sunday 04:05). Restore the newest dump into a scratch
+# database and count tables, so a corrupt or truncated backup is found by a cron
+# job rather than by an incident. Uncomment and adjust the scratch name.
+#
+# For MySQL:
+#   05 4 * * 0 deployer cd $MCSERAUTH_ROOT/apps/server && \
+#     latest=$(ls -1t data/backups/*.sql | head -1) && \
+#     mysql -e 'drop database if exists mcserauth_restorecheck; create database mcserauth_restorecheck character set utf8mb4' && \
+#     mysql mcserauth_restorecheck < "$latest" && \
+#     mysql -N -e "select count(*) from information_schema.tables where table_schema='mcserauth_restorecheck'" | grep -qx 29
+#
+# For PostgreSQL (createdb/dropdb are part of postgresql-client):
+#   05 4 * * 0 deployer cd $MCSERAUTH_ROOT/apps/server && \
+#     latest=$(ls -1t data/backups/*.sql | head -1) && \
+#     dropdb --if-exists mcserauth_restorecheck && createdb mcserauth_restorecheck && \
+#     psql -q -v ON_ERROR_STOP=1 -d mcserauth_restorecheck -f "$latest" && \
+#     test "$(psql -At -d mcserauth_restorecheck -c "select count(*) from information_schema.tables where table_schema='public'")" = "29"

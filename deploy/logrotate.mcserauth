@@ -1,0 +1,21 @@
+# MCSerAuth log rotation (2.0 F5/F4).
+#
+# Install to /etc/logrotate.d/mcserauth.
+#
+# The server logs JSON to stdout (pino; `LOG_LEVEL=info` in production) and pm2
+# captures stdout/stderr into the files below, so rotation is pm2's problem — not
+# the app's. `copytruncate` is used because pm2 holds the file descriptors open;
+# it avoids the `pm2 flush` / reload dance at the cost of losing whatever the
+# process writes between the copy and the truncate (a few lines at most).
+
+/var/log/mcserauth/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y%m%d
+}

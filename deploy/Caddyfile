@@ -1,0 +1,64 @@
+# MCSerAuth production Caddyfile (2.0 F4).
+#
+# Install to /etc/caddy/Caddyfile, replace the two hostnames, then:
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Caddy provisions and renews Let's Encrypt certificates automatically once the
+# A/AAAA records point at this host. It terminates TLS on 443/80 and proxies to
+# the two pm2 apps on loopback.
+
+# --- Auth service origin: what launchers (HMCL/PCL2/authlib-injector) are given.
+# Set AUTH_URL=https://auth.example.com in apps/server/.env.
+auth.example.com {
+	# NestJS serves every protocol and API route under /api, including the
+	# authlib-injector root metadata at exactly `GET /api`.
+	#
+	# reverse_proxy forwards X-Forwarded-For by default, which is what the server
+	# relies on: main.ts sets `trust proxy` so the rate limiter and the login audit
+	# rows see the real client address instead of 127.0.0.1.
+	#
+	# Active health check on the F5 readiness probe: while the database is
+	# unreachable /health/ready returns 503, Caddy marks the upstream down and fails
+	# fast with 502 instead of queueing requests behind a 30s connection timeout.
+	# Use /health/live here instead if you would rather keep serving reads that do
+	# not need the database.
+	reverse_proxy 127.0.0.1:8000 {
+		health_uri /health/ready
+		health_interval 10s
+		health_timeout 3s
+		health_status 200
+	}
+
+	# API responses already carry helmet's headers (HSTS included). This block adds
+	# the same policy to responses Caddy generates itself, so the hostname is never
+	# reachable over plain HTTP without an HSTS record.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	encode zstd gzip
+}
+
+# --- Site origin: the Next.js forum. Set APP_URL=https://example.com.
+example.com {
+	reverse_proxy 127.0.0.1:3000
+
+	# next.config.ts sets nosniff / X-Frame-Options / Referrer-Policy on app
+	# responses but not HSTS, so the site hostname gets it here.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+	}
+
+	encode zstd gzip
+}
+
+# --- Single-domain variant (optional)
+#
+# To expose one hostname, route by path prefix instead:
+#
+#   mcserauth.example.com {
+#     handle /api* { reverse_proxy 127.0.0.1:8000 }
+#     handle     { reverse_proxy 127.0.0.1:3000 }
+#   }
+#
+# Set APP_URL and AUTH_URL to the same origin (https://mcserauth.example.com);
+# launchers are then configured with https://mcserauth.example.com/api.
