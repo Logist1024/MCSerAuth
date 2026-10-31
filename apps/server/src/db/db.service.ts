@@ -162,21 +162,40 @@ export class DbService implements OnModuleDestroy {
     );
   }
 
-  private timedPromise<T>(
+  /** Log once `pending` settles without changing the value flowing to the caller. */
+  private timeSettled(
     dialect: DatabaseDialect,
     statement: string,
     startedAt: number,
-    pending: Promise<T>,
-  ): Promise<T> {
-    return pending.finally(() => {
+    pending: unknown,
+  ): void {
+    const logSlow = (): void => {
       const durationMs = performance.now() - startedAt;
       if (durationMs > DbService.SLOW_QUERY_MS) {
         this.warnSlowQuery(dialect, durationMs, statement);
       }
-    });
+    };
+    // node-postgres returns a Query object: thenable AND an EventEmitter.
+    // Handle the thenable side first and keep the object flowing untouched —
+    // drizzle and pg internals attach their own listeners to it.
+    const thenable = pending as { then?: (onOk: () => void, onErr: () => void) => unknown };
+    if (typeof thenable?.then === 'function') {
+      thenable.then(logSlow, logSlow);
+      return;
+    }
+    // mysql2 callback-style calls return a Command (an EventEmitter) that
+    // emits 'end' when the round trip finishes — the pool itself attaches
+    // listeners to it, so the wrapper must return the object untouched.
+    const command = pending as { once?: (event: string, listener: () => void) => unknown };
+    if (typeof command?.once === 'function') {
+      command.once('end', logSlow);
+    }
   }
 
-  /** better-sqlite3 has one connection: time every prepared statement's reads and writes. */
+  /**
+   * better-sqlite3 has one connection: time every prepared statement's reads
+   * and writes. Synchronous results flow through unchanged.
+   */
   private instrumentSqlite(sqlite: Database.Database): void {
     const originalPrepare = sqlite.prepare.bind(sqlite);
     const methods = ['all', 'get', 'run'] as const;
@@ -199,7 +218,12 @@ export class DbService implements OnModuleDestroy {
     }) as Database.Database['prepare'];
   }
 
-  /** mysql2 borrows connections for each query; wrap every new connection. */
+  /**
+   * mysql2 borrows raw connections for each pool query. The wrapper MUST
+   * return the driver's own result object: mysql2's pool internals call
+   * `.once('end')` on it and drizzle streams through it, so timing is
+   * attached as an extra listener instead of replacing the value.
+   */
   private instrumentMySqlPool(pool: MySqlPool): void {
     pool.on('connection', (connection) => {
       const target = connection as unknown as Record<string, (...args: unknown[]) => unknown>;
@@ -208,12 +232,9 @@ export class DbService implements OnModuleDestroy {
         target[method] = (...parameters: unknown[]) => {
           const statement = typeof parameters[0] === 'string' ? parameters[0] : 'named statement';
           const startedAt = performance.now();
-          return this.timedPromise(
-            'mysql',
-            statement,
-            startedAt,
-            Promise.resolve(original(...parameters)),
-          );
+          const result = original(...parameters);
+          this.timeSettled('mysql', statement, startedAt, result);
+          return result;
         };
       }
     });
@@ -227,12 +248,9 @@ export class DbService implements OnModuleDestroy {
       target.query = (...parameters: unknown[]) => {
         const statement = typeof parameters[0] === 'string' ? parameters[0] : 'parameterized query';
         const startedAt = performance.now();
-        return this.timedPromise(
-          'postgres',
-          statement,
-          startedAt,
-          Promise.resolve(original(...parameters)),
-        );
+        const result = original(...parameters);
+        this.timeSettled('postgres', statement, startedAt, result);
+        return result;
       };
     });
   }

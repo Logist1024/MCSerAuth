@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import {
-  user as userTable,
-  player as playerTable,
-  category as categoryTable,
-} from '../src/db/schema/index.js';
+import type Database from 'better-sqlite3';
+import * as sqliteSchema from '../src/db/schema/generated/sqlite.js';
 import { tableByName } from '../src/db/schema/model.js';
 import {
   copyDatabase,
@@ -14,7 +13,30 @@ import {
   sourceSelect,
   toTargetValues,
 } from '../scripts/copy-data.js';
-import { createTestContext, type TestContext } from './helpers/db.js';
+
+/**
+ * Standalone migrated SQLite database for copy-data's SQLite-specific tests.
+ *
+ * These flows exercise SQLite→SQLite behaviour, so they must NOT depend on
+ * `TEST_DATABASE_URL`: on the CI matrix that variable points the whole suite
+ * at MySQL/PostgreSQL while this file keeps testing against real SQLite files.
+ */
+async function createStandaloneSqlite(file: string): Promise<Database.Database> {
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
+  const sqlite = new Database(file);
+  try {
+    sqlite.pragma('foreign_keys = ON');
+    migrate(drizzle(sqlite), {
+      migrationsFolder: path.resolve(process.cwd(), 'drizzle', 'sqlite'),
+    });
+    return sqlite;
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
+}
 
 describe('copy-data source query', () => {
   it('converts Drizzle SQLite timestamp seconds to milliseconds', () => {
@@ -49,30 +71,38 @@ describe('copy-data source query', () => {
 });
 
 describe('copy-data against a real SQLite database', () => {
-  let ctx: TestContext;
+  let dir: string;
+  let sqlite: Database.Database;
 
   beforeAll(async () => {
-    ctx = await createTestContext();
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcserauth-copy-source-'));
+    sqlite = await createStandaloneSqlite(path.join(dir, 'source.db'));
   });
 
-  afterAll(async () => {
-    await ctx.cleanup();
+  afterAll(() => {
+    sqlite.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('reads a stored timestamp as epoch milliseconds', async () => {
+    const { drizzle } = await import('drizzle-orm/better-sqlite3');
+    const db = drizzle(sqlite);
     const createdAt = new Date('2026-10-20T14:08:48.000Z');
-    await ctx.db.insertReturning(userTable, {
-      id: 'copy-user',
-      email: 'copy@example.com',
-      name: 'copy-user',
-      createdAt,
-      updatedAt: createdAt,
-    });
+    await db
+      .insert(sqliteSchema.user)
+      .values({
+        id: 'copy-user',
+        email: 'copy@example.com',
+        name: 'copy-user',
+        createdAt,
+        updatedAt: createdAt,
+      })
+      .run();
 
     const user = tableByName('user');
     const columns = new Set(user.columns.map((column) => column.column));
-    const row = ctx.db.sqlite
-      ?.prepare(`SELECT ${sourceSelect(user, columns)} FROM "user" WHERE id = ?`)
+    const row = sqlite
+      .prepare(`SELECT ${sourceSelect(user, columns)} FROM "user" WHERE id = ?`)
       .get('copy-user') as Record<string, unknown> | undefined;
 
     expect(row?.created_at).toBe(createdAt.getTime());
@@ -233,60 +263,72 @@ describe('copy-data checksums', () => {
 });
 
 describe('copy-data into a SQLite target', () => {
-  let ctx: TestContext;
+  let dir: string;
+  let source: Database.Database;
   let sourceFile: string;
   let targetFile: string;
 
   beforeAll(async () => {
-    ctx = await createTestContext();
-    sourceFile = path.join(ctx.dir, 'test.db');
-    targetFile = path.join(ctx.dir, 'target.db');
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcserauth-copy-target-'));
+    sourceFile = path.join(dir, 'source.db');
+    targetFile = path.join(dir, 'target.db');
+    source = await createStandaloneSqlite(sourceFile);
 
     // The target must be a separately migrated database, exactly like the
     // baseline-realignment flow documented in database.md.
     const { default: Database } = await import('better-sqlite3');
     const { drizzle } = await import('drizzle-orm/better-sqlite3');
     const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-    const sqlite = new Database(targetFile);
+    const targetSqlite = new Database(targetFile);
     try {
-      migrate(drizzle(sqlite), {
+      migrate(drizzle(targetSqlite), {
         migrationsFolder: path.resolve(process.cwd(), 'drizzle', 'sqlite'),
       });
     } finally {
-      sqlite.close();
+      targetSqlite.close();
     }
 
+    const db = drizzle(source);
     const createdAt = new Date('2026-10-20T14:08:48.000Z');
-    await ctx.db.insertReturning(userTable, {
-      id: 'copy-target-user',
-      email: 'copy-target@example.com',
-      name: 'copy-target-user',
-      mutedUntil: null,
-      createdAt,
-      updatedAt: createdAt,
-    });
-    await ctx.db.insertReturning(playerTable, {
-      uuid: '11111111-1111-1111-1111-111111111111',
-      userId: 'copy-target-user',
-      nickname: 'Steve',
-      nicknameHistory: ['Steve', 'Alex'],
-      createdAt,
-    });
-    const rootRows = await ctx.db.insertReturning(categoryTable, {
-      name: 'root',
-      slug: 'root',
-      sortOrder: 0,
-    });
-    await ctx.db.insertReturning(categoryTable, {
-      name: 'child',
-      slug: 'child',
-      sortOrder: 1,
-      parentId: rootRows[0]!.id,
-    });
+    await db
+      .insert(sqliteSchema.user)
+      .values({
+        id: 'copy-target-user',
+        email: 'copy-target@example.com',
+        name: 'copy-target-user',
+        createdAt,
+        updatedAt: createdAt,
+      })
+      .run();
+    await db
+      .insert(sqliteSchema.player)
+      .values({
+        uuid: '11111111-1111-1111-1111-111111111111',
+        userId: 'copy-target-user',
+        nickname: 'Steve',
+        nicknameHistory: ['Steve', 'Alex'],
+        createdAt,
+      })
+      .run();
+    const rootRows = (await db
+      .insert(sqliteSchema.category)
+      .values({ name: 'root', slug: 'root', sortOrder: 0 })
+      .returning({ id: sqliteSchema.category.id })
+      .all()) as Array<{ id: number }>;
+    await db
+      .insert(sqliteSchema.category)
+      .values({
+        name: 'child',
+        slug: 'child',
+        sortOrder: 1,
+        parentId: rootRows[0]?.id,
+      })
+      .run();
   });
 
-  afterAll(async () => {
-    await ctx.cleanup();
+  afterAll(() => {
+    source.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('copies rows with checksums passing and timestamps in seconds', async () => {
