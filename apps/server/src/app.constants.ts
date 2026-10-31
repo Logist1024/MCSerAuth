@@ -1,2 +1,6 @@
-/** Bump alongside package.json when the public API contract changes. */
-export const APP_VERSION = '0.1.0';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+
+/** Derived from package.json so the API contract version never drifts from the release. */
+export const APP_VERSION: string = (require('../package.json') as { version: string }).version;
