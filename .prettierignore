@@ -23,3 +23,6 @@ apps/web/next-env.d.ts
 # Hand-maintained planning document: kept in its original layout to avoid
 # reflowing tables on unrelated edits.
 docs/项目策划案.md
+
+# ZCode session-local plans (not project code).
+.zcode/
