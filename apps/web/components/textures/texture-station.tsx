@@ -22,7 +22,7 @@ import { formatDateTime } from '@/lib/format';
 import ConfirmDialog from '@/components/confirm-dialog';
 import GameCharacterPanel from '@/components/account/game-character-panel';
 import LauncherGuide from '@/components/account/launcher-guide';
-import SkinPreview from './skin-preview';
+import ProfileHeader from './profile-header';
 import TextureLibrary, { type PreviewSelection } from './texture-library';
 import TextureUploadForm from './texture-upload-form';
 
@@ -35,8 +35,8 @@ function describeUpload(result: TextureUploadResponse): string {
 }
 
 /**
- * Game account manager: character identity and rename, 3D skin preview,
- * uploads and the signed-in player's own texture library.
+ * 游戏账号管理：官方档案页式布局——档案头（3D 预览 + 名称/UUID）+
+ * 改名卡 + 皮肤卡 + 披风卡，启动器指南折叠在页尾。
  */
 export default function TextureStation({
   initialSettings,
@@ -51,7 +51,6 @@ export default function TextureStation({
   const [busy, setBusy] = useState<UploadKind | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [uploadKind, setUploadKind] = useState<UploadKind>('skin');
   const [capeUnlocked, setCapeUnlocked] = useState<boolean | null>(null);
 
   const [variant, setVariant] = useState<SkinVariant>('classic');
@@ -200,7 +199,7 @@ export default function TextureStation({
       <header className="page-head station-head">
         <div>
           <h1>游戏账号管理</h1>
-          <p className="page-description">管理游戏角色、皮肤与披风，连接启动器外置登录。</p>
+          <p className="page-description">管理游戏档案：名称、皮肤与披风，连接启动器外置登录。</p>
         </div>
         <span className="station-badge">PNG · 64×64 / 64×32</span>
       </header>
@@ -226,143 +225,113 @@ export default function TextureStation({
       ) : null}
 
       {signedIn && initialSettings !== null ? (
-        <GameCharacterPanel initialSettings={initialSettings} />
-      ) : null}
-
-      <div className="appearance-layout">
-        <section className="panel appearance-panel">
-          <div className="panel-head">
-            <h2>外观预览</h2>
-            {textures !== null ? (
-              <span className="muted small">{textures.name}</span>
-            ) : (
-              <span className="muted small">默认形象</span>
-            )}
-          </div>
-          <SkinPreview
-            skinUrl={previewSkin?.url ?? null}
-            capeUrl={previewCape}
-            variant={previewSkin?.variant ?? null}
-            playerName={textures?.name ?? null}
-            onRefresh={() => void refresh()}
+        <>
+          <ProfileHeader
+            settings={initialSettings}
+            textures={textures}
+            capeUnlocked={capeUnlocked}
+            previewSkin={previewSkin}
+            previewCape={previewCape}
+            onPreviewRefresh={() => void refresh()}
           />
-          <div className="appearance-badges">
-            <span className="texture-meta">
-              皮肤：{activeSkin !== null ? '使用中' : '史蒂夫（默认）'}
-            </span>
-            <span className="texture-meta">
-              披风：
-              {activeCape !== null ? '使用中' : capeUnlocked === false ? '未解锁' : '未设置'}
-            </span>
-          </div>
-        </section>
 
-        <section className="panel texture-controls">
-          <div className="panel-head">
-            <h2>{signedIn ? '上传' : '登录后上传'}</h2>
-          </div>
-          <div className="panel-body">
-            {loading && session === undefined ? <p className="muted">读取形象数据中…</p> : null}
-            {!loading && session === null ? (
-              <div className="stack">
-                <p className="muted">登录后即可上传并切换形象。</p>
-                <div>
-                  <Link className="button primary" href="/login?next=%2Ftextures">
-                    登录 / 注册
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-            {signedIn ? (
-              <div className="texture-uploader">
-                <div className="texture-kind-tabs" role="tablist" aria-label="上传类型">
-                  <button
-                    className={uploadKind === 'skin' ? 'active' : ''}
-                    type="button"
-                    role="tab"
-                    aria-selected={uploadKind === 'skin'}
-                    onClick={() => setUploadKind('skin')}
-                  >
-                    皮肤
-                  </button>
-                  <button
-                    className={uploadKind === 'cape' ? 'active' : ''}
-                    type="button"
-                    role="tab"
-                    aria-selected={uploadKind === 'cape'}
-                    onClick={() => setUploadKind('cape')}
-                  >
-                    披风
-                    {capeUnlocked === false ? (
-                      <span className="texture-tab-lock">未解锁</span>
-                    ) : null}
-                  </button>
-                </div>
+          <GameCharacterPanel initialSettings={initialSettings} />
 
-                {uploadKind === 'skin' ? (
-                  <TextureUploadForm
-                    idPrefix="skin"
-                    fileLabel="皮肤 PNG"
-                    submitLabel="上传皮肤"
-                    busyLabel="上传中…"
-                    hint="64×64 或 64×32 PNG，≤ 1 MiB。"
-                    busy={busy === 'skin'}
-                    disabled={busy !== null}
-                    variant={variant}
-                    onVariantChange={setVariant}
-                    onSubmit={submitSkin}
-                  />
-                ) : capeUnlocked === false ? (
-                  <div className="texture-unlock">
-                    <p>披风需要先在成长中心用积分解锁。</p>
-                    <Link className="button secondary small" href="/forum/growth">
-                      前往解锁
-                    </Link>
-                  </div>
-                ) : (
-                  <TextureUploadForm
-                    idPrefix="cape"
-                    fileLabel="披风 PNG"
-                    submitLabel="上传披风"
-                    busyLabel="上传中…"
-                    hint="64×32 PNG，≤ 1 MiB。"
-                    busy={busy === 'cape'}
-                    disabled={busy !== null}
-                    onSubmit={submitCape}
-                  />
-                )}
-              </div>
-            ) : null}
-          </div>
-        </section>
-      </div>
-
-      {signedIn ? (
-        <section className="panel">
-          <div className="panel-head">
-            <h2>我的皮肤与披风</h2>
-            <span className="muted small">点击预览</span>
-          </div>
-          <div className="panel-body">
-            {textures === null ? (
-              <p className="muted">加载中…</p>
-            ) : (
+          <section className="panel texture-section" aria-labelledby="skin-section-heading">
+            <div className="panel-head">
+              <h2 id="skin-section-heading">皮肤</h2>
+              <span className={`texture-section-state${activeSkin !== null ? ' on' : ''}`}>
+                {activeSkin !== null ? '自定义皮肤使用中' : '默认形象（史蒂夫）'}
+              </span>
+            </div>
+            <div className="panel-body texture-section-body">
+              {textures === null && loading ? <p className="muted">读取形象数据中…</p> : null}
+              <TextureUploadForm
+                idPrefix="skin"
+                fileLabel="皮肤 PNG"
+                submitLabel="上传并使用"
+                busyLabel="上传中…"
+                hint="64×64 或 64×32 PNG，≤ 1 MiB；上传后立即生效。"
+                busy={busy === 'skin'}
+                disabled={busy !== null}
+                variant={variant}
+                onVariantChange={setVariant}
+                onSubmit={submitSkin}
+              />
               <TextureLibrary
-                skins={textures.skins}
-                capes={textures.capes}
+                skins={textures?.skins ?? []}
                 selectedId={selectedId}
                 busyId={activatingId}
-                emptyText="上传后会显示在这里。"
+                emptyText="还没有上传过皮肤。"
                 onPreview={preview}
                 onActivate={activate}
                 onDelete={setDeleteTarget}
               />
-            )}
+            </div>
+          </section>
+
+          <section className="panel texture-section" aria-labelledby="cape-section-heading">
+            <div className="panel-head">
+              <h2 id="cape-section-heading">披风</h2>
+              <span
+                className={`texture-section-state${
+                  activeCape !== null ? ' on' : capeUnlocked === false ? '' : ''
+                }`}
+              >
+                {activeCape !== null ? '披风使用中' : capeUnlocked === false ? '未解锁' : '未设置'}
+              </span>
+            </div>
+            <div className="panel-body texture-section-body">
+              {capeUnlocked === false ? (
+                <div className="texture-unlock">
+                  <p>披风需要先在成长中心用积分解锁。</p>
+                  <Link className="button secondary small" href="/forum/growth">
+                    前往解锁
+                  </Link>
+                </div>
+              ) : (
+                <TextureUploadForm
+                  idPrefix="cape"
+                  fileLabel="披风 PNG"
+                  submitLabel="上传并使用"
+                  busyLabel="上传中…"
+                  hint="64×32 PNG，≤ 1 MiB；上传后立即生效。"
+                  busy={busy === 'cape'}
+                  disabled={busy !== null}
+                  onSubmit={submitCape}
+                />
+              )}
+              <TextureLibrary
+                capes={textures?.capes ?? []}
+                selectedId={selectedId}
+                busyId={activatingId}
+                emptyText="还没有披风。"
+                onPreview={preview}
+                onActivate={activate}
+                onDelete={setDeleteTarget}
+              />
+            </div>
+          </section>
+        </>
+      ) : session === null ? (
+        <section className="panel">
+          <div className="panel-body">
+            <div className="stack">
+              <p className="muted">登录后即可管理游戏档案、上传并切换形象。</p>
+              <div>
+                <Link className="button primary" href="/login?next=%2Ftextures">
+                  登录 / 注册
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       ) : null}
 
-      <LauncherGuide />
+      <details className="launcher-fold">
+        <summary>连接启动器（外置登录）指南</summary>
+        <LauncherGuide />
+      </details>
 
       <ConfirmDialog
         open={deleteTarget !== null}
