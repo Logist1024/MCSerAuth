@@ -111,6 +111,16 @@ export class ProgressService implements OnModuleInit {
   private rulesCache: GrowthRules | null = null;
   constructor(private readonly db: DbService) {}
   async onModuleInit(): Promise<void> {
+    // Seeding must not crash the boot when the database is briefly unavailable:
+    // /health/ready reports the outage and the next successful boot seeds.
+    try {
+      await this.seedSpecialTitles();
+    } catch (error: unknown) {
+      this.logger.warn(`Special title seeding skipped; will retry on next boot: ${String(error)}`);
+    }
+  }
+
+  private async seedSpecialTitles(): Promise<void> {
     await this.db.transaction(async (tx) => {
       for (const item of SPECIAL_TITLES) {
         await this.db.insertIgnore(

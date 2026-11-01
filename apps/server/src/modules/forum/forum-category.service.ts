@@ -21,12 +21,18 @@ export class ForumCategoryService implements OnModuleInit {
   constructor(private readonly db: DbService) {}
 
   async onModuleInit(): Promise<void> {
-    const existing = (await this.db.db.select({ value: count() }).from(categoryTable))[0];
-    if ((existing?.value ?? 0) > 0) {
-      return;
+    // Seeding must not crash the boot when the database is briefly unavailable:
+    // /health/ready reports the outage and the next successful boot seeds.
+    try {
+      const existing = (await this.db.db.select({ value: count() }).from(categoryTable))[0];
+      if ((existing?.value ?? 0) > 0) {
+        return;
+      }
+      await this.db.db.insert(categoryTable).values(DEFAULT_CATEGORIES);
+      this.logger.log(`Seeded ${DEFAULT_CATEGORIES.length} default forum categories`);
+    } catch (error: unknown) {
+      this.logger.warn(`Forum category seeding skipped; will retry on next boot: ${String(error)}`);
     }
-    await this.db.db.insert(categoryTable).values(DEFAULT_CATEGORIES);
-    this.logger.log(`Seeded ${DEFAULT_CATEGORIES.length} default forum categories`);
   }
 
   async listCategories(): Promise<ForumCategory[]> {
