@@ -14,8 +14,7 @@ MySQL 8.0+ / PostgreSQL 16+。
 > （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
 > 2.0 进度：F2 多库真实验证（CI 矩阵全绿）· F3 CSP 与安全头 · F5 探针与慢查询日志 ·
 > F6 文档同步已完成；**F1 协议真机联调、F4 部署与备份未开始**，M6/M7 未启动。
-> 逐字段核对与联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)，
-> M0 交付物见 [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)。
+> 逐字段核对与联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)。
 
 ## 技术栈
 
@@ -351,8 +350,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
   → build）+ `test-sqlite` + `test-databases`（MySQL 8.0 / PostgreSQL 16 service container 矩阵）。
   两个测试 job 都先对空库执行迁移冒烟，再跑同一套 server 测试，最后走 `db:seed` →
   `db:copy-data --truncate`（行数 + 全行 SHA-256 校验）→ 目标库幂等重跑。
-  首次于真实 MySQL/PG 全绿：2026-10-31（`dc503db`，run 41162131163），证据归档在
-  [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)。
+  首次于真实 MySQL/PG 全绿：2026-10-31（`dc503db`，run 41162131163）。
 
 ## 里程碑与文档
 
@@ -360,12 +358,10 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等）                                 |
 | [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单                                   |
-| [`docs/底座初步开发完成情况.md`](docs/底座初步开发完成情况.md)                                   | M0 交付物、验收结论与遗留事项                                              |
 | [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录                                               |
 | [`docs/database.md`](docs/database.md)                                                           | 三库配置、schema 工作流、迁移/复制/备份                                    |
 | [`docs/deploy.md`](docs/deploy.md)                                                               | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
 | [`docs/security.md`](docs/security.md)                                                           | 安全基线：CSP、安全响应头、审计豁免与哈希                                  |
-| [`docs/refactor-multi-db-report.md`](docs/refactor-multi-db-report.md)                           | 三库重构的度量、缺陷修复与待验证项                                         |
 | [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)                             | 三库支持的设计取舍                                                         |
 | [`docs/adr/0007-migration-baseline-alignment.md`](docs/adr/0007-migration-baseline-alignment.md) | 三方言迁移基线对齐与存量搬迁                                               |
 | [`docs/openapi.json`](docs/openapi.json)                                                         | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
