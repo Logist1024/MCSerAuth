@@ -163,7 +163,7 @@ export class MinecraftProfileController {
   @ApiResponse({ status: 200, description: 'PNG 图像', content: { 'image/png': {} } })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
   @ApiResponse({ status: 404, type: ProtocolErrorDto })
-  getTexture(
+  async getTexture(
     @Param('id', ParseIntPipe)
     id: number,
     @Query('expires')
@@ -172,8 +172,10 @@ export class MinecraftProfileController {
     signature: string | undefined,
     @Res()
     response: Response,
-  ): void {
-    const data = this.textures.readSignedTexture(id, expires, signature);
+  ): Promise<void> {
+    // The service is async: without awaiting, the raw Promise was sent as the
+    // body (a literal "{}") and signature validation never ran.
+    const data = await this.textures.readSignedTexture(id, expires, signature);
     response.setHeader('Content-Type', 'image/png');
     response.setHeader('Cache-Control', 'private, max-age=60');
     response.status(HttpStatus.OK).send(data);
