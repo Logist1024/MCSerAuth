@@ -1,3 +1,9 @@
+<div align="right">
+
+简体中文 | [English](README.en.md)
+
+</div>
+
 # MCSerAuth
 
 面向第三方 Minecraft: Java Edition 服务器的**一体化社区论坛 + 外置登录认证服务**。
@@ -6,18 +12,16 @@
 两块业务共用同一账号体系与基础设施，单体部署；默认 SQLite，生产可切换
 MySQL 8.0+ / PostgreSQL 16+。
 
-> **当前阶段：1.x 功能收官（`v1.0.0`）→ 2.0「从功能齐备到生产可运营」进行中**
-> （「2.0」是里程碑计划代号，尚无 2.0.0 tag，最新发布基线为 `v1.0.0`）
-> 已接通：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、`/api/user/profiles/me`、
+> **当前状态**：核心功能已齐备，发布基线 [v1.0.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.0.0)；正在推进
+> 2.0「从功能齐备到生产可运营」打磨（多库 CI 矩阵、部署与备份、可观测性、HTTP e2e
+> 测试层等已完成，其余工作项状态见 [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)；
+> 协议逐字段核对与启动器真机联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)）。
+>
+> **已实现**：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、
 > 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
 > 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览）、公开个人主页、游戏账号管理
 > （资料/改名/纹理切换）、四级角色 + 8 项能力下放 + 密钥超级后台、人机验证、成长体系
 > （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
-> 2.0 进度（2026-11-01）：F2 多库真实验证（CI 三矩阵全绿）、F6 文档同步、
-> F7 growth 域拆分、F8 HTTP e2e 测试层已完成；F3 安全加固、F4 部署与备份、
-> F5 可观测性代码侧完成（待真实 VPS 演练闭合）；**F1 协议真机联调（唯一 P0）暂缓**，
-> F9/F10 与 M7 未开始。工作项状态以 [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md) 为准。
-> 逐字段核对与联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)。
 
 ## 技术栈
 
@@ -54,7 +58,7 @@ MCSerAuth/
 要求：Node.js 22（`.nvmrc` 已固定）、corepack 可用的 pnpm。
 
 ```bash
-git clone <repo> && cd MCSerAuth
+git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
 corepack enable                 # 或使用 corepack pnpm <cmd>
 pnpm install
 cp .env.example apps/server/.env   # 可选：不复制也能跑（有开发默认值）
@@ -360,6 +364,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 | 文档                                                                                             | 内容                                                                       |
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                                                               | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                          |
+| [SECURITY.md](SECURITY.md)                                                                       | 安全政策：漏洞私密报告渠道与响应预期                                       |
 | [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等）                                 |
 | [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单                                   |
 | [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录                                               |
