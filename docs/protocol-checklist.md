@@ -2,8 +2,10 @@
 
 > 依据：《docs/项目策划案.md》2.2
 > 状态：**M1 认证核心 + M2 会话/档案/皮肤披风 + M3/M4 论坛与账号/管理端 + M4.5 人机验证与成长体系
-> 均已实现**（非协议端点见 OpenAPI 与 README）。2.0 M5 已完成 F2 多库真实验证与 F6 文档同步；
-> **协议字段仍待逐项核对，真机联调（F1）未执行**——这是本文的唯一 P0 缺口。
+> 均已实现**（非协议端点见 OpenAPI 与 README）。2.0 M5 已完成 F2 多库真实验证与 F6 文档同步。
+> **F1 真机联调已开始（2026-11-01，生产 VPS）**：HMCL 真机登录与皮肤下发通过（§3.1.9），
+> §4 的 1–7 项经真机 + 生产 curl 断言收敛，8–10 项归产品决策；**进服握手（Paper 侧
+> join/hasJoined 真机）仍待补录**，是 F1 关闭前仅剩的一项。
 > 本文是"服务端实现 ↔ 官方协议文档"的
 > 逐字段核对底稿；所有标有 ⚠️ 的字段均为**待官方协议文档核对**的暂定值，取得协议原文后逐项打勾。
 > 维护规则：任何协议端点的字段/状态码改动，必须同步更新本文与 `docs/openapi.json`。
@@ -704,6 +706,45 @@ Node `fetch` 直接断言 HTTP 状态码与 `Location` 头，浏览器端用 Nex
 覆盖端点改名回归、令牌一次性、会话吊销、防枚举与验证码门禁；
 `pnpm --filter @mcserauth/server test` 由 9 文件 91 例增至 **10 文件 97 例全绿**。
 
+### 3.1.9 F1 首轮真机联调：HMCL × 生产 VPS（2026-11-01）
+
+```text
+启动器/版本：HMCL（版本号待用户补录）
+联调日期：2026-11-01
+服务器地址：https://auth.txt64.eu.cc/api（生产：Debian 13 VPS / Caddy TLS / pm2 单进程 / SQLite）
+操作步骤：
+1) HMCL 设置 → 账户 → 外置登录，认证服务器填 https://auth.txt64.eu.cc/api；
+2) 网站邮箱 + 密码登录 → 启动器显示昵称与 UUID；
+3) 网站侧上传 64×64 classic 皮肤后，启动器/游戏内皮肤下发可见。
+异常表现：无（登录与皮肤链路一次通过）。
+结论：登录 + 皮肤链路通过；进服握手（Paper 侧 join/hasJoined）待补录。
+```
+
+服务端同期生产 curl 断言（同一 VPS 部署，全部以 HTTP 状态码 + 响应形状判定）：
+
+| 断言                                                                              | 结果                                                                                       | 判定         |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------ |
+| `GET /api` 元数据                                                                 | 200，`meta`/`links`/`skinDomains`，无 `signaturePublickey`                                 | ✅           |
+| `POST /api/authserver/authenticate`（正确密码 + `clientToken` + `requestUser`）   | 200，`accessToken` + `clientToken` 回显 + `availableProfiles` + `selectedProfile` + `user` | ✅           |
+| 同上（错误密码）                                                                  | 403 `ForbiddenOperationException`（原生错误形状）                                          | ✅           |
+| `POST validate`（有效 / 伪造 / refresh 后旧令牌 / invalidate 后令牌）             | 204 / **403** / **403** / **403**                                                          | ✅（修复后） |
+| `POST refresh`                                                                    | 200 新令牌 + `clientToken` 回显；旧令牌立即失效                                            | ✅           |
+| `POST invalidate`                                                                 | 204（幂等）                                                                                | ✅           |
+| `GET /api/profiles/minecraft/{name}`、`GET /api/sessionserver/.../profile/{uuid}` | 200 `GameProfile`；未知昵称 204                                                            | ✅           |
+| `POST /api/api/profiles/minecraft`（批量，`{"names":[…]}`）                       | 200 数组、未知昵称跳过；body 非法 400 `IllegalArgumentException`                           | ✅           |
+| `POST /api/sessionserver/session/minecraft/join`（任意握手哈希）                  | 204；`hasJoined` 未加入 204、命中 200 + `properties.textures`                              | ✅           |
+| `POST /api/minecraft/profile/skins`（multipart `file`+`variant`）                 | 200 `TextureUploadResponse`，签名 URL 公开可下载                                           | ✅           |
+| 皮肤上传 → `sessionserver profile/{uuid}`                                         | `properties.textures` base64 可解码，`SKIN.url` 指向签名 URL                               | ✅           |
+| 伪造令牌的 `hasJoined` 语义、错误形状                                             | `{error, errorMessage}`，无统一信封                                                        | ✅           |
+
+**本轮发现并修复的缺陷**（commit `bb43208`，已部署生产并复验）：
+
+`yggdrasil.controller.ts` 的 `validate()` 缺少 `await`——`YggdrasilService.validate()` 对无效令牌抛出的
+`ForbiddenException` 在 204 响应发出后才被拒收，**任何令牌 validate 一律 204**，403 永远到不了启动器，
+拒绝只以未处理 Promise 拒绝的形式打进 stderr。§3.1.5 的冒烟记录（"伪造令牌 → 403"）当时为真，
+系后续重构引入回归且 e2e 未覆盖无效分支。修复：controller 改 `async` + `await`，并在
+`yggdrasil.e2e.test.ts` 补无效令牌 403 断言作回归守卫（全套 25 文件 240 例全绿）。
+
 ### 3.2 启动器侧待记录信息（模板）
 
 联调时请记录（每款启动器一段）：
@@ -740,22 +781,31 @@ Node `fetch` 直接断言 HTTP 状态码与 `Location` 头，浏览器端用 Nex
 
 ## 4. 待核清单汇总（按优先级）
 
-1. **授权主流程形态**：M1 已按 OAuth 授权码 + PKCE 实现（entry → code → authenticate），
-   但官方协议原文仍未取得；需用 HMCL/PCL2 抓包确认字段与回调格式。← 风险最高
-2. **`serverId` 语义**：Yggdrasil 原生的 `serverId` 是登录握手哈希，不是固定服务器 ID；
-   本项目按"服务器白名单 ID"实现，必须用真实 authlib-injector 验证。← 高风险
-3. `hasJoined` 方法与字段（`username` vs UUID、`ip` 是否必传）、204/403 语义。
-4. profiles 命名空间：`/api/profiles/*` vs `/minecraft/profile/*` 各自职责与返回码（204/404）。
-5. 纹理字段：`state`/`variant` 常量、签名 URL 要求、空数组省略规则。
-6. multipart 上传字段名与成功响应形状（当前 `file` + `variant`，200 `TextureUploadResponse`）。
-7. `textures` 属性是否需要签名（当前无签名）、签名 URL 有效期是否满足启动器缓存策略。
-8. 令牌响应字段与有效期（`expires_in`）定值——M1 暂按 30 天（可配）实现。
-9. 首次授权/首次上传自动创建 player 的策略（昵称来源、冲突后缀、改名入口）需产品确认。
-10. `server_entry.secret` 的用途与下发方式（当前仅哈希入库、不参与协议鉴权）。
+> 2026-11-01 首轮真机（§3.1.9）后更新：1–7 项已收敛或降级，8–10 项归产品决策；
+> **F1 关闭前仅剩「Paper 侧进服握手真机补录」**（影响第 2/3 项的最终打勾）。
 
-> 已收敛（2026-10-24）：authlib-injector 兼容层落地后，第 1 项“授权主流程形态”对 HMCL/PCL2
-> **不再阻塞**——启动器走 §2.5 的 `/authserver/*` 密码直登，浏览器 OAuth 保留给自研启动器与网页演示。
-> 第 2 项 `serverId` 语义按双轨处理（见 §2.5 第 2 条）。
+1. ~~**授权主流程形态**~~ **不阻塞（2026-10-24 已收敛）**：HMCL/PCL2 走 §2.5 `/authserver/*`
+   密码直登（真机验证通过）；浏览器 OAuth 授权码 + PKCE 保留给自研启动器与网页演示。
+2. **`serverId` 语义**：按双轨实现（原生白名单 / authlib-injector 任意握手哈希）。compat 层
+   join→hasJoined 已在生产 curl 断言；**真机 Paper 握手补录后打勾**。
+3. `hasJoined` 方法与字段：GET（`username`+`serverId`）+ 204/200/403 语义已在生产断言
+   （未加入 204、命中 200 带 textures、白名单外原生接口 403）；`ip` 参数保持可选。
+   **真机 Paper 握手补录后打勾**。
+4. ✅ profiles 命名空间（2026-11-01）：`/api/profiles/minecraft/{name}`（204/200）、
+   `/api/api/profiles/minecraft` 批量（未知昵称跳过）、`/sessionserver/.../profile/{uuid}`
+   三处均已生产断言；非法 UUID 400。
+5. ✅ 纹理字段（2026-11-01）：`state=ACTIVE/INACTIVE`、`variant=classic|slim`、签名 URL
+   （TTL 300s，启动器每次拉 profile 自然刷新）经真机皮肤上传/下发验证。
+6. ✅ multipart 上传（2026-11-01）：`file` + `variant` 字段名与 200 `TextureUploadResponse`
+   真机通过。
+7. ✅ `textures` 属性签名（2026-11-01）：元数据不含 `signaturePublickey`，authlib-injector
+   在无公钥时不校验签名，HMCL 真机接受无签名 textures 属性；base64 结构可解码。
+8. 令牌有效期定值（`expires_in` 30 天、可配）→ **产品决策**，协议层面 `expires_in` 字段已按
+   OAuth 惯例返回；不再阻塞。
+9. 首次授权自动创建 player 策略（昵称来源、冲突后缀）→ **产品决策**（策划案待确认项），
+   实现行为已在 §2.1 记录。
+10. `server_entry.secret` 用途 → **产品/运维决策**（当前仅哈希入库、不参与协议鉴权）；
+    authlib-injector 兼容层不要求密钥，真机登录未受影响。
 
 ## 5. 变更记录
 
@@ -771,3 +821,4 @@ Node `fetch` 直接断言 HTTP 状态码与 `Location` 头，浏览器端用 Nex
 | 2026-10-25 | 找回密码修复（§3.1.8，无迁移、无新表）：网页端申请端点由 better-auth 1.7 已废弃的 `/api/auth/forget-password` 改为 `/api/auth/request-password-reset`（原路径恒 404），人机验证 `before` 钩子同步挂载到真实路径；`emailAndPassword.revokeSessionsOnPasswordReset: true` 使重置吊销全部网页会话；`credentialLimiter` 覆盖两个重置端点；`/forgot-password` 已发送视图补上 `CaptchaField`（否则“重新发送”在生产环境必 400）；新增 `test/password-reset.test.ts`（6 例，10 文件 97 例全绿）                                                                                                                                                                                                                                                                                                                           |
 | 2026-10-25 | 站点外观（超级面板）与设备令牌自助页下线：`site_setting` 新增 `siteIcon`/`customCss` 键（无迁移），新增 `POST /api/admin/site/icon` 与 `DELETE /api/admin/site/icon`、公开 `GET /api/site/icon/{filename}`，`PATCH /api/admin/site` 接受 `customCss`；根布局内联自定义 CSS 并输出 `icon`/`apple-icon` 链接，页头品牌改用同一张图；移除 `/api/user/tokens` 列表与吊销端点及 `/textures` 的启动器设备面板（`token` 表与授权流程不变）；OpenAPI 同步                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-11-01 | 2.0 F2/F6 文档同步（**协议端点与字段语义零改动**）：三库迁移基线按 ADR 0007 对齐为各一份 29 表 `0000`（旧 SQLite 12 版历史移除，上文各行中的迁移编号仅存于 git 历史）；真实 MySQL 8.0 / PostgreSQL 16 的迁移、测试与 `db:copy-data` 端到端在 CI 首次全绿（run 41162131163），T2/T3 关闭；§1 非协议端点清单按实际路由改写并标注 `/api/user/tokens` 已移除（恢复排期 F14）；策划案升 v1.3（D4 部分被 ADR 0006 推翻、A4 设备页状态、披风与游客浏览判为已实现）；README 删除「设置页展示最近使用」等失效描述。`docs/openapi.json` 重新导出为 **104 路径 / 123 操作**：补入 F5 的 `/health/live`、`/health/ready`，并修正导出脚本与 `main.ts` 的前缀排除表不一致（原会误登记为 `/api/health/*`，实测 404），两处改用同一份 `PREFIX_EXCLUDED_ROUTES`；协议分组本身未变。**§4 的 10 项待核仍未收敛，需真机启动器（F1）** |
+| 2026-11-01 | **F1 首轮真机联调**（§3.1.9，生产 VPS `https://auth.txt64.eu.cc`）：HMCL 外置登录 + 皮肤下发真机通过；配套生产 curl 断言覆盖 authenticate/validate/refresh/invalidate/join/hasJoined/profiles/上传全链路。**发现并修复 `validate` 缺 `await` 缺陷**（commit `bb43208`，含 e2e 回归守卫）：无效令牌一律 204、403 到不了启动器，§3.1.5 记录系重构前真值。§4 据此收敛：1–7 项关闭或待 Paper 补录打勾，8–10 项归产品决策；**F1 仅剩进服握手（Paper 侧）真机补录**                                                                                                                                                                                                                                                                                                                                                     |
