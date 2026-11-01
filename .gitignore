@@ -30,3 +30,9 @@ coverage/
 
 # local smoke-test artifacts
 .smoke/
+uploads/
+
+# AI agent / local tool state
+.zcode/
+.claude/
+.codeartsdoer/
