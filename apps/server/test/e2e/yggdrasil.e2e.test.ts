@@ -64,6 +64,15 @@ test('validate accepts the token; refresh rejects a mismatched clientToken', asy
     .send({ accessToken, clientToken });
   expect(validate.status).toBe(204);
 
+  // Regression guard (F1 2026-11-01): the controller once dropped its await,
+  // so invalid tokens got the 204 before the async 403 could fire.
+  const invalidToken = await ctx
+    .request()
+    .post('/api/authserver/validate')
+    .send({ accessToken: 'mcs_at_not_a_real_token' });
+  expect(invalidToken.status).toBe(403);
+  expect(invalidToken.body.error).toBe('ForbiddenOperationException');
+
   const wrongClient = await ctx
     .request()
     .post('/api/authserver/refresh')

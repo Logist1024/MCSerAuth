@@ -109,11 +109,14 @@ export class YggdrasilAuthController {
   @ApiBody({ type: YggdrasilValidateRequestDto })
   @ApiNoContentResponse({ description: '令牌有效' })
   @ApiResponse({ status: 403, type: ProtocolErrorDto })
-  validate(
+  // Must await: validate() rejects asynchronously, and an unawaited rejection
+  // fires after the 204 is already sent (found by the 2026-11-01 F1 drill —
+  // invalid tokens answered 204 and the ForbiddenException only hit stderr).
+  async validate(
     @Body()
     body: YggdrasilValidateRequestDto,
-  ): void {
-    this.yggdrasil.validate(body.accessToken);
+  ): Promise<void> {
+    await this.yggdrasil.validate(body.accessToken);
   }
   @Post('invalidate')
   @HttpCode(HttpStatus.NO_CONTENT)
