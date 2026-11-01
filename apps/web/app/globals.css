@@ -1,25 +1,29 @@
 /* ==========================================================================
    MCSerAuth community UI
-   A restrained, neutral forum theme built on a quiet slate accent.
+   White minimal light theme by default; dark mode and accent color presets
+   are driven by data attributes on <html> (see lib/appearance.ts):
+   - data-theme-mode="light" | "dark" | "system"
+   - data-theme-color="green" | "blue" | "purple" | "orange" | "pink"
+   - data-icon-style="svg" | "emoji"
    ========================================================================== */
 
 :root {
   color-scheme: light;
-  /* Dense, high-contrast neutral shell with a single utilitarian green accent. */
-  --bg: #ecefed;
+  /* White minimal shell: neutral surfaces, one accent color for highlights. */
+  --bg: #f6f7f8;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-soft: #eff2f0;
-  --surface-strong: #e2e7e4;
-  --fg: #1f2924;
-  --fg-strong: #101713;
-  --muted: #56645c;
-  --muted-strong: #394740;
-  --border: #c5d0c9;
-  --border-strong: #96a69d;
+  --surface-soft: #f3f4f6;
+  --surface-strong: #e9ebee;
+  --fg: #1d2430;
+  --fg-strong: #0e131a;
+  --muted: #5d6773;
+  --muted-strong: #3e4750;
+  --border: #e3e6ea;
+  --border-strong: #c6ccd3;
   --accent: #0c6f4d;
   --accent-strong: #08573c;
-  --accent-soft: #e2efe8;
+  --accent-soft: #e3f0ea;
   --accent-contrast: #ffffff;
   --danger: #ae2b20;
   --danger-strong: #8c2118;
@@ -27,12 +31,12 @@
   --warning: #825600;
   --warning-soft: #f8f1dd;
   --success: #0c6f4d;
-  --success-soft: #e2efe8;
+  --success-soft: #e3f0ea;
   --gold: #825600;
   --gold-soft: #f8f1dd;
-  --shadow-sm: 0 1px 2px rgb(16 24 20 / 6%);
-  --shadow-md: 0 6px 18px -12px rgb(16 24 20 / 30%);
-  --shadow-lg: 0 18px 40px -24px rgb(16 24 20 / 40%);
+  --shadow-sm: 0 1px 2px rgb(15 23 32 / 5%);
+  --shadow-md: 0 8px 24px -16px rgb(15 23 32 / 18%);
+  --shadow-lg: 0 20px 48px -28px rgb(15 23 32 / 28%);
   --radius-sm: 5px;
   --radius: 8px;
   --radius-lg: 10px;
@@ -43,20 +47,76 @@
   --content-width: 78rem;
 }
 
+/* Accent presets (light). Green is the default above; each preset swaps the
+   highlight color while the neutral shell stays untouched. */
+[data-theme-color='blue'] {
+  --accent: #1f6feb;
+  --accent-strong: #1a5fd0;
+  --accent-soft: #e5eefc;
+}
+[data-theme-color='purple'] {
+  --accent: #7c3aed;
+  --accent-strong: #6527cc;
+  --accent-soft: #f0eafc;
+}
+[data-theme-color='orange'] {
+  --accent: #d97a06;
+  --accent-strong: #b56205;
+  --accent-soft: #fbeedb;
+}
+[data-theme-color='pink'] {
+  --accent: #d6336c;
+  --accent-strong: #b52a5b;
+  --accent-soft: #fbe7ee;
+}
+
+/* Dark palette. Kept in sync between the explicit-dark selector and the
+   system-preference fallback used before the init script resolves "system". */
+[data-theme-mode='dark'] {
+  color-scheme: dark;
+  --bg: #0c0f12;
+  --bg-elevated: #14181d;
+  --surface: #161a20;
+  --surface-soft: #1c2127;
+  --surface-strong: #262c34;
+  --fg: #dfe4ea;
+  --fg-strong: #f1f4f7;
+  --muted: #98a2ad;
+  --muted-strong: #bfc7cf;
+  --border: #2c333b;
+  --border-strong: #48525c;
+  --accent: #4cc38a;
+  --accent-strong: #6bd6a1;
+  --accent-soft: #12291f;
+  --accent-contrast: #04150e;
+  --danger: #f08a80;
+  --danger-strong: #ffaaa1;
+  --danger-soft: #2d1a17;
+  --warning: #e0b45a;
+  --warning-soft: #2a2313;
+  --success: #4cc38a;
+  --success-soft: #12291f;
+  --gold: #e0b45a;
+  --gold-soft: #2a2313;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
+  --shadow-md: 0 8px 22px -14px rgb(0 0 0 / 70%);
+  --shadow-lg: 0 20px 50px -26px rgb(0 0 0 / 80%);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme-mode='light']) {
     color-scheme: dark;
-    --bg: #090c0a;
-    --bg-elevated: #111613;
-    --surface: #131a16;
-    --surface-soft: #19211c;
-    --surface-strong: #222c26;
-    --fg: #dfe7e2;
-    --fg-strong: #f0f5f2;
-    --muted: #97a69d;
-    --muted-strong: #bcc9c1;
-    --border: #334039;
-    --border-strong: #52655a;
+    --bg: #0c0f12;
+    --bg-elevated: #14181d;
+    --surface: #161a20;
+    --surface-soft: #1c2127;
+    --surface-strong: #262c34;
+    --fg: #dfe4ea;
+    --fg-strong: #f1f4f7;
+    --muted: #98a2ad;
+    --muted-strong: #bfc7cf;
+    --border: #2c333b;
+    --border-strong: #48525c;
     --accent: #4cc38a;
     --accent-strong: #6bd6a1;
     --accent-soft: #12291f;
@@ -73,6 +133,59 @@
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
     --shadow-md: 0 8px 22px -14px rgb(0 0 0 / 70%);
     --shadow-lg: 0 20px 50px -26px rgb(0 0 0 / 80%);
+  }
+}
+
+/* Accent presets (dark). */
+[data-theme-mode='dark'][data-theme-color='blue'] {
+  --accent: #6ea3f8;
+  --accent-strong: #8fb9fa;
+  --accent-soft: #12233f;
+  --accent-contrast: #051225;
+}
+[data-theme-mode='dark'][data-theme-color='purple'] {
+  --accent: #b28af5;
+  --accent-strong: #c7a5f8;
+  --accent-soft: #221736;
+  --accent-contrast: #140a26;
+}
+[data-theme-mode='dark'][data-theme-color='orange'] {
+  --accent: #f0a24c;
+  --accent-strong: #f5b870;
+  --accent-soft: #33200a;
+  --accent-contrast: #1d1002;
+}
+[data-theme-mode='dark'][data-theme-color='pink'] {
+  --accent: #ef7fa6;
+  --accent-strong: #f49cb8;
+  --accent-soft: #33141f;
+  --accent-contrast: #1d0710;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode='light'])[data-theme-color='blue'] {
+    --accent: #6ea3f8;
+    --accent-strong: #8fb9fa;
+    --accent-soft: #12233f;
+    --accent-contrast: #051225;
+  }
+  :root:not([data-theme-mode='light'])[data-theme-color='purple'] {
+    --accent: #b28af5;
+    --accent-strong: #c7a5f8;
+    --accent-soft: #221736;
+    --accent-contrast: #140a26;
+  }
+  :root:not([data-theme-mode='light'])[data-theme-color='orange'] {
+    --accent: #f0a24c;
+    --accent-strong: #f5b870;
+    --accent-soft: #33200a;
+    --accent-contrast: #1d1002;
+  }
+  :root:not([data-theme-mode='light'])[data-theme-color='pink'] {
+    --accent: #ef7fa6;
+    --accent-strong: #f49cb8;
+    --accent-soft: #33141f;
+    --accent-contrast: #1d0710;
   }
 }
 
@@ -1175,8 +1288,12 @@ textarea {
   background: hsl(var(--cat-hue) 52% 45%);
 }
 
+[data-theme-mode='dark'] .category-dot {
+  background: hsl(var(--cat-hue) 58% 62%);
+}
+
 @media (prefers-color-scheme: dark) {
-  .category-dot {
+  :root:not([data-theme-mode='light']) .category-dot {
     background: hsl(var(--cat-hue) 58% 62%);
   }
 }
@@ -4626,5 +4743,538 @@ a.post-floor:hover {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   Icon dual render & appearance menu
+   Icon renders both an SVG and an emoji span; html[data-icon-style] picks one.
+   ========================================================================== */
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.icon-emoji {
+  display: none;
+}
+
+[data-icon-style='emoji'] .icon-svg {
+  display: none;
+}
+
+[data-icon-style='emoji'] .icon-emoji {
+  display: inline;
+}
+
+.appearance-menu {
+  position: relative;
+}
+
+.appearance-menu-trigger {
+  cursor: pointer;
+  list-style: none;
+}
+
+.appearance-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.appearance-menu-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 0.7rem;
+  width: 14.5rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: pop-in 0.12s ease-out;
+}
+
+.appearance-menu-title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.appearance-section {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.appearance-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.appearance-segment {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.appearance-segment button {
+  flex: 1;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.appearance-segment button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.appearance-colors {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.appearance-color-dot {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.appearance-color-dot:hover {
+  transform: scale(1.1);
+}
+
+.appearance-color-dot[data-active='true'] {
+  border-color: var(--fg-strong);
+}
+
+.appearance-color-dot[data-color='green'] {
+  background: #0c6f4d;
+}
+
+.appearance-color-dot[data-color='blue'] {
+  background: #1f6feb;
+}
+
+.appearance-color-dot[data-color='purple'] {
+  background: #7c3aed;
+}
+
+.appearance-color-dot[data-color='orange'] {
+  background: #d97a06;
+}
+
+.appearance-color-dot[data-color='pink'] {
+  background: #d6336c;
+}
+
+/* ==========================================================================
+   Forum: category board (Discuz-style) & list toolbar
+   ========================================================================== */
+
+.category-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.category-board-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.15s ease;
+}
+
+.category-board-card:hover {
+  border-color: var(--border-strong);
+}
+
+.category-board-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0.1rem;
+  border-radius: var(--radius-sm);
+  background: hsl(var(--cat-hue) 45% 92%);
+  color: hsl(var(--cat-hue) 52% 38%);
+}
+
+[data-theme-mode='dark'] .category-board-icon {
+  background: hsl(var(--cat-hue) 30% 18%);
+  color: hsl(var(--cat-hue) 55% 65%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode='light']) .category-board-icon {
+    background: hsl(var(--cat-hue) 30% 18%);
+    color: hsl(var(--cat-hue) 55% 65%);
+  }
+}
+
+.category-board-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.category-board-name {
+  color: var(--fg-strong);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.category-board-name:hover {
+  color: var(--accent);
+}
+
+.category-board-desc {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.category-board-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.category-board-child-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.category-board-stats {
+  display: grid;
+  flex: none;
+  gap: 0.15rem;
+  justify-items: end;
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.category-board-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.category-board-count strong {
+  color: var(--fg-strong);
+  font-size: 0.95rem;
+}
+
+.forum-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.forum-toolbar-tabs {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.forum-toolbar-tab {
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.forum-toolbar-tab:hover {
+  background: var(--surface-soft);
+  color: var(--fg-strong);
+}
+
+.forum-toolbar-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.forum-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.forum-toolbar-input {
+  width: 11rem;
+  max-width: 100%;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 0.8rem;
+}
+
+.forum-toolbar-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@media (max-width: 40rem) {
+  .category-board {
+    grid-template-columns: 1fr;
+  }
+
+  .category-board-stats {
+    display: none;
+  }
+
+  .forum-toolbar-search {
+    width: 100%;
+  }
+
+  .forum-toolbar-input {
+    flex: 1;
+    width: auto;
+  }
+}
+
+/* ==========================================================================
+   Textures: official-profile style layout
+   ========================================================================== */
+
+.profile-header {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+  margin-bottom: 1.25rem;
+}
+
+.profile-header-preview {
+  justify-self: center;
+  width: 100%;
+}
+
+.profile-header-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-header-name {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.profile-header-state {
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.profile-header-state.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.profile-header-uuid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.profile-header-uuid code {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0.9rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.profile-header-meta div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.profile-header-meta dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.profile-header-meta dd {
+  margin: 0;
+  color: var(--fg);
+  font-size: 0.82rem;
+}
+
+.rename-card {
+  margin-bottom: 1.25rem;
+}
+
+.rename-cooldown {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted-strong);
+  font-size: 0.85rem;
+}
+
+.rename-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+
+.rename-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.rename-details[open] summary {
+  margin-bottom: 0.7rem;
+}
+
+.rename-form {
+  max-width: 26rem;
+}
+
+.texture-section {
+  margin-bottom: 1.25rem;
+}
+
+.texture-section-state {
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.texture-section-state.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.texture-section-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.launcher-fold {
+  margin-top: 1.5rem;
+}
+
+.launcher-fold > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.launcher-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.launcher-fold > summary::before {
+  content: '▸';
+  transition: transform 0.15s ease;
+}
+
+.launcher-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.launcher-fold > summary:hover {
+  color: var(--fg-strong);
+  border-color: var(--border-strong);
+}
+
+.launcher-fold .launcher-guide {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 48rem) {
+  .profile-header {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-header-preview {
+    max-width: 18rem;
   }
 }

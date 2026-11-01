@@ -7,6 +7,7 @@ import { roleAtLeast } from '@mcserauth/shared';
 import { fetchUnreadCount, fetchUserSettings } from '@/lib/api-client';
 import { fetchWebsiteSession, signOut, type WebsiteSession } from '@/lib/auth-client';
 import Avatar from './avatar';
+import AppearanceMenu from './appearance/appearance-menu';
 import { Icon, LogoMark } from './icons';
 import { useToast } from './toast';
 
@@ -196,6 +197,7 @@ export default function SiteHeader({
         </nav>
 
         <div className="header-actions">
+          <AppearanceMenu />
           {signedIn ? (
             <Link
               className="button primary small header-compose"

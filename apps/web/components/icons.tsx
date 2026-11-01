@@ -1,4 +1,4 @@
-import type { ReactNode, SVGProps } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
 export type IconName =
   | 'alert'
@@ -32,6 +32,7 @@ export type IconName =
   | 'quote'
   | 'reply'
   | 'rss'
+  | 'search'
   | 'settings'
   | 'shield'
   | 'star'
@@ -210,6 +211,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <circle cx="5" cy="19" r="1" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
   settings: (
     <>
       <path d="M4 21v-7" />
@@ -254,27 +261,80 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
 };
 
+/**
+ * Emoji 替代表（外观设置里选 "Emoji 图标" 时整体替换线条 SVG）。
+ * 编辑器工具类的 bold/italic/heading 用字母字符更可读，保留为纯文本。
+ */
+const EMOJI: Record<IconName, string> = {
+  alert: '⚠️',
+  arrowLeft: '⬅️',
+  at: '@',
+  bell: '🔔',
+  bold: 'B',
+  check: '✅',
+  chevronDown: '▾',
+  chevronLeft: '◂',
+  chevronRight: '▸',
+  chevronUp: '▴',
+  clock: '🕒',
+  code: '</>',
+  flag: '🚩',
+  gamepad: '🎮',
+  heading: 'H',
+  home: '🏠',
+  image: '🖼️',
+  inbox: '📥',
+  italic: 'I',
+  link: '🔗',
+  list: '☰',
+  lock: '🔒',
+  logout: '🚪',
+  message: '💬',
+  pencil: '✏️',
+  pen: '📝',
+  pin: '📌',
+  plus: '➕',
+  quote: '❝',
+  reply: '↩️',
+  rss: '📡',
+  search: '🔍',
+  settings: '⚙️',
+  shield: '🛡️',
+  star: '⭐',
+  thumbsUp: '👍',
+  trash: '🗑️',
+  user: '👤',
+  x: '❌',
+};
+
 export function Icon({
   name,
   width = 18,
   height = 18,
   ...props
-}: { name: IconName } & SVGProps<SVGSVGElement>) {
+}: { name: IconName; width?: number; height?: number } & HTMLAttributes<HTMLElement>) {
+  // 双渲染：默认显示 SVG；html[data-icon-style='emoji'] 时由 CSS 切换到 emoji，
+  // 因此 Icon 可继续在服务端组件中使用（无需 context）。
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width={width}
-      height={height}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      {PATHS[name]}
-    </svg>
+    <span className="icon" style={{ fontSize: Math.max(width, height) }} {...props}>
+      <svg
+        className="icon-svg"
+        viewBox="0 0 24 24"
+        width={width}
+        height={height}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {PATHS[name]}
+      </svg>
+      <span className="icon-emoji" aria-hidden="true">
+        {EMOJI[name]}
+      </span>
+    </span>
   );
 }
 

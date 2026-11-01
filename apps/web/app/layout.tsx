@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 import { ToastProvider } from '@/components/toast';
+import { APPEARANCE_INIT_SCRIPT } from '@/lib/appearance';
 import { loadSiteDisplay } from '@/lib/site-settings';
 import './globals.css';
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ecefed' },
-    { media: '(prefers-color-scheme: dark)', color: '#090c0a' },
+    { media: '(prefers-color-scheme: light)', color: '#f6f7f8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c0f12' },
   ],
 };
 
@@ -28,8 +29,19 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const site = await loadSiteDisplay();
   return (
-    <html lang="zh-CN" data-scroll-behavior="smooth">
+    <html
+      lang="zh-CN"
+      data-scroll-behavior="smooth"
+      data-theme-mode="system"
+      data-theme-color="green"
+      data-icon-style="svg"
+      // 内联初始化脚本会在水合前改写这三个 data 属性（外观偏好），
+      // 服务端默认值与客户端实际值不同是预期行为，抑制该属性级警告。
+      suppressHydrationWarning
+    >
       <body>
+        {/* 首帧前把外观偏好写到 <html> 的 data 属性，避免主题闪烁。 */}
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_INIT_SCRIPT }} />
         {/* Rendered last in the document order so it can override the built-in theme. */}
         {site.customCss !== null ? (
           <style dangerouslySetInnerHTML={{ __html: site.customCss }} />

@@ -19,8 +19,9 @@ MySQL 8.0+ / PostgreSQL 16+。
 >
 > **已实现**：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、
 > 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
-> 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览）、公开个人主页、游戏账号管理
-> （资料/改名/纹理切换）、四级角色 + 8 项能力下放 + 密钥超级后台、人机验证、成长体系
+> 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览/排序与标题搜索）、公开个人主页、
+> 游戏账号管理（资料/改名/纹理切换）、外观设置（浅色/深色/跟随系统、五色点缀主题、
+> Emoji 图标替换）、四级角色 + 8 项能力下放 + 密钥超级后台、人机验证、成长体系
 > （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
 
 ## 技术栈
@@ -68,17 +69,17 @@ pnpm dev                           # 同时拉起 server(:8000) 与 web(:3000)
 
 启动后：
 
-| 地址                                                   | 说明                                              |
-| ------------------------------------------------------ | ------------------------------------------------- |
-| <http://localhost:3000>                                | 服务器展示页（论坛 / 游戏账号入口）               |
-| <http://localhost:3000/forum>                          | 论坛（版块、帖子、发帖、回帖、点赞）              |
-| <http://localhost:3000/textures>                       | 游戏账号管理（角色 / 皮肤 / 披风 / 登录指南）     |
-| <http://localhost:3000/admin>                          | 管理后台（审核员 / 管理员 / 超级管理员）          |
-| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO 与 RSS                                        |
-| <http://localhost:8000/health>                         | 服务探活（统一封装 `{code:0,data}`）              |
-| <http://localhost:8000/health/live> · `/health/ready`  | liveness（进程）· readiness（数据库不可用返 503） |
-| <http://localhost:8000/docs>                           | Swagger UI（全部端点契约）                        |
-| <http://localhost:8000/docs/json>                      | OpenAPI JSON                                      |
+| 地址                                                   | 说明                                                |
+| ------------------------------------------------------ | --------------------------------------------------- |
+| <http://localhost:3000>                                | 服务器展示页（论坛 / 游戏账号入口）                 |
+| <http://localhost:3000/forum>                          | 论坛（版块、主题列表、排序/搜索、发帖、回帖、点赞） |
+| <http://localhost:3000/textures>                       | 游戏账号管理（角色 / 皮肤 / 披风 / 登录指南）       |
+| <http://localhost:3000/admin>                          | 管理后台（审核员 / 管理员 / 超级管理员）            |
+| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO 与 RSS                                          |
+| <http://localhost:8000/health>                         | 服务探活（统一封装 `{code:0,data}`）                |
+| <http://localhost:8000/health/live> · `/health/ready`  | liveness（进程）· readiness（数据库不可用返 503）   |
+| <http://localhost:8000/docs>                           | Swagger UI（全部端点契约）                          |
+| <http://localhost:8000/docs/json>                      | OpenAPI JSON                                        |
 
 冒烟（注册 → 登录 → 会话）：
 
@@ -163,12 +164,15 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 
 ### M3 论坛与 M4 运营能力
 
-- **论坛**：`/forum` 版块树与最新帖子；`/forum/{slug}` 分类分页；
+- **论坛**：`/forum` 版块卡与主题列表（最新回复/最新发布/热门排序、标题搜索）；
+  `/forum/{slug}` 分类分页；
   `/forum/post/{id}` 帖子详情（Markdown、图片、点赞、举报、回复）；
   `/forum/new` 发帖；作者可编辑/删除自己的帖子与回复。
+- **外观设置**：页头弹层切换浅色/深色/跟随系统、五套点缀色与 SVG/Emoji 图标风格，
+  偏好存浏览器本地（机制见 [ADR 0009](docs/adr/0009-frontend-appearance-system.md)）。
 - **默认版块**：服务首次启动且 `category` 为空时自动种子「服务器动态 / 攻略交流 / 建议反馈 / 水区」。
-- **游戏账号管理**（`/textures`）：游戏角色资料与改名（30 天冷却，旧名保留 30 天）、
-  上传皮肤/披风立即生效、3D 外观预览、形象库切换/删除、
+- **游戏账号管理**（`/textures`）：官方档案页式布局——档案头（3D 形象预览、名称、UUID）、
+  改名（30 天冷却，旧名保留 30 天）、上传皮肤/披风立即生效、形象库切换/删除、
   外置登录连接指南（认证服务器地址与 HMCL/PCL2/Prism Launcher 配置步骤）；
   每个账号只能看到和管理自己的纹理；首页与导航提供入口。
 - **个人主页**（`/users/{id}`）：公开资料、成长档案与最近主题；本人可在页内编辑头像与签名。
