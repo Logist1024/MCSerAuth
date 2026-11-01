@@ -96,10 +96,17 @@ export interface ForumPostDetail extends ForumPostSummary {
   replyPageSize: number;
 }
 
+export const POST_SORT_OPTIONS = ['activity', 'created', 'hot'] as const;
+export type PostSortOption = (typeof POST_SORT_OPTIONS)[number];
+
 export interface ForumPostListQuery {
   page?: number;
   pageSize?: number;
   categorySlug?: string;
+  /** 排序：activity=最新回复（默认）、created=最新发布、hot=最热。 */
+  sort?: PostSortOption;
+  /** 标题关键词搜索（不区分大小写，1–50 字符）。 */
+  search?: string;
 }
 
 export interface CreatePostRequest {

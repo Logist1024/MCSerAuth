@@ -1,5 +1,37 @@
 import type { CSSProperties } from 'react';
-import type { UserRole } from '@mcserauth/shared';
+import { POST_SORT_OPTIONS, type PostSortOption, type UserRole } from '@mcserauth/shared';
+
+export const POST_SORT_LABELS: Record<PostSortOption, string> = {
+  activity: '最新回复',
+  created: '最新发布',
+  hot: '热门',
+};
+
+/** 解析列表页查询参数里的 sort，非法值回退到默认的 activity。 */
+export function parsePostSort(value: string | undefined): PostSortOption {
+  return (POST_SORT_OPTIONS as readonly string[]).includes(value ?? '')
+    ? (value as PostSortOption)
+    : 'activity';
+}
+
+/** 构建论坛列表页链接：默认值不写入查询串，保持 URL 干净。 */
+export function buildForumListHref(
+  basePath: string,
+  params: { page?: number; sort?: PostSortOption; search?: string },
+): string {
+  const query = new URLSearchParams();
+  if (params.sort !== undefined && params.sort !== 'activity') {
+    query.set('sort', params.sort);
+  }
+  if (params.search !== undefined && params.search !== '') {
+    query.set('search', params.search);
+  }
+  if (params.page !== undefined && params.page > 1) {
+    query.set('page', String(params.page));
+  }
+  const qs = query.toString();
+  return qs === '' ? basePath : `${basePath}?${qs}`;
+}
 
 export function stableHash(value: string): number {
   let hash = 0;

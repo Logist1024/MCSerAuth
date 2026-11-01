@@ -1,13 +1,16 @@
-import type { ForumCategory, ForumPostSummary, Paginated } from '@mcserauth/shared';
+import { type PostSortOption } from '@mcserauth/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/breadcrumbs';
-import CategoryStrip from '@/components/category-strip';
+import CategoryBoard from '@/components/category-board';
 import { ForumErrorState } from '@/components/forum-skeleton';
+import ForumListToolbar from '@/components/forum-list-toolbar';
 import { Icon } from '@/components/icons';
 import Pagination from '@/components/pagination';
 import PostList from '@/components/post-list';
+import { buildForumListHref, parsePostSort, POST_SORT_LABELS } from '@/lib/forum-ui';
 import { publicApiFetch } from '@/lib/server-api';
+import type { ForumCategory, ForumPostSummary, Paginated } from '@mcserauth/shared';
 
 export const revalidate = 30;
 
@@ -17,21 +20,29 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; sort?: string; search?: string }>;
 }
 
 const PAGE_SIZE = 15;
 
 export default async function ForumPage({ searchParams }: PageProps) {
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, sort: sortParam, search: searchParam } = await searchParams;
   const requestedPage = Number(pageParam ?? '1');
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const sort: PostSortOption = parsePostSort(sortParam);
+  const search = searchParam?.trim() ?? '';
+
+  const listQuery = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+  if (sort !== 'activity') {
+    listQuery.set('sort', sort);
+  }
+  if (search !== '') {
+    listQuery.set('search', search);
+  }
 
   const [categories, posts] = await Promise.all([
     publicApiFetch<ForumCategory[]>('/api/forum/categories'),
-    publicApiFetch<Paginated<ForumPostSummary>>(
-      `/api/forum/posts?page=${page}&pageSize=${PAGE_SIZE}`,
-    ),
+    publicApiFetch<Paginated<ForumPostSummary>>(`/api/forum/posts?${listQuery.toString()}`),
   ]);
 
   const totalPages =
@@ -60,9 +71,7 @@ export default async function ForumPage({ searchParams }: PageProps) {
         </div>
       </header>
 
-      {categories !== null ? (
-        <CategoryStrip categories={categories} totalPosts={posts?.total} />
-      ) : null}
+      {categories !== null && search === '' ? <CategoryBoard categories={categories} /> : null}
 
       {categories === null || posts === null ? (
         <ForumErrorState />
@@ -71,30 +80,49 @@ export default async function ForumPage({ searchParams }: PageProps) {
           <div className="forum-main">
             <section className="panel" aria-labelledby="forum-topics-heading">
               <div className="panel-head">
-                <h2 id="forum-topics-heading">最新主题</h2>
+                <h2 id="forum-topics-heading">
+                  {search !== '' ? `“${search}” 的搜索结果` : POST_SORT_LABELS[sort]}
+                </h2>
                 <span className="panel-meta">
                   共 {posts.total} 个主题
                   {totalPages > 1 ? ` · 第 ${currentPage} / ${totalPages} 页` : ''}
                 </span>
               </div>
+              <ForumListToolbar basePath="/forum" sort={sort} search={search} />
               {pageOutOfRange ? (
                 <div className="empty-state">
                   <span className="empty-state-icon">
                     <Icon name="alert" width={22} height={22} />
                   </span>
                   <p>第 {page} 页没有主题，页码可能超出了范围。</p>
-                  <Link className="button primary small" href={`/forum?page=${totalPages}`}>
+                  <Link
+                    className="button primary small"
+                    href={buildForumListHref('/forum', {
+                      page: totalPages,
+                      sort,
+                      search,
+                    })}
+                  >
                     前往第 {totalPages} 页
                   </Link>
                 </div>
               ) : (
                 <>
-                  <PostList posts={posts.items} emptyText="论坛还没有帖子，来发起第一个话题吧。" />
+                  <PostList
+                    posts={posts.items}
+                    emptyText={
+                      search !== ''
+                        ? `没有找到标题包含 “${search}” 的主题。`
+                        : '论坛还没有帖子，来发起第一个话题吧。'
+                    }
+                  />
                   <Pagination
                     page={posts.page}
                     pageSize={posts.pageSize}
                     total={posts.total}
-                    buildHref={(target) => (target === 1 ? '/forum' : `/forum?page=${target}`)}
+                    buildHref={(target) =>
+                      buildForumListHref('/forum', { page: target, sort, search })
+                    }
                   />
                 </>
               )}

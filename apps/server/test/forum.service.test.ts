@@ -13,6 +13,7 @@ import {
   reply,
   user as userTable,
   user,
+  vote,
 } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -116,6 +117,109 @@ describe('ForumService', () => {
     const tree = await forum.listCategories();
     expect(tree.find((node) => node.id === parent.id)?.postCount).toBe(2);
     expect(tree.find((node) => node.id === parent.id)?.children[0]?.postCount).toBe(1);
+  });
+
+  describe('listPosts sort & search', () => {
+    /** 把 fixture 里的基准帖挪到过去，便于插入可确定排序的新帖。 */
+    async function ageBasePost(): Promise<void> {
+      await ctx.db.db
+        .update(post)
+        .set({
+          createdAt: new Date('2020-01-01T00:00:00Z'),
+          lastActivityAt: new Date('2020-01-01T00:00:00Z'),
+        })
+        .where(eqId(postId));
+    }
+    async function boardId(): Promise<number> {
+      return firstOrThrow(
+        await ctx.db.db.select().from(category).where(eq(category.slug, 'general')),
+      ).id;
+    }
+    it('sorts by creation time with sort=created', async () => {
+      await ageBasePost();
+      await ctx.db.db.insert(post).values({
+        categoryId: await boardId(),
+        authorId: 'u1',
+        title: 'Newer post',
+        contentMd: 'x',
+        createdAt: new Date('2026-06-01T00:00:00Z'),
+        lastActivityAt: new Date('2026-06-01T00:00:00Z'),
+      });
+      const list = await forum.listPosts({ sort: 'created' });
+      expect(list.items[0]?.title).toBe('Newer post');
+    });
+    it('sorts hot by reply count plus vote count, pinned first', async () => {
+      const hotId = firstOrThrow(
+        await ctx.db.insertReturning(post, {
+          categoryId: await boardId(),
+          authorId: 'u1',
+          title: 'Hot post',
+          contentMd: 'x',
+          createdAt: new Date('2020-06-01T00:00:00Z'),
+          lastActivityAt: new Date('2020-06-01T00:00:00Z'),
+        }),
+      ).id;
+      // base 帖 5 条回复 0 赞 = 5 分；hot 帖 4 回复 2 赞 = 6 分。
+      await ctx.db.db.insert(reply).values(
+        [1, 2, 3, 4].map((floor) => ({
+          postId: hotId,
+          authorId: 'u1',
+          contentMd: `r${floor}`,
+          floor,
+        })),
+      );
+      await ctx.db.db
+        .insert(vote)
+        .values(
+          ['u1', 'u2'].map((userId) => ({ userId, targetType: 'post' as const, targetId: hotId })),
+        );
+      const list = await forum.listPosts({ sort: 'hot' });
+      expect(list.items.map((item) => item.title)).toEqual(['Hot post', 'Hello world']);
+      // activity 排序仍按最后活动时间（基准帖更新，hot 帖更旧）。
+      const byActivity = await forum.listPosts({});
+      expect(byActivity.items[0]?.title).toBe('Hello world');
+    });
+    it('pins posts above all sort modes', async () => {
+      await ageBasePost();
+      const board = await boardId();
+      await ctx.db.db.insert(post).values({
+        categoryId: board,
+        authorId: 'u1',
+        title: 'Pinned old post',
+        contentMd: 'x',
+        pinned: true,
+        createdAt: new Date('2019-01-01T00:00:00Z'),
+        lastActivityAt: new Date('2019-01-01T00:00:00Z'),
+      });
+      const list = await forum.listPosts({ sort: 'created' });
+      expect(list.items[0]?.title).toBe('Pinned old post');
+    });
+    it('searches titles case-insensitively and combines with category filter', async () => {
+      const board = await boardId();
+      const other = firstOrThrow(
+        await ctx.db.insertReturning(category, { name: 'Other', slug: 'other' }),
+      );
+      await ctx.db.db.insert(post).values([
+        { categoryId: other.id, authorId: 'u1', title: 'Hello again', contentMd: 'x' },
+        { categoryId: board, authorId: 'u1', title: '100% 攻略', contentMd: 'x' },
+      ]);
+      expect(
+        (await forum.listPosts({ search: 'HELLO' })).items.map((item) => item.title).sort(),
+      ).toEqual(['Hello again', 'Hello world']);
+      expect(
+        (await forum.listPosts({ search: 'hello', categorySlug: 'general' })).items.map(
+          (item) => item.title,
+        ),
+      ).toEqual(['Hello world']);
+      // 通配符被转义：字面 "%" 只匹配标题含 % 的帖子，"_" 不再充当任意单字符。
+      expect((await forum.listPosts({ search: '%' })).items.map((item) => item.title)).toEqual([
+        '100% 攻略',
+      ]);
+      expect((await forum.listPosts({ search: '_' })).items).toEqual([]);
+      expect((await forum.listPosts({ search: '100%' })).items.map((item) => item.title)).toEqual([
+        '100% 攻略',
+      ]);
+    });
   });
 });
 function eqId(id: number) {

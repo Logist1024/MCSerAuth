@@ -91,6 +91,64 @@ test('voting toggles', async () => {
   expect(second.body.data).toMatchObject({ voted: false, voteCount: 0 });
 });
 
+test('the post list supports sort and title search', async () => {
+  const alpha = await ctx
+    .request()
+    .post('/api/forum/posts')
+    .set('Cookie', author.cookie)
+    .send({ categoryId, title: '排序搜索 Alpha', contentMd: 'alpha' });
+  expect(alpha.status).toBe(201);
+  const beta = await ctx
+    .request()
+    .post('/api/forum/posts')
+    .set('Cookie', author.cookie)
+    .send({ categoryId, title: '排序搜索 Beta', contentMd: 'beta' });
+  expect(beta.status).toBe(201);
+
+  // Alpha 收到回复（最新活动），Beta 更新（最新发布）并拿到 2 票（最热）。
+  // 等待跨过时间戳精度（sqlite 秒级），保证排序断言确定性。
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await ctx
+    .request()
+    .post(`/api/forum/posts/${alpha.body.data.id}/replies`)
+    .set('Cookie', replier.cookie)
+    .send({ contentMd: '让 Alpha 变成最新活动' });
+  for (const actor of [replier, reviewer]) {
+    await ctx
+      .request()
+      .post(`/api/forum/posts/${beta.body.data.id}/vote`)
+      .set('Cookie', actor.cookie)
+      .send();
+  }
+
+  const byActivity = await ctx.request().get('/api/forum/posts').query({ sort: 'activity' });
+  expect(byActivity.status).toBe(200);
+  expect(byActivity.body.data.items[0].title).toBe('排序搜索 Alpha');
+
+  const byCreated = await ctx.request().get('/api/forum/posts').query({ sort: 'created' });
+  expect(byCreated.body.data.items[0].title).toBe('排序搜索 Beta');
+
+  const byHot = await ctx.request().get('/api/forum/posts').query({ sort: 'hot' });
+  expect(byHot.body.data.items[0].title).toBe('排序搜索 Beta');
+
+  const searched = await ctx.request().get('/api/forum/posts').query({ search: '排序搜索' });
+  const titles = searched.body.data.items.map((item: { title: string }) => item.title);
+  expect(titles).toContain('排序搜索 Alpha');
+  expect(titles).toContain('排序搜索 Beta');
+
+  const scoped = await ctx
+    .request()
+    .get('/api/forum/posts')
+    .query({ search: '主干', categorySlug: 'e2e-trunk' });
+  expect(scoped.body.data.items.map((item: { title: string }) => item.title)).toEqual([
+    'E2E 主干帖',
+  ]);
+
+  const invalid = await ctx.request().get('/api/forum/posts').query({ sort: 'bogus' });
+  expect(invalid.status).toBe(400);
+  expect(invalid.body.code).toBe(ErrorCode.VALIDATION_FAILED);
+});
+
 test('the report flows to the reviewer and gets resolved', async () => {
   const reported = await ctx
     .request()

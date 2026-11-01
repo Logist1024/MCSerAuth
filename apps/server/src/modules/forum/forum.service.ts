@@ -19,11 +19,12 @@ import {
   type ModerateReplyResponse,
   type ModerationAction,
   type Paginated,
+  type PostSortOption,
   type ReportTargetType,
   type UserTitleSummary,
   type VoteResponse,
 } from '@mcserauth/shared';
-import { and, count, desc, eq, inArray, max, ne } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, max, ne, sql, type SQL } from 'drizzle-orm';
 import { firstOrThrow } from '../../common/helpers/rows.js';
 import { DbService } from '../../db/db.service.js';
 import {
@@ -75,16 +76,28 @@ export class ForumService {
     categorySlug?: string;
     page?: number;
     pageSize?: number;
+    sort?: PostSortOption;
+    search?: string;
   }): Promise<Paginated<ForumPostSummary>> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 20));
-    const conditions = [eq(postTable.status, 'published')];
+    const conditions: SQL[] = [eq(postTable.status, 'published')];
     if (query.categorySlug !== undefined && query.categorySlug !== '') {
       const category = await this.categories.getCategoryBySlug(query.categorySlug);
       conditions.push(
         inArray(postTable.categoryId, await this.categories.descendantCategoryIds(category.id)),
       );
     }
+    const search = query.search?.trim() ?? '';
+    if (search !== '') {
+      // 标题关键词：lower+like 做跨方言（sqlite/mysql/postgres）的大小写不敏感匹配。
+      // 转义 %、_ 与 \，避免用户输入被当成通配符。
+      const escaped = search.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      conditions.push(
+        sql`lower(${postTable.title}) like ${`%${escaped.toLowerCase()}%`} escape '\\'`,
+      );
+    }
+    const orderBy = this.postListOrderBy(query.sort ?? 'activity');
     const totalRow = (
       await this.db.db
         .select({ value: count() })
@@ -103,7 +116,7 @@ export class ForumService {
       .leftJoin(playerTable, eq(playerTable.userId, userTable.id))
       .innerJoin(categoryTable, eq(postTable.categoryId, categoryTable.id))
       .where(and(...conditions))
-      .orderBy(desc(postTable.pinned), desc(postTable.lastActivityAt), desc(postTable.id))
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset((page - 1) * pageSize);
     return {
@@ -112,6 +125,27 @@ export class ForumService {
       pageSize,
       total: totalRow?.value ?? 0,
     };
+  }
+  /** 列表排序：activity=最新回复、created=最新发布、hot=回复+点赞聚合热度；置顶始终优先。 */
+  private postListOrderBy(sort: PostSortOption): SQL[] {
+    const pinnedFirst = desc(postTable.pinned);
+    const idTiebreak = desc(postTable.id);
+    switch (sort) {
+      case 'created':
+        return [pinnedFirst, desc(postTable.createdAt), idTiebreak];
+      case 'hot': {
+        const replyScore = sql`(select count(*) from ${replyTable} where ${replyTable.postId} = ${postTable.id} and ${replyTable.status} = 'published')`;
+        const voteScore = sql`(select count(*) from ${voteTable} where ${voteTable.targetId} = ${postTable.id} and ${voteTable.targetType} = 'post')`;
+        return [
+          pinnedFirst,
+          desc(sql`${replyScore} + ${voteScore}`),
+          desc(postTable.lastActivityAt),
+          idTiebreak,
+        ];
+      }
+      default:
+        return [pinnedFirst, desc(postTable.lastActivityAt), idTiebreak];
+    }
   }
   async recentPostsByUser(userId: string, limit = 5): Promise<ForumPostSummary[]> {
     const rows = await this.db.db

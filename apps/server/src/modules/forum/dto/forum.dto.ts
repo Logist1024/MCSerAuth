@@ -1,9 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  POST_SORT_OPTIONS,
   REPORT_TARGET_TYPES,
   type CreatePostRequest,
   type CreateReplyRequest,
   type CreateReportRequest,
+  type PostSortOption,
   type ReportTargetType,
   type UpdatePostRequest,
 } from '@mcserauth/shared';
@@ -46,6 +48,17 @@ export class ForumPostListQueryDto {
   @IsOptional()
   @IsString()
   categorySlug?: string;
+
+  @ApiPropertyOptional({ enum: POST_SORT_OPTIONS, default: 'activity' })
+  @IsOptional()
+  @IsIn(POST_SORT_OPTIONS as unknown as string[])
+  sort?: PostSortOption;
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  search?: string;
 }
 
 export class CreatePostDto implements CreatePostRequest {

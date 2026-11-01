@@ -253,6 +253,11 @@ DATABASE_URL=postgres://… pnpm db:backup        # pg_dump 包装
   其他事务的更新；需要强一致返回值的场景优先使用 PostgreSQL。
 - **唯一约束**：MySQL 没有部分唯一索引，`skin.active_slot` 是跨库统一方案；
   新增类似需求时沿用判别列模式。
+- **论坛列表查询**：`GET /forum/posts` 的排序走既有索引（`post_status_last_activity_idx`
+  等）；热门排序按回复数+点赞数的关联子查询聚合。标题搜索使用
+  `lower(title) LIKE '%kw%'`（`%`/`_`/`\` 已转义），前置通配符无法命中 B-tree
+  索引，属全表扫描——论坛帖子量级（万级）下可接受，规模显著增长后再考虑
+  全文索引（如 MySQL FULLTEXT / PostgreSQL tsvector）。
 - **迁移顺序**：生产迁移前先备份；MySQL/PostgreSQL 的大表 DDL 建议在维护窗口执行。
 - **连接池**：多实例部署时按 `实例数 × DB_POOL_MAX` 估算数据库连接上限。
 - **SQLite 并发**：单进程内顶层事务会串行执行（单连接、单写者）；需要高并发写入时

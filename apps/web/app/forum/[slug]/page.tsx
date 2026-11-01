@@ -1,22 +1,23 @@
-import type { ForumCategory, ForumPostSummary, Paginated } from '@mcserauth/shared';
+import type { ForumCategory, ForumPostSummary, Paginated, PostSortOption } from '@mcserauth/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import Breadcrumbs from '@/components/breadcrumbs';
 import CategoryStrip from '@/components/category-strip';
 import { ForumErrorState } from '@/components/forum-skeleton';
+import ForumListToolbar from '@/components/forum-list-toolbar';
 import { Icon } from '@/components/icons';
 import Pagination from '@/components/pagination';
 import PostList from '@/components/post-list';
 import { findCategory, findCategoryPath } from '@/lib/categories';
-import { categoryStyle } from '@/lib/forum-ui';
+import { buildForumListHref, categoryStyle, parsePostSort, POST_SORT_LABELS } from '@/lib/forum-ui';
 import { publicApiFetch } from '@/lib/server-api';
 
 export const revalidate = 30;
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; sort?: string; search?: string }>;
 }
 
 const PAGE_SIZE = 20;
@@ -33,15 +34,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CategoryPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, sort: sortParam, search: searchParam } = await searchParams;
   const requestedPage = Number(pageParam ?? '1');
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const sort: PostSortOption = parsePostSort(sortParam);
+  const search = searchParam?.trim() ?? '';
+  const basePath = `/forum/${slug}`;
+
+  const listQuery = new URLSearchParams({
+    categorySlug: slug,
+    page: String(page),
+    pageSize: String(PAGE_SIZE),
+  });
+  if (sort !== 'activity') {
+    listQuery.set('sort', sort);
+  }
+  if (search !== '') {
+    listQuery.set('search', search);
+  }
 
   const [categories, posts] = await Promise.all([
     publicApiFetch<ForumCategory[]>('/api/forum/categories'),
-    publicApiFetch<Paginated<ForumPostSummary>>(
-      `/api/forum/posts?categorySlug=${encodeURIComponent(slug)}&page=${page}&pageSize=${PAGE_SIZE}`,
-    ),
+    publicApiFetch<Paginated<ForumPostSummary>>(`/api/forum/posts?${listQuery.toString()}`),
   ]);
 
   if (categories === null || posts === null) {
@@ -106,12 +120,15 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
         <div className="forum-main">
           <section className="panel" aria-labelledby="category-topics-heading">
             <div className="panel-head">
-              <h2 id="category-topics-heading">主题</h2>
+              <h2 id="category-topics-heading">
+                {search !== '' ? `“${search}” 的搜索结果` : POST_SORT_LABELS[sort]}
+              </h2>
               <span className="panel-meta">
                 共 {posts.total} 个主题
                 {totalPages > 1 ? ` · 第 ${currentPage} / ${totalPages} 页` : ''}
               </span>
             </div>
+            <ForumListToolbar basePath={basePath} sort={sort} search={search} />
             {pageOutOfRange ? (
               <div className="empty-state">
                 <span className="empty-state-icon">
@@ -120,11 +137,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
                 <p>第 {page} 页没有主题，页码可能超出了范围。</p>
                 <Link
                   className="button primary small"
-                  href={
-                    totalPages === 1
-                      ? `/forum/${category.slug}`
-                      : `/forum/${category.slug}?page=${totalPages}`
-                  }
+                  href={buildForumListHref(basePath, { page: totalPages, sort, search })}
                 >
                   前往第 {totalPages} 页
                 </Link>
@@ -134,16 +147,18 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
                 <PostList
                   posts={posts.items}
                   showCategory={false}
-                  emptyText="该版块还没有帖子，来发第一帖吧。"
+                  emptyText={
+                    search !== ''
+                      ? `该版块没有标题包含 “${search}” 的主题。`
+                      : '该版块还没有帖子，来发第一帖吧。'
+                  }
                 />
                 <Pagination
                   page={posts.page}
                   pageSize={posts.pageSize}
                   total={posts.total}
                   buildHref={(target) =>
-                    target === 1
-                      ? `/forum/${category.slug}`
-                      : `/forum/${category.slug}?page=${target}`
+                    buildForumListHref(basePath, { page: target, sort, search })
                   }
                 />
               </>
