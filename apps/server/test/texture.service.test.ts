@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { UploadQuotaService } from '../src/common/services/upload-quota.service.js';
 import { TextureService } from '../src/modules/profiles/texture.service.js';
-import { ProgressService } from '../src/modules/growth/progress.service.js';
+import { createProgressService } from './helpers/growth.js';
 import { player, user } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -34,7 +34,7 @@ describe('TextureService', () => {
       ctx.config,
       ctx.db,
       new UploadQuotaService(ctx.db),
-      new ProgressService(ctx.db),
+      createProgressService(ctx.db),
     );
   });
   afterEach(async () => {

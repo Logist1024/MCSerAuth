@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException } from '@nes
 import { GROWTH_RULES, LEVEL_MAX, XP_PER_LEVEL } from '@mcserauth/shared';
 import { and, eq } from 'drizzle-orm';
 import { firstOrThrow } from '../src/common/helpers/rows.js';
-import { ProgressService } from '../src/modules/growth/progress.service.js';
+import type { ProgressService } from '../src/modules/growth/progress.service.js';
 import {
   category,
   post,
@@ -12,13 +12,14 @@ import {
   user,
 } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
+import { createProgressService } from './helpers/growth.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const DAY_MS = 24 * 60 * 60 * 1000;
 describe('ProgressService', () => {
   let ctx: TestContext;
   let progress: ProgressService;
   async function makeService(): Promise<ProgressService> {
-    const service = new ProgressService(ctx.db);
+    const service = createProgressService(ctx.db);
     await service.onModuleInit();
     return service;
   }

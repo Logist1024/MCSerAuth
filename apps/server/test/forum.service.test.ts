@@ -4,7 +4,7 @@ import { firstOrThrow } from '../src/common/helpers/rows.js';
 import { NotificationsService } from '../src/modules/forum/notifications.service.js';
 import { ForumCategoryService } from '../src/modules/forum/forum-category.service.js';
 import { ForumService } from '../src/modules/forum/forum.service.js';
-import { ProgressService } from '../src/modules/growth/progress.service.js';
+import { createProgressService } from './helpers/growth.js';
 import {
   category,
   player,
@@ -59,7 +59,7 @@ describe('ForumService', () => {
       ctx.db,
       new NotificationsService(ctx.db),
       new ForumCategoryService(ctx.db),
-      new ProgressService(ctx.db),
+      createProgressService(ctx.db),
     );
   });
   afterEach(async () => {

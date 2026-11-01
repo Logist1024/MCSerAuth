@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { HOME_CONTENT_LIMITS, type HomeContent } from '@mcserauth/shared';
 import { eq } from 'drizzle-orm';
 import { NotificationsService } from '../src/modules/forum/notifications.service.js';
-import { ProgressService } from '../src/modules/growth/progress.service.js';
+import { createProgressService } from './helpers/growth.js';
 import { SiteService } from '../src/modules/site/site.service.js';
 import { banner, siteSetting, user } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
@@ -39,7 +39,7 @@ describe('SiteService home content', () => {
       ctx.db,
       ctx.config,
       new NotificationsService(ctx.db),
-      new ProgressService(ctx.db),
+      createProgressService(ctx.db),
     );
   });
   afterEach(async () => {
