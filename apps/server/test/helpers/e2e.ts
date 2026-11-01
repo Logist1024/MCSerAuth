@@ -27,7 +27,7 @@ export async function createE2eContext(): Promise<E2eContext> {
   return {
     ...ctx,
     app,
-    request: () => request(app.getHttpServer()),
+    request: () => request(app.getHttpServer()) as unknown as request.SuperTest<request.Test>,
     close: async () => {
       await app.close();
       await ctx.cleanup();
@@ -53,8 +53,9 @@ function nextIp(): string {
 }
 
 function cookieOf(response: request.Response): string {
-  const cookies = response.headers['set-cookie'];
-  if (!cookies || cookies.length === 0) {
+  const header = response.headers['set-cookie'];
+  const cookies = Array.isArray(header) ? header : header !== undefined ? [header] : [];
+  if (cookies.length === 0) {
     throw new Error(`no set-cookie in response (status ${response.status})`);
   }
   return cookies.map((cookie) => cookie.split(';')[0]).join('; ');
