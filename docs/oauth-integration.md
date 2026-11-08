@@ -6,7 +6,7 @@
 以这个 UUID 为唯一键。
 
 协议为标准 OAuth 2.0 授权码流程（+ PKCE），错误统一为 `{error, errorMessage}`
-（不带 `{code,data}` envelope）。字段最终以 `docs/protocol-checklist.md` §2.1 与
+（不带 `{code,data}` envelope）。字段定义以 `packages/shared/src/protocol/` 与
 `docs/openapi.json` 为准；本文是面向接入方的走通指南。
 
 ## 0. 接入前：注册客户端
@@ -181,4 +181,4 @@ Authorization: Bearer mcs_at_…
    调试页 `apps/web/app/oauth/callback`（发起 → 回调 → 换令牌 → userinfo →
    刷新的全链路演示）。
 3. 完整接口定义见 `docs/openapi.json`（`/docs` 有 Swagger UI）；
-   行为细节见 `docs/protocol-checklist.md` §2.1；安全基线见 `docs/security.md`。
+   安全基线见 `docs/security.md`。

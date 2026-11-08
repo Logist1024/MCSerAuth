@@ -1,9 +1,9 @@
-# 生产部署与备份（2.0 F4）
+# 生产部署与备份
 
 > 目标形态：**单台 VPS + Caddy 反代 + pm2 两个进程**，数据库按规模选 SQLite / MySQL 8.0+ /
-> PostgreSQL 16+。不引入 Docker、Redis、对象存储（策划案 D5 与 2.0 非目标维持）。
+> PostgreSQL 16+。不引入 Docker、Redis、对象存储（保持单体部署的简单性）。
 >
-> **决策记录（F4.4）**：部署采用**手动 runbook + 仓库内的配置实例**（`deploy/`），
+> **决策记录**：部署采用**手动 runbook + 仓库内的配置实例**（`deploy/`），
 > 不做 GitHub Actions 部署 workflow。理由：单人维护、单实例、无多环境发布需求，
 > workflow 只会增加凭据面与调试成本；等出现第二套环境（预发布/多机房）再评审。
 
@@ -195,8 +195,7 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
 - [ ] **13. 启动器直登**：HMCL「外置登录」填 `https://auth.example.com/api` + 网站邮箱密码
       → 应显示昵称与 UUID。进服还需要**客户端与 Paper 两侧都注入** authlib-injector
       （`online-mode=false` + `-javaagent:authlib-injector.jar=https://auth.example.com/api`）。
-      这一步与协议字段核对（2.0 **F1**）是同一件事，真机记录写进
-      [`protocol-checklist.md`](protocol-checklist.md) §3.2。
+      「可进服」不在纯本站部署的自证范围内，需服主自备客户端与 Paper 两侧注入。
 
 ---
 
@@ -223,7 +222,7 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
 可选 `CONSOLE_PATH=/console`。
 
 TTL 类变量（`OAUTH_*`、`SESSION_JOIN_TTL_SECONDS`、`TEXTURE_URL_TTL_SECONDS`）保持默认即可，
-它们同时也是 F1 协议核对的暂定值来源。
+它们即协议暂定值的来源（见 `packages/shared/src/protocol/`）。
 
 ---
 
@@ -287,7 +286,7 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
 
 `db:migrate` 这里的作用是**确认版本一致而不是执行变更**：迁移记录表 `__drizzle_migrations`
 本身在 dump 里，所以恢复后应报「无待应用迁移」。若它反而开始应用迁移，说明恢复的库来自
-更早的基线（ADR 0007 之前的 12 版 SQLite 历史就属于这种），改用 `pnpm db:copy-data` 搬迁。
+更早的 12 版 SQLite 历史基线就属于这种，改用 `pnpm db:copy-data` 搬迁。
 
 恢复后冒烟：登录（Cookie 会话应仍有效，因为 `better-auth` 的 session 表在库里）、
 `/textures` 皮肤仍能显示（同时验证 `UPLOAD_DIR` 未丢）、发一帖。
@@ -318,21 +317,21 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
 
 ## 7. 已知约束（部署时要知道，不用改代码）
 
-| 约束                                        | 影响                                                                                                      | 出处                                                   |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| 限流、验证码、进程内缓存都是内存态          | **只能跑单进程**；pm2 cluster 或 `instances>1` 会把每个限流阈值除以进程数、并让一次性验证码令牌跨进程失效 | T10 / [ecosystem 注释](../deploy/ecosystem.config.cjs) |
-| SQLite 单连接单写者、写事务全局串行         | 高并发写吞吐有限；需要时切 MySQL/PG（`DATABASE_URL` 一行 + `db:migrate` + `db:copy-data`）                | T14 / [ADR 0006](adr/0006-multi-database.md)           |
-| 无 `HOST` 环境变量，进程绑全网卡            | 必须靠防火墙关闭 3000/8000（§2.1 第 2 步）                                                                | main.ts                                                |
-| `BETTER_AUTH_SECRET` 兼作 SMTP 密码加密密钥 | 轮换它会让后台已存的发件密码解不开；换密钥前先重置发件配置                                                | mail 模块                                              |
-| 进服验证需要服主侧 authlib-injector         | 「可进服」不属于纯本站部署能自证的一环，与 F1 真机联调同一批                                              | protocol-checklist §2.5                                |
+| 约束                                        | 影响                                                                                                      | 出处                                                        |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 限流、验证码、进程内缓存都是内存态          | **只能跑单进程**；pm2 cluster 或 `instances>1` 会把每个限流阈值除以进程数、并让一次性验证码令牌跨进程失效 | [ecosystem 注释](../deploy/ecosystem.config.cjs)            |
+| SQLite 单连接单写者、写事务全局串行         | 高并发写吞吐有限；需要时切 MySQL/PG（`DATABASE_URL` 一行 + `db:migrate` + `db:copy-data`）                | [`docs/database.md`](database.md)                           |
+| 无 `HOST` 环境变量，进程绑全网卡            | 必须靠防火墙关闭 3000/8000（§2.1 第 2 步）                                                                | main.ts                                                     |
+| `BETTER_AUTH_SECRET` 兼作 SMTP 密码加密密钥 | 轮换它会让后台已存的发件密码解不开；换密钥前先重置发件配置                                                | mail 模块                                                   |
+| 进服验证需要服主侧 authlib-injector         | 「可进服」不属于纯本站部署能自证的一环，需客户端与 Paper 两侧都注入                                       | [启动器直登](../README.md#启动器直登authlib-injector--hmcl) |
 
 ---
 
-## 8. F4 验收对照
+## 8. 首次部署踩坑提示
 
-| 验收项                                               | 状态                                                                                                                                                                                                                                                                                        |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/deploy.md` + Caddy/pm2/cron/logrotate 配置实例 | 本文与 `deploy/` 已交付                                                                                                                                                                                                                                                                     |
-| `db:backup` 支持 MySQL/PG（含 cron 与恢复文档）      | 已实现（T13 关闭）；参数拼装与调用链由 `test/backup.test.ts` 的 stub 二进制覆盖，SQLite 分支已真实跑通                                                                                                                                                                                      |
-| 干净 VPS 从 clone 到可登录可进服 ≤ 30 分钟           | **已演练（2026-11-01，生产 VPS）**：空机 → 可登录/可发帖/协议全链路约 40 分钟（含首次踩坑：apt 装 Caddy 自动拉起默认配置，需手动 restart 才加载新 Caddyfile；better-sqlite3 需补 `build-essential python3`）。进服半环 authlib-injector 握手由 curl 断言覆盖，Paper 真机侧待补（F1 §3.1.9） |
-| SQLite 与 MySQL（或 PG）各成功备份一次并演练一次恢复 | SQLite 已实跑；MySQL/PG 需真实实例（本机无 docker 与客户端二进制，已用 stub 验证调用链与失败清理，未验证真实 dump 输出）                                                                                                                                                                    |
+- **Caddy**：`apt install caddy` 会自动拉起默认配置，替换 `Caddyfile` 后需
+  `systemctl restart caddy` 才会加载新配置。
+- **better-sqlite3**：原生模块需要编译环境，干净 VPS 上先补
+  `apt install -y build-essential python3` 再 `pnpm install`。
+- 进服半环（客户端与 Paper 两侧 authlib-injector 握手）不属于纯本站部署能自证的
+  范围，需服主自行验证；本站侧的协议链路可用 §2.3 的 curl 冒烟覆盖。

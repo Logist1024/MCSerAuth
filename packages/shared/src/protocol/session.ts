@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Minecraft session service (called by game servers).
- * Yggdrasil-compatible naming is used; see docs/protocol-checklist.md.
+ * Yggdrasil-compatible naming is used; field values are provisional (see common.ts).
  */
 
 /** POST /api/session/joinServer */

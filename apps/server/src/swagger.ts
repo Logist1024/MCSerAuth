@@ -4,7 +4,7 @@ import { APP_VERSION } from './app.constants.js';
 import { AppConfigService } from './config/app-config.service.js';
 
 const DESCRIPTION = [
-  'MCSerAuth 后端 API（1.x 功能收官 · 2.0 M5 生产就绪中）。',
+  'MCSerAuth 后端 API。',
   '',
   '**统一响应**：非协议端点成功返回 `{ code: 0, data }`，失败返回 `{ code, message }`（错误码见 packages/shared）。',
   '',
@@ -15,8 +15,8 @@ const DESCRIPTION = [
   '管理端（禁言、封禁、内容审核、举报、版块、公告、纹理下架、服务器白名单、站点展示配置、能力下放）；',
   '人机验证（内置 SVG / Turnstile / hCaptcha）与成长体系（等级/称号/签到/积分/商店/打赏/Banner）；',
   '找回密码；authlib-injector 直登兼容层；运维探针 `/health`、`/health/live`、`/health/ready`（不带 `/api` 前缀）。',
-  '纹理上传经 sharp 校验后立即生效（仅原版尺寸），并通过短时签名 URL 分发。协议字段仍按暂定值与官方文档逐条核对（docs/protocol-checklist.md）。',
-  '启动器令牌的网页自助吊销页已于 2026-10-25 移除，恢复排期见 docs/2.0-开发指南.md F14。',
+  '纹理上传经 sharp 校验后立即生效（仅原版尺寸），并通过短时签名 URL 分发。协议字段以 packages/shared/src/protocol/ 为准。',
+  '启动器令牌的网页自助吊销页已移除，当前吊销入口为启动器侧 POST /api/authserver/invalidate。',
 ].join('\n');
 
 /** Builds the OpenAPI document — the single source of truth for the API contract. */

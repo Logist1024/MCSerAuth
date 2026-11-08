@@ -5,9 +5,9 @@
  * every protocol endpoint answers with its native shape, and failures use the
  * `{ error, errorMessage }` object below.
  *
- * NOTE (M0): the protocol document is not vendored in this repository yet.
- * Field names are provisional and must be reconciled one-by-one against the
- * official spec — see docs/protocol-checklist.md.
+ * NOTE: field names are provisional and may still drift from the official
+ * spec — this package (src/protocol/) is the single source of truth for the
+ * current field values.
  */
 
 export interface ProtocolErrorBody {

@@ -5,9 +5,9 @@ import type { PROTOCOL_TOKEN_TYPE } from './common.js';
 /**
  * OAuth-style account/authorization endpoints.
  *
- * M0 provisional contract: shapes are registered in Swagger so launchers can
- * be pointed at the stubs and the real requests can be recorded. Field names
- * are reconciled against the Commons-Designs spec in docs/protocol-checklist.md.
+ * Provisional contract: field names may still drift from the Commons-Designs
+ * spec; this package (src/protocol/) is the single source of truth for the
+ * current field values.
  *
  * Registered clients (managed via /api/admin/oauth-clients) get strict
  * validation: exact redirect_uri matching and scope allow-lists. Launchers

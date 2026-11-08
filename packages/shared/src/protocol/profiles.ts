@@ -4,7 +4,7 @@ import type { GameProfile } from './session.js';
 
 /**
  * Player profile / texture endpoints consumed by server mods and launchers.
- * See docs/protocol-checklist.md for the still-unverified field list.
+ * Field values are provisional and may still drift from the official spec.
  */
 
 /** GET /api/profiles/{uuid} */

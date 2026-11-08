@@ -1,10 +1,10 @@
 # 安全基线
 
-2.0 F3（安全加固）落地后的基线记录。改动遵循「逐项收紧、不破坏既有页面」原则。
+安全基线记录。改动遵循「逐项收紧、不破坏既有页面」原则。
 
 ## 内容安全策略（CSP）
 
-服务端（`apps/server`）此前显式关闭 CSP（entry 授权页内联样式/脚本所致，T9），现已开启：
+服务端（`apps/server`）已开启 CSP（此前因 entry 授权页内联样式/脚本显式关闭）：
 
 - **策略生成**：`src/common/csp.ts`。中间件按请求生成 nonce（16 字节随机），为
   `/api/oauth/entry` 一族 HTML 设置严格策略，为 swagger `/docs*` 设置宽松策略。
@@ -15,8 +15,7 @@
   iframe 内，因此 `style-src` 可以保持严格。
 - **宽松策略**（swagger-ui）：`script-src 'self' 'unsafe-inline'`。swagger-ui
   的 bootstrap 内联脚本无法携带 nonce；该页面仅运维/开发使用。
-- 后续（F11）：`entry-page.ts` 抽模板与静态样式后，可进一步评估移除对
-  swagger 的 `unsafe-inline`（例如独立文档站点）。
+- 后续可评估在 swagger 改造后移除 `unsafe-inline`（例如独立文档站点）。
 
 helmet 继续负责其余安全响应头（CSP 由上述中间件接管）：
 
@@ -53,7 +52,7 @@ web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等
   `m=65536 KiB, p=4, t=3`，高于 OWASP 最低建议（m=19456, t=2, p=1）；
   如未来显式调参，同步更新此处。
 - 启动器令牌（Yggdrasil/OAuth）：SHA-256 摘要落库，不存明文（`token` 表）。
-- OAuth 客户端 secret（旗下服务接入，ADR 0010）：SHA-256 摘要落库（`oauth_client` 表），
+- OAuth 客户端 secret（旗下服务接入）：SHA-256 摘要落库（`oauth_client` 表），
   明文仅创建/重置时返回一次，校验用时序安全的 `verifySha256`（`oauth.util.ts`）。
 - OAuth 授权码/记住授权：授权码只存哈希、单次使用；注册客户端的 `redirect_uri`
   精确白名单匹配（叠加 HTTPS/loopback 基础规则防开放重定向）；用户在个人主页
@@ -72,6 +71,6 @@ web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等
 
 四级角色（user/reviewer/admin/superadmin）+ 8 项 `user_permission` 下放能力的
 越权用例已双层覆盖：service 层 `admin-access.service.test.ts` 覆盖判定逻辑，
-HTTP 层 `apps/server/test/e2e/permissions.e2e.test.ts`（2026-11-01，F8/F3.4 合流）
+HTTP 层 `apps/server/test/e2e/permissions.e2e.test.ts`
 覆盖 user 403、reviewer 无能力 403、superadmin 授 `users.ban` 后可 ban、
 封禁账号在论坛与管理端点双双被拒，全部断言 envelope `10003`。

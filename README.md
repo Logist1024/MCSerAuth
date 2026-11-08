@@ -12,12 +12,11 @@
 两块业务共用同一账号体系与基础设施，单体部署；默认 SQLite，生产可切换
 MySQL 8.0+ / PostgreSQL 16+。
 
-> **当前状态**：核心功能已齐备，发布基线 [v1.0.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.0.0)；正在推进
-> 2.0「从功能齐备到生产可运营」打磨（多库 CI 矩阵、部署与备份、可观测性、HTTP e2e
-> 测试层等已完成，其余工作项状态见 [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)；
-> 协议逐字段核对与启动器真机联调记录见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md)）。
+> **当前状态**：核心功能已齐备，发布基线 [v1.0.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.0.0)，
+> 持续打磨生产可用性（多库 CI 矩阵、部署与备份、可观测性、HTTP e2e 测试层均已就绪）。
 >
-> **已实现**：better-auth 网站会话、OAuth 授权码 + PKCE、启动器令牌轮换、
+> **已实现**：better-auth 网站会话、OAuth 授权码 + PKCE、注册 OAuth 客户端与作用域 SSO
+> （basic/player/email，含 userinfo 端点）、启动器令牌轮换、
 > 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
 > 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览/排序与标题搜索）、公开个人主页、
 > 游戏账号管理（资料/改名/纹理切换）、外观设置（浅色/深色/跟随系统、五色点缀主题、
@@ -26,13 +25,13 @@ MySQL 8.0+ / PostgreSQL 16+。
 
 ## 技术栈
 
-| 层     | 选型                                                                                                   |
-| ------ | ------------------------------------------------------------------------------------------------------ |
-| 运行时 | Node.js 22 LTS · pnpm 9 · TypeScript 6（全仓 ESM）                                                     |
-| 后端   | NestJS 12 · better-auth（账号）· Drizzle ORM · SQLite / MySQL 8.0+ / PostgreSQL 16+                    |
-| 前端   | Next.js 16 App Router · React 19（只做渲染，业务全在后端）                                             |
-| 契约   | NestJS Swagger → `docs/openapi.json`；Commons-Designs 协议对照 [checklist](docs/protocol-checklist.md) |
-| 质量   | ESLint · Prettier · husky + lint-staged · GitHub Actions                                               |
+| 层     | 选型                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------- |
+| 运行时 | Node.js 22 LTS · pnpm 9 · TypeScript 6（全仓 ESM）                                       |
+| 后端   | NestJS 12 · better-auth（账号）· Drizzle ORM · SQLite / MySQL 8.0+ / PostgreSQL 16+      |
+| 前端   | Next.js 16 App Router · React 19（只做渲染，业务全在后端）                               |
+| 契约   | NestJS Swagger → `docs/openapi.json`；协议暂定字段集中在 `packages/shared/src/protocol/` |
+| 质量   | ESLint · Prettier · husky + lint-staged · GitHub Actions                                 |
 
 ## 仓库结构
 
@@ -42,7 +41,7 @@ MCSerAuth/
 │   ├── server/              NestJS 单体后端
 │   │   ├── src/config/      env 加载与 zod 校验（单一入口）
 │   │   ├── src/common/      过滤器/拦截器/管道/日志脱敏/Swagger 封装
-│   │   ├── src/db/          Drizzle 实例 + 单一逻辑模型 + 三套生成 schema（29 张表）
+│   │   ├── src/db/          Drizzle 实例 + 单一逻辑模型 + 三套生成 schema（31 张表）
 │   │   ├── src/modules/     auth · session · profiles · forum · user · admin · site
 │   │   │                    · growth · captcha · mail · maintenance · health
 │   │   └── drizzle/         按方言拆分的迁移 SQL（sqlite/ · mysql/ · postgres/）
@@ -50,7 +49,7 @@ MCSerAuth/
 ├── packages/
 │   └── shared/              跨端类型/DTO/错误码/zod schema（单一事实来源）
 ├── deploy/                  Caddy / pm2 / cron / logrotate 生产配置实例
-├── docs/                    策划案、开发与部署指南、协议 checklist、OpenAPI 产物
+├── docs/                    部署 / 数据库 / OAuth 集成指南与 OpenAPI 产物
 └── .github/workflows/ci.yml
 ```
 
@@ -90,7 +89,7 @@ curl -c jar.txt -X POST http://localhost:8000/api/auth/sign-up/email \
 curl -b jar.txt http://localhost:8000/api/auth/get-session
 ```
 
-### M1 认证链路（浏览器 / 启动器共用）
+### 认证链路（浏览器 / 启动器共用）
 
 1. 网站在 `/api/auth/*` 注册/登录，获得 better-auth Cookie 会话。
 2. 启动器打开 `GET /api/oauth/entry?client_id=…&redirect_uri=…&state=…`；
@@ -103,17 +102,15 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 5. 首次授权会自动为账号创建 1:1 的 player（32 位小写 UUID），令牌只以 SHA-256 哈希入库。
 
 浏览器演示：<http://localhost:3000> 的「网站会话」与「发起一次 OAuth 授权」面板会跑完整条链路，
-回调页展示 `/me` 与 refresh 轮换结果。逐字段契约与冒烟记录见
-[`docs/protocol-checklist.md`](docs/protocol-checklist.md) §2.1 与 §3.1.1。
+回调页展示 `/me` 与 refresh 轮换结果。
 
 **找回密码**：登录页「忘记密码？」→ `/forgot-password`（人机验证后提交邮箱）→
 `POST /api/auth/request-password-reset` 发出 1 小时有效的一次性链接 →
 邮件链接经 `GET /api/auth/reset-password/{token}` 302 回到 `/reset-password?token=…` →
 `POST /api/auth/reset-password` 重设密码。未知邮箱同样返回 200（防枚举）；重设成功后
-全部网页会话立即失效，启动器令牌与游戏身份不受影响。冒烟记录见
-[`docs/protocol-checklist.md`](docs/protocol-checklist.md) §3.1.8。
+全部网页会话立即失效，启动器令牌与游戏身份不受影响。
 
-### M2 会话与形象
+### 会话与形象
 
 **会话服务（游戏服务器接入）**
 
@@ -157,19 +154,19 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 
 两点差异要知道：`/api/sessionserver/*` 按 Yggdrasil 语义接受任意握手哈希（不校验白名单），
 而原生 `/api/session/*` 仍要求管理员登记过的 `serverId`；元数据不提供 `signaturePublickey`，
-所以纹理属性不带签名。逐字段契约见 [`docs/protocol-checklist.md`](docs/protocol-checklist.md) §2.5。
+所以纹理属性不带签名。字段定义见 `packages/shared/src/protocol/`。
 
 > 进服需要客户端 **和** Paper 侧都注入 authlib-injector（服务端 `online-mode=false` +
-> `-javaagent:authlib-injector.jar=http://localhost:8000/api`）。本仓库不含 Paper 插件（见里程碑声明）。
+> `-javaagent:authlib-injector.jar=http://localhost:8000/api`）。本仓库不含 Paper 插件。
 
-### M3 论坛与 M4 运营能力
+### 论坛与运营能力
 
 - **论坛**：`/forum` 版块卡与主题列表（最新回复/最新发布/热门排序、标题搜索）；
   `/forum/{slug}` 分类分页；
   `/forum/post/{id}` 帖子详情（Markdown、图片、点赞、举报、回复）；
   `/forum/new` 发帖；作者可编辑/删除自己的帖子与回复。
 - **外观设置**：页头弹层切换浅色/深色/跟随系统、五套点缀色与 SVG/Emoji 图标风格，
-  偏好存浏览器本地（机制见 [ADR 0009](docs/adr/0009-frontend-appearance-system.md)）。
+  偏好存浏览器本地。
 - **默认版块**：服务首次启动且 `category` 为空时自动种子「服务器动态 / 攻略交流 / 建议反馈 / 水区」。
 - **游戏账号管理**（`/textures`）：官方档案页式布局——档案头（3D 形象预览、名称、UUID）、
   改名（30 天冷却，旧名保留 30 天）、上传皮肤/披风立即生效、形象库切换/删除、
@@ -200,7 +197,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 - **图片上传**：帖子图片存于 `UPLOAD_DIR/forum/`（PNG/JPEG/WebP/GIF，≤5 MiB，
   SHA-256 内容寻址，公开只读 URL）。
 
-### M4.5 人机验证与社区成长（策划案 6 阶段之外的扩展特性）
+### 社区成长与人机验证
 
 - **人机验证**（登录与注册）：内置离线 SVG 算术题，或接入 Cloudflare Turnstile / hCaptcha。
   验证通过后签发一次性令牌，请求 `sign-in/email`、`sign-up/email` 时带 `x-captcha-token`。
@@ -299,16 +296,15 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 - **三库支持**：SQLite（默认，WAL + 外键 + `busy_timeout`）、MySQL 8.0+、PostgreSQL 16+。
   方言由 `DATABASE_URL` 自动识别；完整配置、迁移与运维说明见
-  [`docs/database.md`](docs/database.md)，设计取舍见
-  [ADR 0006](docs/adr/0006-multi-database.md)；三方言各一份 29 表 `0000` 基线（旧 SQLite 12 版
-  历史已移除），见 [ADR 0007](docs/adr/0007-migration-baseline-alignment.md)。
-- **单一逻辑模型**：29 张表在 `apps/server/src/db/schema/model.ts` 声明一次，
+  [`docs/database.md`](docs/database.md)。三方言各一份 31 表 `0000` 基线（旧 SQLite 12 版
+  历史已移除），后续变更以增量迁移追加。
+- **单一逻辑模型**：31 张表在 `apps/server/src/db/schema/model.ts` 声明一次，
   `scripts/generate-schema.ts` 生成 SQLite/MySQL/PostgreSQL 三套 Drizzle schema 与运行时
   facade。改表只改 `model.ts`，然后 `pnpm db:generate`；生成文件禁止手改。
 - **跨方言 helper**：业务代码通过 `DbService` 的 `insertReturning` / `updateReturning` /
   `insertIgnore` / `upsert` / `transaction` 访问数据库，避免散落方言分支；MySQL 无
   `RETURNING`、无部分唯一索引，`skin.active_slot` 判别列负责“每人每类仅一条 active”。
-- 29 张表覆盖用户与账号、玩家与令牌、OAuth 授权码、
+- 31 张表覆盖用户与账号、玩家与令牌、OAuth 授权码与注册客户端/授权记录、
   游戏会话、服务器白名单、皮肤披风、论坛版块/帖子/回复/投票/举报/通知/审计日志、
   站点配置，以及成长体系的 `user_progress`/`daily_checkin`/`point_transaction`/
   `title`/`user_title`/`title_application`/`banner`、`captcha_challenge`、
@@ -330,10 +326,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 上传配额按 `upload_usage(user_id, kind, day, count)` 按自然日计数；维护任务每小时清理过期授权码、游戏会话、过期会话与 90 天前的配额行。
 - 启动器令牌记录 `device_name` / `ip` / `expires_at` / `last_used_at` / `revoked_at`（令牌本体只存哈希）。
   玩家侧「已授权设备」页与 `/api/user/tokens` **已于 2026-10-25 移除**，当前吊销入口只有启动器侧
-  `POST /api/authserver/invalidate`；网页自助面板排期为 2.0 F14（见
-  [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)）。
-- 已定稿决策（S1 玩家 1:1、S2 皮肤披风同表、S4 别名 JSON、S5 软删除、S6 实时计数、S3 角色枚举）
-  均已在 schema 中落地。
+  `POST /api/authserver/invalidate`。
 
 ## API 契约
 
@@ -349,7 +342,6 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 启动器令牌只存哈希、授权码单次使用；`/user/profiles/me` 与纹理接口同时接受 Bearer 令牌与网站 Cookie。
 - 纹理上传经 sharp 校验后立即生效（仅原版尺寸，不支持高清）；审核员可事后下架，
   当前纹理以短时签名 URL 下发；删除当前纹理回退默认形象。
-- 端点与逐字段核对底稿：[`docs/protocol-checklist.md`](docs/protocol-checklist.md)。
 - 契约产物：[`docs/openapi.json`](docs/openapi.json)（`pnpm openapi:export` 刷新）。
 
 ## 开发约定
@@ -361,30 +353,18 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
   → build）+ `test-sqlite` + `test-databases`（MySQL 8.0 / PostgreSQL 16 service container 矩阵）。
   两个测试 job 都先对空库执行迁移冒烟，再跑同一套 server 测试，最后走 `db:seed` →
   `db:copy-data --truncate`（行数 + 全行 SHA-256 校验）→ 目标库幂等重跑。
-  首次于真实 MySQL/PG 全绿：2026-10-31（`dc503db`，run 41162131163）。
 
-## 里程碑与文档
+## 文档导航
 
-| 文档                                                                                             | 内容                                                                       |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                                                               | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                          |
-| [SECURITY.md](SECURITY.md)                                                                       | 安全政策：漏洞私密报告渠道与响应预期                                       |
-| [`docs/项目策划案.md`](docs/项目策划案.md)                                                       | 产品范围、架构与全部已定稿决策（S1–S6 等）                                 |
-| [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md)                                                   | 2.0 版本规划：工作项、验收标准与发布清单                                   |
-| [`docs/protocol-checklist.md`](docs/protocol-checklist.md)                                       | 协议字段对照、启动器联调记录                                               |
-| [`docs/database.md`](docs/database.md)                                                           | 三库配置、schema 工作流、迁移/复制/备份                                    |
-| [`docs/deploy.md`](docs/deploy.md)                                                               | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
-| [`docs/security.md`](docs/security.md)                                                           | 安全基线：CSP、安全响应头、审计豁免与哈希                                  |
-| [`docs/adr/0006-multi-database.md`](docs/adr/0006-multi-database.md)                             | 三库支持的设计取舍                                                         |
-| [`docs/adr/0007-migration-baseline-alignment.md`](docs/adr/0007-migration-baseline-alignment.md) | 三方言迁移基线对齐与存量搬迁                                               |
-| [`docs/openapi.json`](docs/openapi.json)                                                         | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
-
-里程碑：1.x 已收官 —— M0 底座 → M1 认证核心 → M2 会话与形象 → M3 论坛 MVP → M4 运营与加固
-→ M4.5 人机验证与成长体系（策划案之外的扩展），发布基线 `v1.0.0`。
-2.0 进行中（状态以 [`docs/2.0-开发指南.md`](docs/2.0-开发指南.md) §3.2 为准）——
-**M5 生产就绪与协议可信化**（F2/F6 完成，F3/F4/F5 代码侧完成、待真实 VPS 演练，F1 真机联调暂缓）
-→ **M6 架构还债与质量**（F7/F8 完成，F9/F10 未开始，F11 过半）→ M7 生态与运营扩展（未开始）。
-Paper 插件与启动器修改**永不**实施。
+| 文档                                                     | 内容                                                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                          |
+| [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                       |
+| [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                    |
+| [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
+| [`docs/security.md`](docs/security.md)                   | 安全基线：CSP、安全响应头、审计豁免与哈希                                  |
+| [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                       |
+| [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
 
 ## License
 

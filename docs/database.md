@@ -6,8 +6,6 @@ MCSerAuth 支持 SQLite、MySQL 8.0+ 与 PostgreSQL 16+。三者共用同一套�
 - SQLite 是默认开发库，零配置、单文件、适合本地与小规模单机部署。
 - MySQL / PostgreSQL 面向生产环境，提供连接池、并发写入与标准备份工具。
 
-设计取舍见 [ADR 0006](adr/0006-multi-database.md)。
-
 ## 配置
 
 ```bash
@@ -70,14 +68,14 @@ apps/server/src/db/schema/
     └── postgres.ts          # 生成
 
 apps/server/drizzle/
-├── sqlite/                  # 0000 基线（与 MySQL/PG 对齐，见 ADR 0007）
+├── sqlite/                  # 0000 基线（与 MySQL/PG 对齐）
 ├── mysql/                   # 0000 基线
 └── postgres/                # 0000 基线
 ```
 
-三个方言的迁移历史自 2.0 起共同对齐到 29 表基线（后续版本成对追加，当前
+三个方言的迁移历史共同对齐到 31 表基线（后续版本成对追加；当前
 `0001` 新增 `oauth_client`/`oauth_consent` 表并为 `token` 表加 `client_id`/`scope`
-可空列，见 ADR 0010，共 31 表）：改 `model.ts` 后
+可空列）：改 `model.ts` 后
 `pnpm db:generate` 会在三个目录**同时**追加一个同语义版本；任何一侧单独出现
 新版本都说明生成流程被跳过。1.x 的 SQLite 12 版历史已移除（git 历史可考），
 存量库升级见下文「迁移基线对齐升级」。
@@ -107,14 +105,12 @@ CREATE DATABASE mcserauth CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 迁移只建表，不会修改已存在数据库的字符集；字符集不一致会导致昵称、帖子中的
 emoji 写入失败。
 
-### SQLite 0010 / 0011 的历史处理（已移除）
+### 1.x SQLite 迁移历史的处理
 
-1.x 的 SQLite 迁移历史（含两次重建表的 `0010`/`0011`）已在 2.0 基线对齐中移除，
-见 [ADR 0007](adr/0007-migration-baseline-alignment.md)。其中的数据修复逻辑
-（`mod` → `reviewer`、pending 纹理转 approved、`active_slot` 回填）保留在
-`scripts/migrate.mjs` 的幂等后处理里，对所有方言的全新库同样安全。
-历史迁移采用过备份表方案（`__bak_*` → 重建 → 回填），如果需要在 git 历史中
-考古，注意 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不生效，重建表必须
+1.x 的 SQLite 迁移历史（含两次重建表的 `0010`/`0011`）已在基线对齐中移除，
+其中的数据修复逻辑（`mod` → `reviewer`、pending 纹理转 approved、`active_slot`
+回填）保留在 `scripts/migrate.mjs` 的幂等后处理里，对所有方言的全新库同样安全。
+注意 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不生效，重建表必须
 按「子表先删、父表先建」的顺序操作。
 
 ## 引导数据（seed）
@@ -136,8 +132,7 @@ pnpm db:seed
 
 一次性脚本。两个典型场景：
 
-1. **存量 1.x SQLite 库升级到 2.0 基线**（SQLite → SQLite，见
-   [ADR 0007](adr/0007-migration-baseline-alignment.md)）：
+1. **存量 1.x SQLite 库升级到当前基线**（SQLite → SQLite）：
 
    ```bash
    # 1. 新基线空库
