@@ -69,8 +69,9 @@ web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等
 
 ## 权限矩阵
 
-四级角色（user/reviewer/admin/superadmin）+ 8 项 `user_permission` 下放能力的
-越权用例已双层覆盖：service 层 `admin-access.service.test.ts` 覆盖判定逻辑，
+四级角色（user/reviewer/admin/superadmin）+ 9 项 `user_permission` 下放能力
+（含 `oauth.clients`）的越权用例已双层覆盖：service 层 `admin-access.service.test.ts`
+覆盖判定逻辑，
 HTTP 层 `apps/server/test/e2e/permissions.e2e.test.ts`
 覆盖 user 403、reviewer 无能力 403、superadmin 授 `users.ban` 后可 ban、
 封禁账号在论坛与管理端点双双被拒，全部断言 envelope `10003`。

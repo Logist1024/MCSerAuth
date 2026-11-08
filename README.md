@@ -20,7 +20,7 @@ MySQL 8.0+ / PostgreSQL 16+。
 > 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
 > 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览/排序与标题搜索）、公开个人主页、
 > 游戏账号管理（资料/改名/纹理切换）、外观设置（浅色/深色/跟随系统、五色点缀主题、
-> Emoji 图标替换）、四级角色 + 8 项能力下放 + 密钥超级后台、人机验证、成长体系
+> Emoji 图标替换）、四级角色 + 9 项能力下放 + 密钥超级后台、人机验证、成长体系
 > （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
 
 ## 技术栈
@@ -101,6 +101,14 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
    `GET /api/user/profiles/me` 读取账号与 player。
 5. 首次授权会自动为账号创建 1:1 的 player（32 位小写 UUID），令牌只以 SHA-256 哈希入库。
 
+**注册客户端与作用域**：经管理员在 `/api/admin/oauth-clients` 注册的姊妹服务
+（需 `oauth.clients` 能力）使用严格的 `redirect_uri` 精确白名单与作用域授权
+（`basic` 默认 + `player` / `email`，对应 `GET|POST /api/oauth/userinfo`），
+用户可"记住授权"实现一键重授权，并随时在个人主页「已授权服务」撤销（撤销即
+吊销该客户端全部令牌）。未带 `client_id` 的启动器保持原有宽松行为（任意
+HTTPS/localhost 回跳、全部作用域）。接入步骤见
+[`docs/oauth-integration.md`](docs/oauth-integration.md)。
+
 浏览器演示：<http://localhost:3000> 的「网站会话」与「发起一次 OAuth 授权」面板会跑完整条链路，
 回调页展示 `/me` 与 refresh 轮换结果。
 
@@ -172,7 +180,8 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
   改名（30 天冷却，旧名保留 30 天）、上传皮肤/披风立即生效、形象库切换/删除、
   外置登录连接指南（认证服务器地址与 HMCL/PCL2/Prism Launcher 配置步骤）；
   每个账号只能看到和管理自己的纹理；首页与导航提供入口。
-- **个人主页**（`/users/{id}`）：公开资料、成长档案与最近主题；本人可在页内编辑头像与签名。
+- **个人主页**（`/users/{id}`）：公开资料、成长档案与最近主题；本人可在页内编辑头像与签名，
+  并查看/撤销「已授权服务」（注册 OAuth 客户端的授权记录）。
 - **通知**（`/notifications`）：回帖、@提及（优先匹配游戏昵称）、审核与系统公告；支持单条/全部已读。
 - **举报**：帖子/回复/用户/纹理均可举报；管理员在 `/admin` 的举报队列中处理。
 - **角色与权限**：
@@ -222,9 +231,9 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
   （主副标题、按钮、数据条、加入步骤、入口卡）与审批中的 Banner，
   由超级管理员在 `/admin?tab=home` 维护；链接必须以 `/` 或 `http(s)://` 开头，
   超条数/超长度会被拒绝并保留上一版内容。
-- **权限下放**：超级管理员可在 `/admin?tab=permissions` 按成员勾选 8 项能力
+- **权限下放**：超级管理员可在 `/admin?tab=permissions` 按成员勾选 9 项能力
   （`site.manage`、`forum.categories`、`forum.announce`、`users.ban`、`servers.manage`、
-  `titles.manage`、`banners.manage`、`points.adjust`）。被下放者即使角色只是
+  `titles.manage`、`banners.manage`、`points.adjust`、`oauth.clients`）。被下放者即使角色只是
   `reviewer` 也能进入对应面板；超级管理员隐式拥有全部能力，无需勾选。
 - **成长规则可调**：签到经验/积分与加成上限、发帖回帖经验与每日上限、翻倍卡
   倍率/时长/价格、披风与 Banner 价格、Banner 天数与同屏上限、打赏区间、
@@ -342,6 +351,9 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 - 启动器令牌只存哈希、授权码单次使用；`/user/profiles/me` 与纹理接口同时接受 Bearer 令牌与网站 Cookie。
 - 纹理上传经 sharp 校验后立即生效（仅原版尺寸，不支持高清）；审核员可事后下架，
   当前纹理以短时签名 URL 下发；删除当前纹理回退默认形象。
+- 注册 OAuth 客户端：管理端 `/api/admin/oauth-clients`（列表/创建/更新/密钥重置/删除，
+  需 `oauth.clients` 能力）+ 作用域 userinfo `GET|POST /api/oauth/userinfo`（按令牌 scope
+  过滤账号/玩家/邮箱声明）；接入方指南见 [`docs/oauth-integration.md`](docs/oauth-integration.md)。
 - 契约产物：[`docs/openapi.json`](docs/openapi.json)（`pnpm openapi:export` 刷新）。
 
 ## 开发约定

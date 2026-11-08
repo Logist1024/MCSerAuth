@@ -28,7 +28,7 @@ MySQL 8.0+ / PostgreSQL 16+ supported in production.
 > image uploads / guest browsing / sorting & title search), public profile pages,
 > game account management (profile / rename / texture switching), appearance
 > settings (light/dark/system, five accent themes, emoji icons), four-level roles +
-> 8 delegable permissions + key-protected super console, captcha, growth system
+> 9 delegable permissions + key-protected super console, captcha, growth system
 > (levels / titles / check-in / points / shop / tipping / home banners), password
 > reset, RSS/sitemap, three-database support.
 
@@ -112,6 +112,17 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
    to rotate and `GET /api/user/profiles/me` to read the account and player.
 5. First authorization auto-creates a 1:1 player for the account (32-char
    lowercase UUID); tokens are stored as SHA-256 hashes only.
+
+**Registered clients & scopes**: sibling services registered by an admin at
+`/api/admin/oauth-clients` (requires the `oauth.clients` capability) use a
+strict exact-match `redirect_uri` allow-list and scoped consent (`basic` by
+default plus `player` / `email`, served by `GET|POST /api/oauth/userinfo`).
+Users can "remember authorization" for one-click re-consent and revoke any
+client at any time from the "authorized services" panel on their profile page
+(revocation immediately invalidates all of that client's tokens). Launchers
+without a `client_id` keep the legacy lenient behavior (any
+HTTPS/localhost redirect, all scopes). Integration guide:
+[`docs/oauth-integration.md`](docs/oauth-integration.md).
 
 Browser demo: the "web session" and "start an OAuth authorization" panels on
 <http://localhost:3000> run the whole chain, with the callback page showing
@@ -205,7 +216,8 @@ definitions live in `packages/shared/src/protocol/`.
   an external-login connection guide (auth server URL plus HMCL/PCL2/Prism
   Launcher steps); each account only sees and manages its own textures.
 - **Profile pages** (`/users/{id}`): public profile, growth history and recent
-  threads; the owner can edit avatar and signature in place.
+  threads; the owner can edit avatar and signature in place, and view/revoke
+  "authorized services" (consents granted to registered OAuth clients).
 - **Notifications** (`/notifications`): replies, @mentions (game nicknames
   matched first), moderation and system announcements; mark one/all as read.
 - **Reports**: threads, replies, users and textures can all be reported;
@@ -271,11 +283,12 @@ definitions live in `packages/shared/src/protocol/`.
   review, maintained by superadmins at `/admin?tab=home`; links must start with
   `/` or `http(s)://`, over-count/over-length submissions are rejected and the
   previous version is kept.
-- **Delegated permissions**: superadmins can grant 8 capabilities per member at
+- **Delegated permissions**: superadmins can grant 9 capabilities per member at
   `/admin?tab=permissions` (`site.manage`, `forum.categories`, `forum.announce`,
   `users.ban`, `servers.manage`, `titles.manage`, `banners.manage`,
-  `points.adjust`). Delegees can enter the corresponding panels even if their
-  role is only `reviewer`; superadmins implicitly hold every capability.
+  `points.adjust`, `oauth.clients`). Delegees can enter the corresponding panels
+  even if their role is only `reviewer`; superadmins implicitly hold every
+  capability.
 - **Tunable growth rules**: check-in XP/points and bonus caps, post/reply XP and
   daily limits, multiplier card rate/duration/price, cape and banner prices,
   banner days and concurrent-slot caps, tipping range, custom-title level — all
@@ -425,6 +438,11 @@ to `apps/web/.env.local` to activate.
   sizes only, no HD); reviewers can take textures down after the fact, the
   current texture is delivered via a short-lived signed URL, and deleting it
   falls back to the default appearance.
+- Registered OAuth clients: admin endpoints `/api/admin/oauth-clients`
+  (list/create/update/secret reset/delete, requires the `oauth.clients`
+  capability) + scoped userinfo `GET|POST /api/oauth/userinfo` (account/player/
+  email claims filtered by the token's scopes); integration guide at
+  [`docs/oauth-integration.md`](docs/oauth-integration.md).
 - Contract artifact: [`docs/openapi.json`](docs/openapi.json) (refreshed via
   `pnpm openapi:export`).
 
