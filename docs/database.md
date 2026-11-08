@@ -216,7 +216,8 @@ DATABASE_URL=mysql://… pnpm db:backup           # mysqldump 包装
 DATABASE_URL=postgres://… pnpm db:backup        # pg_dump 包装
 ```
 
-- **SQLite**：先 `wal_checkpoint(TRUNCATE)`，再用 better-sqlite3 在线备份 API 复制，
+- **SQLite**：以**可写连接**先 `wal_checkpoint(TRUNCATE)`（只读连接无法 checkpoint
+  存活中的 WAL，会报 `SQLITE_IOERR_WRITE`），再用 better-sqlite3 在线备份 API 复制，
   不长时间阻塞服务。
 - **MySQL**：`--no-tablespaces --single-transaction --routines --triggers --hex-blob
 --default-character-set=utf8mb4`，可在托管实例（无 TABLESPACE 权限）上直接使用。

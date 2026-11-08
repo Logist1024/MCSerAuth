@@ -2,6 +2,14 @@
 
 安全基线记录。改动遵循「逐项收紧、不破坏既有页面」原则。
 
+## 生产环境变量强校验
+
+`src/config/env.ts` 在启动时（`NODE_ENV=production`）除 `BETTER_AUTH_SECRET` /
+`COOKIE_SECURE` 外，还拒绝回环地址的 `APP_URL` / `AUTH_URL`
+（localhost / 127.0.0.1 / ::1 / 0.0.0.0）：未覆盖这两项的实例此前会静默生成
+`http://localhost:8000/...` 验证链接。`MAIL_PROVIDER=console` 在生产启动时输出
+`warn`（邮件只写日志不投递），保留可运行以不阻断首次部署。
+
 ## 内容安全策略（CSP）
 
 服务端（`apps/server`）已开启 CSP（此前因 entry 授权页内联样式/脚本显式关闭）：

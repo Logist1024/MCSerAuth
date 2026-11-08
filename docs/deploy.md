@@ -204,18 +204,23 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
 全部变量由 [env.ts](../apps/server/src/config/env.ts) 在启动时用 zod 校验，**配错直接启动失败**，
 不做运行期兜底。下表是必须相对开发默认值改动的项。
 
-| 变量                                     | 生产值                                             | 为什么                                                                                         |
-| ---------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                               | `production`                                       | 触发下面的强校验；pino 输出 JSON                                                               |
-| `COOKIE_SECURE`                          | `true`                                             | **生产必填**，否则启动失败；Cookie 走 Secure/HttpOnly/SameSite=Lax                             |
-| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 48` 的输出                   | ≥32 字符，**不能用开发默认值**（启动即报错）；也是 SMTP 密码的加密密钥，换值会让已存密码解不开 |
-| `APP_URL` / `AUTH_URL`                   | 两个真实 https 源                                  | CORS 与 OriginGuard 白名单来源；必须同注册域（§1）                                             |
-| `CONSOLE_KEY`                            | `openssl rand -base64 32`（或留空禁用 `/console`） | ≥16 字符                                                                                       |
-| `DATABASE_URL`                           | 目标库连接串                                       | 方言由协议自动识别；`DB_DIALECT` 只在需要显式覆盖时设置，冲突即失败                            |
-| `DB_SSL`                                 | 跨机/托管库设 `true`                               | 运行时与迁移/备份脚本共用同一语义                                                              |
-| `LOG_LEVEL`                              | `info`                                             | 见 §6；`debug` 会打印请求级细节                                                                |
-| `MAIL_PROVIDER` / `MAIL_FROM` / `SMTP_*` | 真实发件配置                                       | `console` 只把邮件打进日志；发件配置也可在 `/console` 覆盖，SMTP 密码加密存储                  |
-| `UPLOAD_DIR`                             | 默认 `./data/uploads` 或显式目录                   | 皮肤/披风/帖子图片/站点图标的落盘位置，属**需备份的第二个数据体**                              |
+| 变量                                     | 生产值                                             | 为什么                                                                                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                               | `production`                                       | 触发下面的强校验；pino 输出 JSON                                                                                                                                               |
+| `COOKIE_SECURE`                          | `true`                                             | **生产必填**，否则启动失败；Cookie 走 Secure/HttpOnly/SameSite=Lax                                                                                                             |
+| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 48` 的输出                   | ≥32 字符，**不能用开发默认值**（启动即报错）；也是 SMTP 密码的加密密钥，换值会让已存密码解不开                                                                                 |
+| `APP_URL` / `AUTH_URL`                   | 两个真实 https 源                                  | CORS 与 OriginGuard 白名单来源；必须同注册域（§1）。**回环地址（localhost / 127.0.0.1 / ::1 / 0.0.0.0）在生产启动即报错**，否则验证邮件会生成 `http://localhost:8000/...` 链接 |
+| `CONSOLE_KEY`                            | `openssl rand -base64 32`（或留空禁用 `/console`） | ≥16 字符                                                                                                                                                                       |
+| `DATABASE_URL`                           | 目标库连接串                                       | 方言由协议自动识别；`DB_DIALECT` 只在需要显式覆盖时设置，冲突即失败                                                                                                            |
+| `DB_SSL`                                 | 跨机/托管库设 `true`                               | 运行时与迁移/备份脚本共用同一语义                                                                                                                                              |
+| `LOG_LEVEL`                              | `info`                                             | 见 §6；`debug` 会打印请求级细节                                                                                                                                                |
+| `MAIL_PROVIDER` / `MAIL_FROM` / `SMTP_*` | 真实发件配置                                       | `console` 只把邮件打进日志（生产启动时输出 `warn` 提示）；发件配置也可在 `/console` 覆盖，SMTP 密码加密存储                                                                    |
+| `UPLOAD_DIR`                             | 默认 `./data/uploads` 或显式目录                   | 皮肤/披风/帖子图片/站点图标的落盘位置，属**需备份的第二个数据体**                                                                                                              |
+
+> **发件方式不会因填写 SMTP 参数而自动切换**：仅在 `/console` 填写 SMTP 主机/账号/密码时，
+> 必须把「发件方式」显式设为 SMTP（或设置 `MAIL_PROVIDER=smtp`），否则邮件只会写入服务端
+> 日志。`/console` 保存时若检测到这种状态会提示切换；`console` 模式下页面也会常驻标注
+> 「仅写日志，不投递」。
 
 `apps/web/.env.local`：`NEXT_PUBLIC_API_BASE_URL=https://auth.example.com`、
 `NEXT_PUBLIC_SITE_URL=https://example.com`（sitemap/robots 用，无结尾斜杠）、
@@ -230,11 +235,11 @@ TTL 类变量（`OAUTH_*`、`SESSION_JOIN_TTL_SECONDS`、`TEXTURE_URL_TTL_SECOND
 
 `pnpm db:backup` 按 `DATABASE_URL` 选引擎，产物统一落在 `apps/server/data/backups/`：
 
-| 引擎       | 命令内部动作                                                                                                       | 产物                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------- |
-| SQLite     | `wal_checkpoint(TRUNCATE)` 后走 better-sqlite3 在线备份 API                                                        | `mcserauth-<时间戳>.db` |
-| MySQL      | `mysqldump --no-tablespaces --single-transaction --routines --triggers --hex-blob --default-character-set=utf8mb4` | `.sql`                  |
-| PostgreSQL | `pg_dump --format=plain --no-owner --no-acl`                                                                       | `.sql`                  |
+| 引擎       | 命令内部动作                                                                                                                                      | 产物                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| SQLite     | 以**可写连接**执行 `wal_checkpoint(TRUNCATE)` 后走 better-sqlite3 在线备份 API（只读连接无法 checkpoint 存活中的 WAL，会报 `SQLITE_IOERR_WRITE`） | `mcserauth-<时间戳>.db` |
+| MySQL      | `mysqldump --no-tablespaces --single-transaction --routines --triggers --hex-blob --default-character-set=utf8mb4`                                | `.sql`                  |
+| PostgreSQL | `pg_dump --format=plain --no-owner --no-acl`                                                                                                      | `.sql`                  |
 
 要点：
 

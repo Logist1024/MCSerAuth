@@ -143,6 +143,22 @@ export default function ConsoleClient() {
     setBusy(true);
     setError(null);
     setNotice(null);
+    // Guard the silent trap of filling in SMTP credentials while the provider
+    // stays on console: every mail would only land in the server log.
+    let provider = mailProvider;
+    if (
+      provider === 'console' &&
+      (smtpHost.trim() !== '' || smtpUser.trim() !== '' || smtpPass.trim() !== '')
+    ) {
+      if (
+        window.confirm(
+          'SMTP 参数已填写，但发件方式仍为 console，邮件不会真实发送。是否切换为 SMTP？',
+        )
+      ) {
+        provider = 'smtp';
+        setMailProvider('smtp');
+      }
+    }
     try {
       const updated = await consoleUpdateSettings({
         siteName: siteName.trim(),
@@ -151,7 +167,7 @@ export default function ConsoleClient() {
         footerText: footerText.trim(),
         announcement: announcement.trim() === '' ? null : announcement.trim(),
         contactEmail: contactEmail.trim() === '' ? null : contactEmail.trim(),
-        mailProvider,
+        mailProvider: provider,
         mailFrom: mailFrom.trim(),
         smtpHost: smtpHost.trim() === '' ? null : smtpHost.trim(),
         smtpPort,
@@ -163,7 +179,11 @@ export default function ConsoleClient() {
             : { smtpPass: smtpPass.trim() }),
       });
       applySettings(updated);
-      setNotice('全站配置已保存。');
+      setNotice(
+        provider === 'console'
+          ? '全站配置已保存。注意：发件方式为 console，邮件只会写入服务端日志，不会投递到邮箱。'
+          : '全站配置已保存。',
+      );
     } catch (saveError) {
       setError(describeApiError(saveError));
     } finally {
@@ -403,8 +423,13 @@ export default function ConsoleClient() {
 
               <h3>发件设置</h3>
               <p className="muted small">
-                配置会持久化保存；当前版本尚未接入实际邮件投递，接入后按这里的发件方式与账号发送。
+                配置会持久化保存；验证与重置邮件按这里的发件方式与账号发送。
               </p>
+              {mailProvider === 'console' ? (
+                <p className="bad small">
+                  当前为 console 模式：邮件只会写入服务端日志，不会投递到任何邮箱。
+                </p>
+              ) : null}
               <div className="grid-2">
                 <div className="field">
                   <label htmlFor="console-mail-provider">发件方式</label>

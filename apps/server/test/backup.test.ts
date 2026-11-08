@@ -305,6 +305,37 @@ describe('backup of a real SQLite database', () => {
     }
   });
 
+  it('backs a WAL database up while a live connection keeps frames in the log', () => {
+    // Mirrors production: the server process holds an open handle, so the -wal
+    // file exists with un-checkpointed frames. A read-only backup handle cannot
+    // truncate it (SQLITE_IOERR_WRITE), hence the read-write checkpoint here.
+    const output = path.join(dir, 'wal-live-copy.db');
+    const live = new Database(source);
+    try {
+      live.pragma('journal_mode = WAL');
+      live.prepare('insert into sample (note) values (?)').run('在线写入的帖子');
+      const result = spawnSync(process.execPath, [SCRIPT, output], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: { ...process.env, DATABASE_URL: source },
+      });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('Backup written to');
+      expect(fs.statSync(output).size).toBeGreaterThan(0);
+    } finally {
+      live.close();
+    }
+
+    const copy = new Database(output, { readonly: true });
+    try {
+      expect(copy.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(copy.prepare('select count(*) as total from sample').get()).toEqual({ total: 2 });
+    } finally {
+      copy.close();
+    }
+  });
+
   it('refuses to back a database up onto itself', () => {
     const result = spawnSync(process.execPath, [SCRIPT, source], {
       cwd: process.cwd(),

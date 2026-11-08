@@ -144,6 +144,27 @@ export function validateEnv(input: Record<string, unknown>): AppEnv {
   if (env.NODE_ENV === 'production' && !env.COOKIE_SECURE) {
     throw new Error('COOKIE_SECURE must be true in production (Secure/HttpOnly/SameSite=Lax).');
   }
+  // A loopback AUTH_URL silently turns every verification / reset link into
+  // `http://localhost:8000/...` — reject it instead of letting mail look healthy.
+  if (env.NODE_ENV === 'production') {
+    for (const [name, value] of [
+      ['APP_URL', env.APP_URL],
+      ['AUTH_URL', env.AUTH_URL],
+    ] as const) {
+      const hostname = new URL(value).hostname.replace(/^\[/, '').replace(/\]$/, '');
+      if (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(hostname)) {
+        throw new Error(`${name} must not point at a loopback address in production.`);
+      }
+    }
+    // Deliberately a warning, not an error: first deployments may legitimately
+    // boot before finishing mail setup, but the operator must see why no mail
+    // ever arrives.
+    if (env.MAIL_PROVIDER === 'console') {
+      console.warn(
+        '[config] MAIL_PROVIDER=console in production: verification and password-reset emails are only written to the server log, never delivered. Set MAIL_PROVIDER=smtp (or switch the provider in /console) to send real mail.',
+      );
+    }
+  }
 
   return { ...env, BETTER_AUTH_SECRET: secret };
 }

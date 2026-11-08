@@ -178,7 +178,10 @@ async function backupSqlite(plan) {
 
   const { default: Database } = await import('better-sqlite3');
   fs.mkdirSync(path.dirname(plan.outputFile), { recursive: true });
-  const sqlite = new Database(plan.sourceFile, { readonly: true });
+  // A read-only handle cannot run `wal_checkpoint(TRUNCATE)` on a WAL database —
+  // it fails with SQLITE_IOERR_WRITE while a server process keeps the WAL alive.
+  // Open read-write so the checkpoint can truncate the WAL before the online backup.
+  const sqlite = new Database(plan.sourceFile);
   try {
     sqlite.pragma('wal_checkpoint(TRUNCATE)');
     await sqlite.backup(plan.outputFile);

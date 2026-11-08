@@ -268,29 +268,29 @@ HTTPS/localhost 回跳、全部作用域）。接入步骤见
 全部变量在 `apps/server/src/config/env.ts` 中 zod 校验，启动即失败、不做运行期兜底。
 模板见根目录 [`.env.example`](.env.example)（复制到 `apps/server/.env`）。
 
-| 变量                              | 默认（开发）                      | 说明                                             |
-| --------------------------------- | --------------------------------- | ------------------------------------------------ |
-| `NODE_ENV`                        | `development`                     | `production` 时强制校验 secret 与 Cookie         |
-| `PORT`                            | `8000`                            | server 端口                                      |
-| `LOG_LEVEL`                       | `debug`（模板）                   | pino 级别；敏感字段自动脱敏                      |
-| `APP_URL` / `AUTH_URL`            | `http://localhost:3000` / `:8000` | 站点域 / 认证域；CORS 与 OriginGuard 白名单来源  |
-| `COOKIE_SECURE`                   | `false`                           | 生产必须 `true`（Secure/HttpOnly/SameSite=Lax）  |
-| `BETTER_AUTH_SECRET`              | 开发默认值                        | 生产必填（≥32 字符），`openssl rand -base64 48`  |
-| `OAUTH_ACCESS_TOKEN_TTL_SECONDS`  | `2592000`                         | 启动器 access token 有效期（秒，默认 30 天）     |
-| `OAUTH_REFRESH_TOKEN_TTL_SECONDS` | `5184000`                         | refresh token 绝对有效期（秒，默认 60 天）       |
-| `OAUTH_AUTH_CODE_TTL_SECONDS`     | `300`                             | 授权码有效期（秒，单次使用）                     |
-| `SESSION_JOIN_TTL_SECONDS`        | `300`                             | joinServer 会话可被 hasJoined 兑换的窗口（秒）   |
-| `TEXTURE_URL_TTL_SECONDS`         | `300`                             | 签名纹理 URL 有效期（秒）                        |
-| `DATABASE_URL`                    | `./data/mcserauth.db`             | SQLite 路径或 `mysql://` / `postgres://` 连接串  |
-| `DB_DIALECT`                      | 自动识别                          | 可选覆盖，必须与 `DATABASE_URL` 协议一致         |
-| `DB_POOL_MIN` / `DB_POOL_MAX`     | `0` / `10`                        | MySQL/PostgreSQL 连接池（SQLite 忽略）           |
-| `DB_CONNECTION_TIMEOUT_MS`        | `10000`                           | 建立连接超时（毫秒）                             |
-| `DB_IDLE_TIMEOUT_MS`              | `30000`                           | 空闲连接回收时间（毫秒）                         |
-| `DB_SSL`                          | `false`                           | MySQL/PostgreSQL 是否强制 TLS                    |
-| `UPLOAD_DIR`                      | `./data/uploads`                  | 皮肤/披风 PNG 存储目录                           |
-| `MAIL_*` / `SMTP_*`               | 占位                              | 默认发件配置；超级后台可覆盖（密码加密存储）     |
-| `CONSOLE_KEY`                     | 空（禁用）                        | 超级后台密钥（≥16 字符），空则 `/console` 不可用 |
-| `CONSOLE_SESSION_TTL_SECONDS`     | `28800`                           | 超级后台会话有效期（秒）                         |
+| 变量                              | 默认（开发）                      | 说明                                                                                          |
+| --------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                        | `development`                     | `production` 时强制校验 secret、Cookie 与非回环 URL                                           |
+| `PORT`                            | `8000`                            | server 端口                                                                                   |
+| `LOG_LEVEL`                       | `debug`（模板）                   | pino 级别；敏感字段自动脱敏                                                                   |
+| `APP_URL` / `AUTH_URL`            | `http://localhost:3000` / `:8000` | 站点域 / 认证域；CORS 与 OriginGuard 白名单来源；生产禁止回环地址（启动即报错）               |
+| `COOKIE_SECURE`                   | `false`                           | 生产必须 `true`（Secure/HttpOnly/SameSite=Lax）                                               |
+| `BETTER_AUTH_SECRET`              | 开发默认值                        | 生产必填（≥32 字符），`openssl rand -base64 48`                                               |
+| `OAUTH_ACCESS_TOKEN_TTL_SECONDS`  | `2592000`                         | 启动器 access token 有效期（秒，默认 30 天）                                                  |
+| `OAUTH_REFRESH_TOKEN_TTL_SECONDS` | `5184000`                         | refresh token 绝对有效期（秒，默认 60 天）                                                    |
+| `OAUTH_AUTH_CODE_TTL_SECONDS`     | `300`                             | 授权码有效期（秒，单次使用）                                                                  |
+| `SESSION_JOIN_TTL_SECONDS`        | `300`                             | joinServer 会话可被 hasJoined 兑换的窗口（秒）                                                |
+| `TEXTURE_URL_TTL_SECONDS`         | `300`                             | 签名纹理 URL 有效期（秒）                                                                     |
+| `DATABASE_URL`                    | `./data/mcserauth.db`             | SQLite 路径或 `mysql://` / `postgres://` 连接串                                               |
+| `DB_DIALECT`                      | 自动识别                          | 可选覆盖，必须与 `DATABASE_URL` 协议一致                                                      |
+| `DB_POOL_MIN` / `DB_POOL_MAX`     | `0` / `10`                        | MySQL/PostgreSQL 连接池（SQLite 忽略）                                                        |
+| `DB_CONNECTION_TIMEOUT_MS`        | `10000`                           | 建立连接超时（毫秒）                                                                          |
+| `DB_IDLE_TIMEOUT_MS`              | `30000`                           | 空闲连接回收时间（毫秒）                                                                      |
+| `DB_SSL`                          | `false`                           | MySQL/PostgreSQL 是否强制 TLS                                                                 |
+| `UPLOAD_DIR`                      | `./data/uploads`                  | 皮肤/披风 PNG 存储目录                                                                        |
+| `MAIL_*` / `SMTP_*`               | 占位                              | 默认发件配置；超级后台可覆盖（密码加密存储）。`console` 只写日志不投递，生产启动时输出 `warn` |
+| `CONSOLE_KEY`                     | 空（禁用）                        | 超级后台密钥（≥16 字符），空则 `/console` 不可用                                              |
+| `CONSOLE_SESSION_TTL_SECONDS`     | `28800`                           | 超级后台会话有效期（秒）                                                                      |
 
 测试用 `TEST_DATABASE_URL` 切换到 MySQL/PostgreSQL；数据复制用
 `SOURCE_DATABASE_URL` / `TARGET_DATABASE_URL`（脚本变量，不由 server 读取），

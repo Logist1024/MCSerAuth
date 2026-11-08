@@ -4,7 +4,7 @@
 
 ## 结构
 
-- `apps/server` — NestJS 12 单体后端（Express 5），端口 8000。`src/config/`（zod 校验的唯一 env 入口）、`src/common/`（过滤器/守卫/拦截器/日志脱敏）、`src/db/`（Drizzle）、`src/modules/`（auth·session·profiles·forum·user·admin·site·growth·captcha·mail·maintenance·health）。
+- `apps/server` — NestJS 12 单体后端（Express 5），端口 8000。`src/config/`（zod 校验的唯一 env 入口）、`src/common/`（过滤器/守卫/拦截器/日志脱敏）、`src/db/`（Drizzle）、`src/modules/`（auth·session·profiles·forum·user·admin·site·growth·captcha·mail·maintenance·health）。账号/会话基于 better-auth（`src/modules/auth/auth.instance.ts`），改认证逻辑先看它。
 - `apps/web` — Next.js 16 App Router（React 19），端口 3000，**纯渲染层，业务逻辑都在 NestJS**。
 - `packages/shared` — 跨端契约唯一事实来源：DTO、错误码、枚举、zod schema、协议暂定字段（`src/protocol/`）。
 - `deploy/` 生产配置实例；`docs/` 部署/数据库/OAuth 集成指南与 OpenAPI 产物；`.github/workflows/ci.yml` CI。
@@ -35,7 +35,8 @@ pnpm openapi:export     # 改契约后刷新 docs/openapi.json
 - TS 严格模式：`no-explicit-any` 为 error、`noUncheckedIndexedAccess`（索引访问返回 `T | undefined`）、`verbatimModuleSyntax`。
 - `apps/server/src/**` 内 `consistent-type-imports` 规则被关闭：NestJS DI 依赖装饰器元数据，构造参数中的“类型导入”实为运行时值，**不要当 lint 误报去“修”**。
 - 测试统一 vitest：新模块必须带 service 级测试；改 controller/守卫/过滤器行为必须同步 `apps/server/test/e2e/` 的 HTTP e2e。server 测试强制 `TZ=UTC`、`pool: 'forks'`（better-sqlite3 原生模块）、缓存目录按包隔离（并行跑避免 ENOTCLOSED）。
-- 提交：trunk-based 直接提交 `main`，Conventional Commits，主题行英文。
+- env 与邮件陷阱：`src/config/env.ts` 在生产启动强校验（`COOKIE_SECURE=true` 必须；回环地址的 `APP_URL`/`AUTH_URL` 直接拒绝启动）。`MAIL_PROVIDER=console` 只把邮件写进服务端日志不投递；填了 `SMTP_*` 参数**不会**切换发件方式，必须显式设 `MAIL_PROVIDER=smtp`。背景见 `docs/security.md`。
+- 提交：trunk-based 直接提交 `main`，Conventional Commits，主题行英文；husky + lint-staged 在提交时自动跑 eslint --fix 与 prettier。
 - **`apps/web/AGENTS.md`（next dev 自动生成）**：此 Next 版本可能超出训练数据，写 web 代码前先读 `apps/web/node_modules/next/dist/docs/`；不要删除该文件中的规则块。
 
 ## 改动域 → 文档同步（随同一 PR）
