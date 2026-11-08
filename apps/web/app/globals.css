@@ -21,9 +21,9 @@
   --muted-strong: #3e4750;
   --border: #e3e6ea;
   --border-strong: #c6ccd3;
-  --accent: #0c6f4d;
-  --accent-strong: #08573c;
-  --accent-soft: #e3f0ea;
+  --accent: #1f6feb;
+  --accent-strong: #1a5fd0;
+  --accent-soft: #e5eefc;
   --accent-contrast: #ffffff;
   --danger: #ae2b20;
   --danger-strong: #8c2118;
@@ -47,8 +47,13 @@
   --content-width: 78rem;
 }
 
-/* Accent presets (light). Green is the default above; each preset swaps the
+/* Accent presets (light). Blue is the default above; these presets swap the
    highlight color while the neutral shell stays untouched. */
+[data-theme-color='green'] {
+  --accent: #0c6f4d;
+  --accent-strong: #08573c;
+  --accent-soft: #e3f0ea;
+}
 [data-theme-color='blue'] {
   --accent: #1f6feb;
   --accent-strong: #1a5fd0;
@@ -85,10 +90,10 @@
   --muted-strong: #bfc7cf;
   --border: #2c333b;
   --border-strong: #48525c;
-  --accent: #4cc38a;
-  --accent-strong: #6bd6a1;
-  --accent-soft: #12291f;
-  --accent-contrast: #04150e;
+  --accent: #6ea3f8;
+  --accent-strong: #8fb9fa;
+  --accent-soft: #12233f;
+  --accent-contrast: #051225;
   --danger: #f08a80;
   --danger-strong: #ffaaa1;
   --danger-soft: #2d1a17;
@@ -137,6 +142,12 @@
 }
 
 /* Accent presets (dark). */
+[data-theme-mode='dark'][data-theme-color='green'] {
+  --accent: #4cc38a;
+  --accent-strong: #6bd6a1;
+  --accent-soft: #12291f;
+  --accent-contrast: #04150e;
+}
 [data-theme-mode='dark'][data-theme-color='blue'] {
   --accent: #6ea3f8;
   --accent-strong: #8fb9fa;
@@ -163,6 +174,12 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode='light'])[data-theme-color='green'] {
+    --accent: #4cc38a;
+    --accent-strong: #6bd6a1;
+    --accent-soft: #12291f;
+    --accent-contrast: #04150e;
+  }
   :root:not([data-theme-mode='light'])[data-theme-color='blue'] {
     --accent: #6ea3f8;
     --accent-strong: #8fb9fa;
@@ -314,7 +331,6 @@ textarea {
 
 .logo-mark {
   flex: none;
-  filter: drop-shadow(0 1px 2px rgb(16 24 20 / 18%));
 }
 
 .brand-logo {
@@ -323,7 +339,6 @@ textarea {
   height: 30px;
   border-radius: var(--radius-sm);
   object-fit: cover;
-  filter: drop-shadow(0 1px 2px rgb(16 24 20 / 18%));
 }
 
 .brand-text {
@@ -619,36 +634,44 @@ textarea {
   gap: 0.4rem;
   min-height: 2.2rem;
   padding: 0.38rem 0.85rem;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
+  /* 实心按钮：扁平浅蓝绿渐变，底边渐隐出超浅粉，无光效无投影 */
+  --btn-pink: rgba(255, 209, 232, 0.6);
+  --btn-base-1: #a9e7f2;
+  --btn-base-2: #4fbfd9;
+  background-image:
+    /* 底边向上渐隐的超浅粉 */
+    linear-gradient(0deg, var(--btn-pink) 0%, transparent 45%),
+    /* 主体浅蓝绿渐变 */ linear-gradient(170deg, var(--btn-base-1) 0%, var(--btn-base-2) 100%);
+  background-position:
+    0 0,
+    0 0;
+  background-size:
+    100% 100%,
+    100% 100%;
+  background-repeat: no-repeat;
+  background-clip: padding-box;
+  border: 1px solid color-mix(in srgb, var(--btn-base-2) 42%, white);
+  border-radius: calc(var(--radius-sm) + 3px);
+  color: #0a4a5e;
   font-size: 0.84rem;
   font-weight: 600;
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--fg-strong) 16%, transparent);
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.1s ease;
+  box-shadow: none;
 }
 
-.button:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+.button:hover,
+.button.primary:hover {
+  border-color: color-mix(in srgb, var(--btn-base-2) 55%, white);
 }
 
 .button:active {
-  box-shadow: none;
-  transform: translateY(1px);
+  border-color: color-mix(in srgb, var(--btn-base-2) 70%, black);
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--btn-base-2);
   outline-offset: 2px;
 }
 
@@ -656,12 +679,6 @@ textarea {
   opacity: 0.55;
   box-shadow: none;
   cursor: not-allowed;
-}
-
-.button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
 }
 
 .button.secondary {
@@ -703,14 +720,11 @@ textarea {
 }
 
 .button.danger-solid {
-  border-color: var(--danger);
-  background: var(--danger);
+  /* 与主按钮同一扁平渐变结构，但主体为红色系、底边暖橙，保持“危险”语义 */
+  --btn-pink: rgba(251, 146, 60, 0.4);
+  --btn-base-1: #f87171;
+  --btn-base-2: #dc2626;
   color: #fff;
-}
-
-.button.danger-solid:hover {
-  border-color: var(--danger-strong);
-  background: var(--danger-strong);
 }
 
 .button.small {

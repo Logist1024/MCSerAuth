@@ -16,7 +16,7 @@ export const ICON_STYLES = ['svg', 'emoji'] as const;
 export type IconStyle = (typeof ICON_STYLES)[number];
 
 export const DEFAULT_THEME_MODE: ThemeMode = 'system';
-export const DEFAULT_THEME_COLOR: ThemeColor = 'green';
+export const DEFAULT_THEME_COLOR: ThemeColor = 'blue';
 export const DEFAULT_ICON_STYLE: IconStyle = 'svg';
 
 export const THEME_MODE_LABELS: Record<ThemeMode, string> = {
@@ -39,7 +39,8 @@ export const ICON_STYLE_LABELS: Record<IconStyle, string> = {
 };
 
 const KEY_MODE = 'mcserauth:mode';
-const KEY_COLOR = 'mcserauth:color';
+// v2：默认主色从翠绿换成天蓝；换键可让旧默认偏好（green）重置为新默认。
+const KEY_COLOR = 'mcserauth:color-v2';
 const KEY_ICONS = 'mcserauth:icons';
 
 function pick<T extends string>(value: string | null, allowed: readonly T[], fallback: T): T {

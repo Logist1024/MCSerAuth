@@ -338,16 +338,19 @@ export function Icon({
   );
 }
 
-/** Blocky grass-cube mark used as the community logo. */
+/** Pastel isometric block mark: light-blue cube with a pink face and a keyhole. */
 export function LogoMark({ size = 32 }: { size?: number }) {
   return (
     <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className="logo-mark">
-      <path d="M16 2 29 9.5v13L16 30 3 22.5v-13Z" fill="#0f7a55" />
-      <path d="M16 2 29 9.5 16 17 3 9.5Z" fill="#6fce9f" />
-      <path d="M3 9.5 16 17v13L3 22.5Z" fill="#2b9e70" />
-      <path d="M29 9.5 16 17v13l13-7.5Z" fill="#127a55" />
-      <path d="m8.5 12.1 4.2 2.4-4.2 2.4-4.2-2.4Z" fill="#b7ead0" opacity=".7" />
-      <path d="m16 9.5 4.4 2.5-4.4 2.5-4.4-2.5Z" fill="#8fdcb8" opacity=".45" />
+      {/* 顶面：最浅蓝 */}
+      <path d="M16 2 29 9.5 16 17 3 9.5Z" fill="#a9e7f2" />
+      {/* 左面：主蓝，带认证钥匙孔 */}
+      <path d="M3 9.5 16 17v13L3 22.5Z" fill="#4fbfd9" />
+      {/* 右面：浅粉 */}
+      <path d="M29 9.5 16 17v13l13-7.5Z" fill="#f6c3dd" />
+      {/* 钥匙孔 */}
+      <circle cx="9.5" cy="19" r="1.9" fill="#fff" />
+      <path d="M9.5 19.8 11.6 24H7.4Z" fill="#fff" />
     </svg>
   );
 }
