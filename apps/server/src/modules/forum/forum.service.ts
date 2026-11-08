@@ -91,10 +91,11 @@ export class ForumService {
     const search = query.search?.trim() ?? '';
     if (search !== '') {
       // 标题关键词：lower+like 做跨方言（sqlite/mysql/postgres）的大小写不敏感匹配。
-      // 转义 %、_ 与 \，避免用户输入被当成通配符。
+      // 转义 %、_ 与 \，避免用户输入被当成通配符。ESCAPE 字符必须走绑定参数：
+      // 写成 SQL 字面量 `'\'` 会在 MySQL 上因反斜杠转义闭引号而直接语法报错。
       const escaped = search.replace(/[\\%_]/g, (ch) => `\\${ch}`);
       conditions.push(
-        sql`lower(${postTable.title}) like ${`%${escaped.toLowerCase()}%`} escape '\\'`,
+        sql`lower(${postTable.title}) like ${`%${escaped.toLowerCase()}%`} escape ${'\\'}`,
       );
     }
     const orderBy = this.postListOrderBy(query.sort ?? 'activity');
