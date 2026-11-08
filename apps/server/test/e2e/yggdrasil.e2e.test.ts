@@ -171,7 +171,9 @@ test('a game-banned player fails authenticate and hasJoined with 403', async () 
   expect(reauth.status).toBe(403);
   expect(reauth.body.error).toBe('ForbiddenOperationException');
 
-  // Even a token minted before the ban no longer passes the session server.
+  // Even a token minted before the ban no longer passes the session server:
+  // banning revokes live tokens, so join sees an invalid token (401) rather
+  // than the banned-player 403.
   const join = await ctx
     .request()
     .post('/api/sessionserver/session/minecraft/join')
@@ -180,6 +182,6 @@ test('a game-banned player fails authenticate and hasJoined with 403', async () 
       selectedProfile: selectedProfile.id as string,
       serverId: createHash('sha256').update('any-server').digest('hex'),
     });
-  expect(join.status).toBe(403);
-  expect(join.body.error).toBe('ForbiddenOperationException');
+  expect(join.status).toBe(401);
+  expect(join.body.error).toBeDefined();
 });

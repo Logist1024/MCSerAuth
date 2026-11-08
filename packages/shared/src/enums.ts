@@ -23,6 +23,7 @@ export const ADMIN_PERMISSIONS = [
   'titles.manage',
   'banners.manage',
   'points.adjust',
+  'oauth.clients',
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -35,6 +36,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   'titles.manage': '称号授予与申请',
   'banners.manage': 'Banner 审核',
   'points.adjust': '积分调整',
+  'oauth.clients': 'OAuth 接入客户端管理',
 };
 
 export function hasAdminPermission(

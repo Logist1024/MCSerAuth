@@ -43,6 +43,7 @@ import {
   userPermission,
 } from '../../db/schema/index.js';
 import { ProgressService } from '../growth/progress.service.js';
+import { OAuthService } from '../auth/oauth.service.js';
 import type { AdminActor } from './admin-access.service.js';
 import type {
   AdminCategoryDto,
@@ -73,6 +74,7 @@ export class AdminForumService {
     private readonly forum: ForumService,
     private readonly notifications: NotificationsService,
     private readonly progress: ProgressService,
+    private readonly oauth: OAuthService,
   ) {}
   async stats(): Promise<AdminStats> {
     return {
@@ -209,6 +211,10 @@ export class AdminForumService {
         .set({ banned: true })
         .where(eq(playerTable.userId, userId));
     }
+    // Ban takes effect on live launcher/OAuth tokens immediately: refresh is
+    // already blocked by the banned check, so kill the access tokens too
+    // instead of letting them ride out the 30-day TTL.
+    await this.oauth.revokeAllTokensForUser(userId);
     const reason = input.reason?.trim() || undefined;
     await this.log(actor.userId, 'ban_user', 'user', userId, reason);
     this.notifications.notifyModeration(userId, `你的账号已被封禁${reason ? `：${reason}` : ''}`);

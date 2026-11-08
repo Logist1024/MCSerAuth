@@ -3,11 +3,16 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import type { OAuthTokenResponse, UserProfilesMeResponse } from '@mcserauth/shared';
+import type {
+  OAuthTokenResponse,
+  OAuthUserInfoResponse,
+  UserProfilesMeResponse,
+} from '@mcserauth/shared';
 import {
   ProtocolApiError,
   authenticateOAuth,
   fetchMyProfile,
+  fetchUserInfo,
   refreshOAuth,
 } from '@/lib/api-client';
 
@@ -47,6 +52,7 @@ export default function OAuthCallbackClient() {
   const searchParams = useSearchParams();
   const [tokens, setTokens] = useState<OAuthTokenResponse | null>(null);
   const [profile, setProfile] = useState<UserProfilesMeResponse | null>(null);
+  const [userInfo, setUserInfo] = useState<OAuthUserInfoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'exchanging' | 'ready' | 'failed'>('exchanging');
   const [busy, setBusy] = useState(false);
@@ -102,6 +108,12 @@ export default function OAuthCallbackClient() {
           setError(`令牌已签发，但 /user/profiles/me 调用失败：${describeError(profileError)}`);
         }
 
+        try {
+          setUserInfo(await fetchUserInfo(result.access_token));
+        } catch (userinfoError) {
+          setError(`令牌已签发，但 /oauth/userinfo 调用失败：${describeError(userinfoError)}`);
+        }
+
         setStatus('ready');
       } catch (exchangeError) {
         setError(describeError(exchangeError));
@@ -135,6 +147,7 @@ export default function OAuthCallbackClient() {
       const next = await refreshOAuth({ refresh_token: tokens.refresh_token });
       setTokens(next);
       setProfile(await fetchMyProfile({ accessToken: next.access_token }));
+      setUserInfo(await fetchUserInfo(next.access_token));
     } catch (refreshError) {
       setError(describeError(refreshError));
     } finally {
@@ -198,6 +211,32 @@ export default function OAuthCallbackClient() {
           </div>
         ) : null}
       </section>
+
+      {userInfo !== null ? (
+        <section className="card">
+          <h2>旗下服务视角（/oauth/userinfo）</h2>
+          <p className="muted">
+            第三方服务拿到 access_token 后调用此端点，按授权 scope 获取账号与玩家 UUID。
+          </p>
+          <div className="status-row">
+            <span className="status-label">user</span>
+            <span className="status-value">
+              {userInfo.user.name}
+              {userInfo.user.email ? `（${userInfo.user.email}）` : ''}
+            </span>
+          </div>
+          <div className="status-row">
+            <span className="status-label">player</span>
+            <span className="status-value">
+              {userInfo.player
+                ? `${userInfo.player.nickname} · ${userInfo.player.uuid}${
+                    userInfo.player.banned ? ' · 已封禁' : ''
+                  }`
+                : '未授权 player scope，或未绑定游戏身份'}
+            </span>
+          </div>
+        </section>
+      ) : null}
 
       {profile !== null ? (
         <section className="card">

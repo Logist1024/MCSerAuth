@@ -94,7 +94,9 @@ export class YggdrasilService {
       throw new ForbiddenException('该玩家已被封禁');
     }
     const clientToken = input.clientToken ?? generateOpaqueToken('mcs_ct_');
-    const tokens = await this.oauth.issueTokens(playerRow, userRow, meta, sha256(clientToken));
+    const tokens = await this.oauth.issueTokens(playerRow, userRow, meta, {
+      clientTokenHash: sha256(clientToken),
+    });
     const profile = this.toProfile(playerRow);
     return {
       accessToken: tokens.access_token,

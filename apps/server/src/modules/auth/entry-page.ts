@@ -1,4 +1,4 @@
-import type { OAuthEntryQuery } from '@mcserauth/shared';
+import type { OAuthEntryQuery, OAuthScope } from '@mcserauth/shared';
 
 function escapeHtml(value: string): string {
   const replacements: Record<string, string> = {
@@ -21,6 +21,10 @@ export interface ConsentPageContext extends EntryPageContext {
   account: { name: string; email: string };
   player: { nickname: string; uuid: string; banned: boolean } | null;
   redirectUriError?: string;
+  /** Present when authorization is blocked (e.g. banned account); hides the form. */
+  authError?: string;
+  /** Present for registered clients; legacy launchers keep the raw parameter table. */
+  client?: { name: string; scopes: { scope: OAuthScope; label: string }[] };
 }
 
 function styles(): string {
@@ -43,6 +47,11 @@ function styles(): string {
       .error-box { border: 1px solid #7f1d1d; background: #450a0a; color: #fecaca; border-radius: 0.5rem; padding: 0.75rem 0.9rem; font-size: 0.85rem; margin: 1rem 0; }
       .account { border: 1px solid #334155; border-radius: 0.6rem; padding: 0.75rem 0.9rem; margin: 1rem 0; font-size: 0.9rem; }
       .account strong { color: #f8fafc; }
+      .scope-box { border: 1px solid #334155; border-radius: 0.6rem; padding: 0.75rem 0.9rem; margin: 1rem 0; font-size: 0.9rem; }
+      .scope-box ul { margin: 0.5rem 0 0; padding-left: 1.2rem; color: #cbd5e1; }
+      .scope-box li { margin: 0.25rem 0; }
+      label.remember { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #cbd5e1; margin: 0.75rem 0; cursor: pointer; }
+      label.remember input { width: auto; margin: 0; }
       .muted { color: #94a3b8; font-size: 0.8rem; }
       .captcha-box { border: 1px solid #334155; background: #0f172a; border-radius: 0.5rem; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem; }
       .captcha-svg { display: block; margin-bottom: 0.5rem; }
@@ -385,6 +394,7 @@ export function renderEntryLoginPage(context: EntryPageContext, nonce: string): 
 export function renderEntryConsentPage(context: ConsentPageContext, nonce: string): string {
   const details = parameterRows(context.query);
   const redirectBlocked = context.redirectUriError !== undefined;
+  const authBlocked = context.authError !== undefined;
 
   const playerLine = context.player
     ? `<div>游戏角色：<strong>${escapeHtml(context.player.nickname)}</strong>（<code>${escapeHtml(context.player.uuid)}</code>）${
@@ -408,20 +418,37 @@ export function renderEntryConsentPage(context: ConsentPageContext, nonce: strin
     )
     .join('');
 
+  // Registered clients get a human-readable scope summary plus the "remember
+  // this authorization" checkbox; legacy launcher requests keep the raw table.
+  const clientName = context.client?.name;
+  const scopeList = context.client
+    ? `<div class="scope-box"><div>该服务申请获取：</div><ul>${context.client.scopes
+        .map((item) => `<li>${escapeHtml(item.label)}</li>`)
+        .join('')}</ul></div>`
+    : '';
+  const rememberField = context.client
+    ? `<label class="remember"><input type="checkbox" name="remember" value="on" checked />记住此授权，下次免确认直接登录</label>`
+    : '';
+  const intro = clientName
+    ? `<p>「${escapeHtml(clientName)}」正在请求访问你的账号。授权成功后浏览器会携带一次性授权码返回该服务。</p>`
+    : '<p>启动器将通过本次授权获取访问令牌。授权成功后浏览器会携带一次性授权码返回启动器，令牌由启动器在后台换取。</p>';
+
   return shell(
     '授权确认',
     `<span class="badge">M2 会话与形象</span>
       <h1>确认授权</h1>
-      <p>启动器将通过本次授权获取访问令牌。授权成功后浏览器会携带一次性授权码返回启动器，令牌由启动器在后台换取。</p>
+      ${intro}
       <div class="account">
         <div>账号：<strong>${escapeHtml(context.account.name)}</strong>（${escapeHtml(context.account.email)}）</div>
         ${playerLine}
       </div>
-      ${details ? `<table><tbody>${details}</tbody></table>` : '<p>未收到授权参数。</p>'}
+      ${context.client ? scopeList : details ? `<table><tbody>${details}</tbody></table>` : '<p>未收到授权参数。</p>'}
       ${
-        redirectBlocked
-          ? `<div class="error-box">${escapeHtml(context.redirectUriError ?? '')}</div>`
-          : `<form method="post" action="/api/oauth/entry">${hiddenFields}<button type="submit">授权并返回启动器</button></form>`
+        authBlocked
+          ? `<div class="error-box">${escapeHtml(context.authError ?? '')}</div>`
+          : redirectBlocked
+            ? `<div class="error-box">${escapeHtml(context.redirectUriError ?? '')}</div>`
+            : `<form method="post" action="/api/oauth/entry">${hiddenFields}${rememberField}<button type="submit">${clientName ? '授权并返回该服务' : '授权并返回启动器'}</button></form>`
       }
       <footer>授权码单次使用且短时有效；回调只允许 HTTPS 或本机 HTTP 地址。</footer>`,
     nonce,

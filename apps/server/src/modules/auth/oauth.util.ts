@@ -48,6 +48,11 @@ export function verifyPkce(verifier: string, challenge: string, method: 'S256' |
   return safeEqual(expected, challenge);
 }
 
+/** Timing-safe check of a raw secret against a stored SHA-256 hash. */
+export function verifySha256(value: string, hash: string): boolean {
+  return safeEqual(sha256(value), hash);
+}
+
 /**
  * Launcher callbacks must not become an open redirect.
  *

@@ -11,6 +11,7 @@ import { AdminCaptchaController } from './admin-captcha.controller.js';
 import { AdminForumController } from './admin-forum.controller.js';
 import { AdminForumService } from './admin-forum.service.js';
 import { AdminGrowthController } from './admin-growth.controller.js';
+import { AdminOauthClientsController } from './admin-oauth-clients.controller.js';
 import { AdminPermissionsController } from './admin-permissions.controller.js';
 import { AdminServersController } from './admin-servers.controller.js';
 import { AdminServersService } from './admin-servers.service.js';
@@ -28,6 +29,7 @@ import { AdminTexturesController } from './admin-textures.controller.js';
     AdminForumController,
     AdminGrowthController,
     AdminPermissionsController,
+    AdminOauthClientsController,
     AdminCaptchaController,
     AdminSiteController,
   ],

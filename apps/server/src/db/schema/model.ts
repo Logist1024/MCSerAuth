@@ -263,6 +263,10 @@ export const tables: TableModel[] = [
       text('accessTokenHash', 'access_token_hash', { length: 128, notNull: true, unique: true }),
       text('refreshTokenHash', 'refresh_token_hash', { length: 128, notNull: true, unique: true }),
       text('clientTokenHash', 'client_token_hash', { length: 128 }),
+      // Registered OAuth client (null for legacy launcher/Yggdrasil tokens).
+      text('clientId', 'client_id', { length: 191 }),
+      // Granted scopes at issuance time, space-separated (null for legacy tokens).
+      text('scope', 'scope'),
       text('deviceName', 'device_name', { length: 128 }),
       text('ip', 'ip', { length: 64 }),
       now('expiresAt', 'expires_at', { defaultFn: undefined }),
@@ -273,6 +277,7 @@ export const tables: TableModel[] = [
     indexes: [
       { name: 'token_player_uuid_idx', columns: ['playerUuid'] },
       { name: 'token_expires_at_idx', columns: ['expiresAt'] },
+      { name: 'token_client_id_idx', columns: ['clientId'] },
     ],
   },
   {
@@ -293,6 +298,58 @@ export const tables: TableModel[] = [
     indexes: [
       { name: 'oauth_code_user_id_idx', columns: ['userId'] },
       { name: 'oauth_code_expires_at_idx', columns: ['expiresAt'] },
+    ],
+  },
+  {
+    // Registered sibling-service clients managed via /api/admin/oauth-clients.
+    // `clientId` is the public identifier; the secret is stored as a SHA-256
+    // hash only (null = public/PKCE-only client).
+    name: 'oauth_client',
+    columns: [
+      id(),
+      text('clientId', 'client_id', { length: 191, notNull: true, unique: true }),
+      text('clientSecretHash', 'client_secret_hash', { length: 128 }),
+      text('name', 'name', { length: 128, notNull: true }),
+      text('description', 'description'),
+      {
+        prop: 'redirectUris',
+        column: 'redirect_uris',
+        type: 'json',
+        tsType: 'string[]',
+        notNull: true,
+        defaultFn: 'emptyArray',
+      },
+      {
+        prop: 'allowedScopes',
+        column: 'allowed_scopes',
+        type: 'json',
+        tsType: 'string[]',
+        notNull: true,
+        defaultFn: 'emptyArray',
+      },
+      bool('enabled', 'enabled', { notNull: true, default: true }),
+      now('createdAt', 'created_at'),
+      now('updatedAt', 'updated_at'),
+    ],
+  },
+  {
+    // One remembered consent per (user, client). `scope` holds the union of
+    // granted scopes; when a request fits inside it the consent page is
+    // skipped entirely.
+    name: 'oauth_consent',
+    columns: [
+      id(),
+      userOwner(),
+      text('clientId', 'client_id', { length: 191, notNull: true }),
+      text('scope', 'scope', { notNull: true }),
+      now('grantedAt', 'granted_at'),
+    ],
+    indexes: [
+      {
+        name: 'oauth_consent_user_client_unique',
+        columns: ['userId', 'clientId'],
+        unique: true,
+      },
     ],
   },
   {
@@ -725,6 +782,8 @@ export const tableOrder: string[] = [
   'account',
   'player',
   'oauth_code',
+  'oauth_client',
+  'oauth_consent',
   'category',
   'nickname_reservation',
   'token',

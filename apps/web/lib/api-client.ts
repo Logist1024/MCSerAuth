@@ -60,6 +60,7 @@ import {
   type OAuthEntryQuery,
   type OAuthRefreshRequest,
   type OAuthTokenResponse,
+  type OAuthUserInfoResponse,
   type Paginated,
   type PointTransactionPage,
   type PublicHomeResponse,
@@ -82,6 +83,7 @@ import {
   type UpdateServerRequest,
   type UpdateSiteSettingsRequest,
   type UpdateUserRoleRequest,
+  type UserAuthorizationView,
   type UserTitleSummary,
   type ConsoleSessionResponse,
   type ConsoleStaffMember,
@@ -416,6 +418,26 @@ export function changeAccountEmail(body: ChangeEmailRequest): Promise<UserSettin
     body,
     credentials: 'include',
   });
+}
+
+export function fetchMyAuthorizations(): Promise<{ items: UserAuthorizationView[] }> {
+  return apiFetch<{ items: UserAuthorizationView[] }>('/api/user/oauth/authorizations', {
+    credentials: 'include',
+  });
+}
+
+/** `GET /api/oauth/userinfo` — scope-filtered account info for sibling services. */
+export function fetchUserInfo(accessToken: string): Promise<OAuthUserInfoResponse> {
+  return protocolFetch<OAuthUserInfoResponse>('/api/oauth/userinfo', {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function revokeAuthorization(clientId: string): Promise<{ revoked: boolean }> {
+  return apiFetch<{ revoked: boolean }>(
+    `/api/user/oauth/authorizations/${encodeURIComponent(clientId)}`,
+    { method: 'DELETE', credentials: 'include' },
+  );
 }
 
 export function activateTexture(id: number): Promise<ActivateTextureResponse> {

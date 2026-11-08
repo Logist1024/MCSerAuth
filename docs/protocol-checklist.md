@@ -111,36 +111,42 @@ M0 开发环境的网络访问受限，官方协议文档（Commons-Designs Serv
   - 授权码只存 SHA-256 哈希，单次使用（`used_at`），TTL 由
     `OAUTH_AUTH_CODE_TTL_SECONDS` 配置（默认 300 秒）。
 - 状态码：302 成功；400 参数/回调地址非法；401 未登录；403 Origin 不受信任。
+- legacy 启动器请求（无 `client_id`）携带的 `scope` 参数**不生效**：令牌不记录 scope，
+  保持完整启动器视图（2026-11-08 起强制，此前会被原样记录并意外缩小 userinfo 视图）。
 
 #### `POST /api/oauth/authenticate`
 
 - M1 行为：✅ 已实现，授权码换取 `OAuthTokenResponse`。
 - 请求体（`code` 与 `token` 为同义字段，至少提供一个；均缺失 → 400）：
 
-| 字段            | 类型   | 必填              | 核对                |
-| --------------- | ------ | ----------------- | ------------------- |
-| `code`          | string | 与 `token` 二选一 | ⚠️ 主流程究竟用哪种 |
-| `token`         | string | 同上              | ⚠️                  |
-| `client_id`     | string | 否                | ⚠️                  |
-| `redirect_uri`  | string | 否                | ⚠️                  |
-| `code_verifier` | string | 否（PKCE）        | ⚠️                  |
+| 字段            | 类型   | 必填              | 核对                 |
+| --------------- | ------ | ----------------- | -------------------- |
+| `code`          | string | 与 `token` 二选一 | ⚠️ 主流程究竟用哪种  |
+| `token`         | string | 同上              | ⚠️                   |
+| `client_id`     | string | 否                | ⚠️                   |
+| `client_secret` | string | 机密客户端必填    | 注册客户端语义，见下 |
+| `redirect_uri`  | string | 否                | ⚠️                   |
+| `code_verifier` | string | 否（PKCE）        | ⚠️                   |
 
-- 校验规则（M1）：
+- 校验规则（M1，2026-11-08 收紧注册客户端路径）：
   - `code` / `token` 二选一，均缺失 → `400 IllegalArgumentException`；
   - 授权码不存在、已使用、已过期 → `401 UnauthorizedException`；
   - 授权码带 PKCE 时缺 `code_verifier` → 400；verifier 不匹配 → 401；
   - 请求携带 `client_id` / `redirect_uri` 且与授权码记录不一致 → 401；
+  - **注册客户端（`client_id` 绑定）必须回传 `redirect_uri`** 且与授权请求逐字一致，
+    缺失同样 → 401（RFC 6749 §4.1.3）；legacy 启动器授权码保持可选；
+  - **公开注册客户端（无 `client_secret`）签发授权码时强制 PKCE**（见 entry 节）；
   - `player.banned = true` → `403 ForbiddenOperationException`。
 - M1 响应（`OAuthTokenResponse`）：
 
-| 字段            | 类型                                   | 核对                              |
-| --------------- | -------------------------------------- | --------------------------------- |
-| `access_token`  | string                                 | ⚠️ 命名风格（snake_case）待核对   |
-| `token_type`    | string（暂定 `Bearer`）                | ⚠️                                |
-| `expires_in`    | number（秒，默认 2592000=30 天，可配） | ⚠️ 有效期定值待策划确认           |
-| `refresh_token` | string                                 | ⚠️ 是否在 authenticate 阶段即返回 |
-| `scope`         | string                                 | ⚠️ 可选；当前不返回（未持久化）   |
-| `user`          | object `{id,email,name,role}`          | ⚠️ 可选；当前返回                 |
+| 字段            | 类型                                   | 核对                                                                      |
+| --------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| `access_token`  | string                                 | ⚠️ 命名风格（snake_case）待核对                                           |
+| `token_type`    | string（暂定 `Bearer`）                | ⚠️                                                                        |
+| `expires_in`    | number（秒，默认 2592000=30 天，可配） | ⚠️ 有效期定值待策划确认                                                   |
+| `refresh_token` | string                                 | ⚠️ 是否在 authenticate 阶段即返回                                         |
+| `scope`         | string                                 | 注册客户端流程恒返回（空格分隔的已授权 scope）；legacy 启动器流程仍不返回 |
+| `user`          | object `{id,email,name,role}`          | ⚠️ 可选；当前返回                                                         |
 
 - 状态码：200 成功；400 参数非法；401 授权码/令牌无效；403 账号封禁。
 - 实现要点：
@@ -153,8 +159,13 @@ M0 开发环境的网络访问受限，官方协议文档（Commons-Designs Serv
 #### `POST /api/oauth/refresh`
 
 - M1 行为：✅ 已实现，刷新令牌轮换。
-- 请求体：`refresh_token`（string，必填）+ `client_id`（可选）→ 缺失时
-  `400 IllegalArgumentException`；`client_id` 目前不参与令牌绑定。
+- 请求体：`refresh_token`（string，必填）+ `client_id`（可选）+ `client_secret`（机密客户端必填）
+  → `refresh_token` 缺失时 `400 IllegalArgumentException`。
+- 2026-11-08 起注册客户端令牌的刷新校验：
+  - `client_id` 与令牌记录不一致 → 401；
+  - 机密客户端缺 `client_secret` → 400，secret 错误 → 401；
+  - 客户端已停用 → 403；
+  - legacy 启动器令牌（无 `clientId` 记录）不受影响。
 - 响应：同 `OAuthTokenResponse`；状态码 200 / 400 / 401 / 403。
 - 轮换语义：
   - 成功后旧 access/refresh 立即失效（同一行原子更新哈希），并发使用旧 refresh → 401；
@@ -179,6 +190,42 @@ M0 开发环境的网络访问受限，官方协议文档（Commons-Designs Serv
 
 - 状态码：200；401 无有效令牌/会话。`player` 在首次启动器授权前为 `null`
   （网站 Cookie 登录后即可看到）。⚠️ 整体结构与 `player` 可空性待官方文档核对。
+
+#### 注册客户端与 scope 模型（旗下服务 SSO，2026-11-08 新增）
+
+MC 服务器旗下其他服务通过本站账号登录并获取玩家 UUID，走"注册客户端"通道（ADR 0010）。
+接入方视角的流程/示例见 [docs/oauth-integration.md](oauth-integration.md)：
+
+- **客户端注册**：`client_id`/`client_secret`（哈希入库）/`redirect_uri` 精确白名单/`allowed_scopes`
+  由管理端 `/api/admin/oauth-clients`（能力位 `oauth.clients`，ADR 0010）管理；secret 明文仅创建/重置时返回一次。
+- **三档 scope**：`basic`（账号 id+昵称，恒授予）、`player`（玩家 UUID/昵称/封禁状态）、`email`（注册邮箱）。
+  请求缺失 `scope` 时默认 `basic player`；请求超出客户端 allow-list → 400。
+- **entry 严格校验**：`client_id` 已注册 → `response_type` 若提供必须为 `code`、`redirect_uri` 必须与注册项精确匹配、
+  scope 必须在 allow-list 内、**公开客户端（未配置 secret）必须携带 `code_challenge`（强制 PKCE）**、
+  机密客户端在 authenticate 时必须携带正确 `client_secret`（错 → 401）；`client_id` 缺失 → 保持 legacy 启动器行为不变；
+  提供但未注册/停用 → 400。
+- **记住授权**：授权确认页勾选"记住此授权"后，`(user, client)` 记录已授权 scope 并集
+  （`oauth_consent` 表）；此后该用户再从同一客户端发起授权，entry 直接 `302` 带 code 回跳，免二次确认
+  （封禁账号不跳，授权页直接显示封禁提示）。用户可在网站个人主页"已授权服务"面板查看与撤销
+  （`GET|DELETE /api/user/oauth/authorizations`，撤销同时吊销该客户端持有的全部令牌）；删除客户端亦吊销其全部令牌。
+- **封禁即时生效**：管理端封禁会同步吊销该用户全部启动器/OAuth 令牌（`docs/security.md`），旗下服务
+  下一次 userinfo 调用即 401。
+
+#### `GET|POST /api/oauth/userinfo`（2026-11-08 新增）
+
+- 行为：✅ 仅接受 `Authorization: Bearer <access_token>`，按该令牌签发时记录的 scope 返回账号信息。
+- 响应：
+
+| 字段         | 类型                                     | 条件                                                     |
+| ------------ | ---------------------------------------- | -------------------------------------------------------- |
+| `user.id`    | string                                   | 恒返回（basic）                                          |
+| `user.name`  | string                                   | 恒返回（basic）                                          |
+| `user.email` | string                                   | 仅 scope 含 `email`                                      |
+| `player`     | `{uuid, nickname, banned}`（uuid 32hex） | 仅 scope 含 `player`，**即旗下服务获取玩家 UUID 的通道** |
+
+- 无 recorded scope 的 legacy 令牌（启动器）保持完整视图（含 email 与 player）。
+- 状态码：200；401 `{error, errorMessage}`（Bearer 缺失/无效/过期）。
+- 错误形状遵循 §1 协议错误约定；无 `id_token`（决策见 ADR 0010：用 userinfo 回源而非 JWT）。
 
 ### 2.2 Minecraft 会话服务（服务器调用）
 
@@ -822,3 +869,4 @@ Node `fetch` 直接断言 HTTP 状态码与 `Location` 头，浏览器端用 Nex
 | 2026-10-25 | 站点外观（超级面板）与设备令牌自助页下线：`site_setting` 新增 `siteIcon`/`customCss` 键（无迁移），新增 `POST /api/admin/site/icon` 与 `DELETE /api/admin/site/icon`、公开 `GET /api/site/icon/{filename}`，`PATCH /api/admin/site` 接受 `customCss`；根布局内联自定义 CSS 并输出 `icon`/`apple-icon` 链接，页头品牌改用同一张图；移除 `/api/user/tokens` 列表与吊销端点及 `/textures` 的启动器设备面板（`token` 表与授权流程不变）；OpenAPI 同步                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-11-01 | 2.0 F2/F6 文档同步（**协议端点与字段语义零改动**）：三库迁移基线按 ADR 0007 对齐为各一份 29 表 `0000`（旧 SQLite 12 版历史移除，上文各行中的迁移编号仅存于 git 历史）；真实 MySQL 8.0 / PostgreSQL 16 的迁移、测试与 `db:copy-data` 端到端在 CI 首次全绿（run 41162131163），T2/T3 关闭；§1 非协议端点清单按实际路由改写并标注 `/api/user/tokens` 已移除（恢复排期 F14）；策划案升 v1.3（D4 部分被 ADR 0006 推翻、A4 设备页状态、披风与游客浏览判为已实现）；README 删除「设置页展示最近使用」等失效描述。`docs/openapi.json` 重新导出为 **104 路径 / 123 操作**：补入 F5 的 `/health/live`、`/health/ready`，并修正导出脚本与 `main.ts` 的前缀排除表不一致（原会误登记为 `/api/health/*`，实测 404），两处改用同一份 `PREFIX_EXCLUDED_ROUTES`；协议分组本身未变。**§4 的 10 项待核仍未收敛，需真机启动器（F1）** |
 | 2026-11-01 | **F1 首轮真机联调**（§3.1.9，生产 VPS `https://auth.example.com`）：HMCL 外置登录 + 皮肤下发真机通过；配套生产 curl 断言覆盖 authenticate/validate/refresh/invalidate/join/hasJoined/profiles/上传全链路。**发现并修复 `validate` 缺 `await` 缺陷**（commit `bb43208`，含 e2e 回归守卫）：无效令牌一律 204、403 到不了启动器，§3.1.5 记录系重构前真值。§4 据此收敛：1–7 项关闭或待 Paper 补录打勾，8–10 项归产品决策；**F1 仅剩进服握手（Paper 侧）真机补录**                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-11-08 | **旗下服务 SSO（ADR 0010）**：新增注册 OAuth 客户端体系——`oauth_client`/`oauth_consent` 表与 `token.client_id`/`token.scope` 列（迁移 `0001`，三库成对）；entry 对注册客户端做 redirect_uri 精确匹配与 scope allow-list 校验、机密客户端 authenticate 需 `client_secret`；「记住授权」命中时 entry 免确认直接 302 回跳；新增 `GET\|POST /api/oauth/userinfo`（三档 scope：basic/player/email，player 输出玩家 UUID）、`/api/admin/oauth-clients` 管理端点（能力位 `oauth.clients`）与 `/api/user/oauth/authorizations` 查看/撤销；网页个人主页新增「已授权服务」面板；OpenAPI 同步                                                                                                                                                                                                                                |

@@ -91,6 +91,11 @@ export class OAuthEntryConsentDto implements OAuthEntryConsentRequest {
   @IsOptional()
   @IsIn(['S256', 'plain'])
   code_challenge_method?: 'S256' | 'plain';
+
+  /** Consent-page checkbox; stores the remembered grant for registered clients. */
+  @ApiPropertyOptional({ oneOf: [{ type: 'string' }, { type: 'boolean' }] })
+  @IsOptional()
+  remember?: 'on' | 'true' | '1' | boolean;
 }
 
 export class OAuthAuthenticateRequestDto implements OAuthAuthenticateRequest {
@@ -108,6 +113,11 @@ export class OAuthAuthenticateRequestDto implements OAuthAuthenticateRequest {
   @IsOptional()
   @IsString()
   client_id?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  client_secret?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -130,6 +140,12 @@ export class OAuthRefreshRequestDto implements OAuthRefreshRequest {
   @IsOptional()
   @IsString()
   client_id?: string;
+
+  /** Required when the token belongs to a confidential registered client. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  client_secret?: string;
 }
 
 export class OAuthAvailabilityResponseDto implements OAuthAvailabilityResponse {

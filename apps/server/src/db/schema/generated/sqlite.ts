@@ -117,6 +117,29 @@ export const oauthCode = sqliteTable('oauth_code', {
   index('oauth_code_expires_at_idx').on(t.expiresAt),
 ]);
 
+export const oauthClient = sqliteTable('oauth_client', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clientId: text('client_id').notNull().unique(),
+  clientSecretHash: text('client_secret_hash'),
+  name: text('name').notNull(),
+  description: text('description'),
+  redirectUris: text('redirect_uris', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
+  allowedScopes: text('allowed_scopes', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const oauthConsent = sqliteTable('oauth_consent', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull(),
+  scope: text('scope').notNull(),
+  grantedAt: integer('granted_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (t) => [
+  uniqueIndex('oauth_consent_user_client_unique').on(t.userId, t.clientId),
+]);
+
 export const category = sqliteTable('category', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -142,6 +165,8 @@ export const token = sqliteTable('token', {
   accessTokenHash: text('access_token_hash').notNull().unique(),
   refreshTokenHash: text('refresh_token_hash').notNull().unique(),
   clientTokenHash: text('client_token_hash'),
+  clientId: text('client_id'),
+  scope: text('scope'),
   deviceName: text('device_name'),
   ip: text('ip'),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
@@ -151,6 +176,7 @@ export const token = sqliteTable('token', {
 }, (t) => [
   index('token_player_uuid_idx').on(t.playerUuid),
   index('token_expires_at_idx').on(t.expiresAt),
+  index('token_client_id_idx').on(t.clientId),
 ]);
 
 export const gameSession = sqliteTable('game_session', {

@@ -9,6 +9,7 @@ import { Icon } from '@/components/icons';
 import PostList from '@/components/post-list';
 import ProfileEditor from '@/components/profile/profile-editor';
 import AccountSecurity from '@/components/profile/account-security';
+import AuthorizedServices from '@/components/profile/authorized-services';
 import { formatDate } from '@/lib/format';
 import { roleClass, roleLabel } from '@/lib/forum-ui';
 import { serverApiFetch, serverApiFetchResult } from '@/lib/server-api';
@@ -131,6 +132,7 @@ export default async function UserPage({ params }: PageProps) {
                 initialSignature={viewerSettings.user.signature ?? ''}
               />
               <AccountSecurity currentEmail={viewerSettings.user.email} />
+              <AuthorizedServices />
             </>
           ) : null}
 

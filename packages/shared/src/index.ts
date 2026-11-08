@@ -5,6 +5,7 @@ export * from './errors.js';
 export * from './forum.js';
 export * from './growth.js';
 export * from './health.js';
+export * from './oauth.js';
 export * from './site.js';
 export * from './protocol/common.js';
 export * from './protocol/oauth.js';

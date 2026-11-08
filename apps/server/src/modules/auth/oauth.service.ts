@@ -7,14 +7,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  OAUTH_SCOPES,
   PROTOCOL_TOKEN_TYPE,
   USER_ROLES,
+  parseOAuthScopes,
   type OAuthAuthenticateRequest,
+  type OAuthRefreshRequest,
   type OAuthTokenResponse,
+  type OAuthUserInfoResponse,
   type OAuthUserSummary,
   type UserProfilesMeResponse,
 } from '@mcserauth/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { DbService } from '../../db/db.service.js';
 import {
@@ -23,6 +27,7 @@ import {
   token as tokenTable,
   user as userTable,
 } from '../../db/schema/index.js';
+import { OAuthClientService } from './oauth-client.service.js';
 import {
   generateOpaqueToken,
   generatePlayerUuid,
@@ -49,6 +54,13 @@ export interface AuthorizationCodeInput {
   codeChallenge?: string;
   codeChallengeMethod?: 'S256' | 'plain';
 }
+
+/** Optional issuance context; `clientId`/`scope` tag registered-client tokens. */
+export interface IssueTokensOptions {
+  clientTokenHash?: string;
+  clientId?: string | null;
+  scope?: string | null;
+}
 /**
  * Commons-Designs OAuth core.
  *
@@ -63,6 +75,7 @@ export class OAuthService {
     private readonly config: AppConfigService,
     private readonly db: DbService,
     private readonly reservations: NicknameReservationService,
+    private readonly clients: OAuthClientService,
   ) {}
   /** CSRF defence for the browser-submitted consent form (SameSite=Lax + Origin). */
   assertTrustedOrigin(origin: string | undefined, required = false): void {
@@ -139,7 +152,23 @@ export class OAuthService {
     ) {
       throw new UnauthorizedException('client_id 与授权码不匹配');
     }
-    if (input.redirect_uri !== undefined && input.redirect_uri !== codeRow.redirectUri) {
+    // Registered sibling-service clients must still be enabled and, when
+    // confidential, prove their secret. Legacy launcher codes skip this.
+    const clientRow =
+      codeRow.clientId !== null ? await this.clients.findClient(codeRow.clientId) : null;
+    if (clientRow && !clientRow.enabled) {
+      throw new ForbiddenException('该客户端已被停用');
+    }
+    if (clientRow) {
+      this.clients.verifyClientSecret(clientRow, input.client_secret);
+    }
+    if (codeRow.clientId !== null) {
+      // RFC 6749 §4.1.3: registered clients must replay the exact redirect_uri
+      // they used on the authorization request — missing counts as a mismatch.
+      if (input.redirect_uri !== codeRow.redirectUri) {
+        throw new UnauthorizedException('redirect_uri 与授权码不匹配');
+      }
+    } else if (input.redirect_uri !== undefined && input.redirect_uri !== codeRow.redirectUri) {
       throw new UnauthorizedException('redirect_uri 与授权码不匹配');
     }
     if (codeRow.codeChallenge !== null) {
@@ -177,10 +206,18 @@ export class OAuthService {
       await this.ensurePlayerForUser(userRow.id, userRow.name),
       userRow,
       meta,
+      {
+        clientTokenHash: undefined,
+        clientId: codeRow.clientId,
+        scope: codeRow.scope,
+      },
     );
   }
-  async refreshAccessToken(refreshToken: string, meta: RequestMeta): Promise<OAuthTokenResponse> {
-    const currentHash = sha256(refreshToken);
+  async refreshAccessToken(
+    input: OAuthRefreshRequest,
+    meta: RequestMeta,
+  ): Promise<OAuthTokenResponse> {
+    const currentHash = sha256(input.refresh_token);
     const row = (
       await this.db.db
         .select({ token: tokenTable, player: playerTable, user: userTable })
@@ -197,6 +234,21 @@ export class OAuthService {
       Date.now()
     ) {
       throw new UnauthorizedException('刷新令牌已过期，请重新授权');
+    }
+    // Registered sibling-service clients must stay enabled and, when
+    // confidential, re-authenticate with their secret (RFC 6749 §6). Legacy
+    // launcher tokens (clientId null) keep the bare refresh-token check.
+    if (row.token.clientId !== null) {
+      if (input.client_id !== undefined && input.client_id !== row.token.clientId) {
+        throw new UnauthorizedException('client_id 与刷新令牌不匹配');
+      }
+      const clientRow = await this.clients.findClient(row.token.clientId);
+      if (clientRow && !clientRow.enabled) {
+        throw new ForbiddenException('该客户端已被停用');
+      }
+      if (clientRow) {
+        this.clients.verifyClientSecret(clientRow, input.client_secret);
+      }
     }
     if (row.player.banned || row.user.banned) {
       throw new ForbiddenException('该玩家已被封禁');
@@ -231,6 +283,7 @@ export class OAuthService {
       token_type: PROTOCOL_TOKEN_TYPE,
       expires_in: this.config.oauthAccessTokenTtlSeconds,
       refresh_token: nextRefreshToken,
+      ...(row.token.scope !== null ? { scope: row.token.scope } : {}),
       user: this.toUserSummary(row.user),
     };
   }
@@ -262,6 +315,52 @@ export class OAuthService {
         nickname: row.player.nickname,
         banned: row.player.banned,
       },
+    };
+  }
+
+  /**
+   * Scope-filtered account info for sibling services (`GET /oauth/userinfo`).
+   * `basic` is always granted; `email` and `player` (the Minecraft UUID)
+   * only appear when the token carries the matching scope. Tokens without a
+   * recorded scope (legacy launchers) keep the full launcher view.
+   */
+  async resolveUserInfo(accessToken: string): Promise<OAuthUserInfoResponse | null> {
+    const row = (
+      await this.db.db
+        .select({ token: tokenTable, player: playerTable, user: userTable })
+        .from(tokenTable)
+        .innerJoin(playerTable, eq(tokenTable.playerUuid, playerTable.uuid))
+        .innerJoin(userTable, eq(playerTable.userId, userTable.id))
+        .where(eq(tokenTable.accessTokenHash, sha256(accessToken)))
+    )[0];
+    if (!row || row.token.revokedAt !== null || row.token.expiresAt.getTime() <= Date.now()) {
+      return null;
+    }
+    const lastUsedAt = row.token.lastUsedAt?.getTime() ?? 0;
+    if (Date.now() - lastUsedAt > 60000) {
+      await this.db.db
+        .update(tokenTable)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(tokenTable.id, row.token.id));
+    }
+    const granted = parseOAuthScopes(row.token.scope);
+    const legacy = row.token.scope === null;
+    const has = (scope: (typeof OAUTH_SCOPES)[number]) => legacy || granted.includes(scope);
+    return {
+      user: {
+        id: row.user.id,
+        name: row.user.name,
+        ...(has('email') ? { email: row.user.email } : {}),
+      },
+      ...(has('player')
+        ? {
+            player: {
+              uuid: row.player.uuid,
+              nickname: row.player.nickname,
+              banned: row.player.banned,
+            },
+          }
+        : {}),
     };
   }
   async getUserProfile(userId: string): Promise<UserProfilesMeResponse | null> {
@@ -301,17 +400,54 @@ export class OAuthService {
    * clear message on the consent page instead of a failing token exchange.
    */
   async assertUserCanAuthorize(userId: string): Promise<void> {
+    const reason = await this.getAuthorizationBlockReason(userId);
+    if (reason === null) {
+      return;
+    }
+    if (reason.accountMissing) {
+      throw new UnauthorizedException(reason.message);
+    }
+    throw new ForbiddenException(reason.message);
+  }
+
+  /**
+   * Non-throwing variant of {@link assertUserCanAuthorize} for page rendering:
+   * returns the ban message to display, or null when authorization may proceed.
+   */
+  async getAuthorizationBlockReason(
+    userId: string,
+  ): Promise<{ accountMissing: boolean; message: string } | null> {
     const userRow = (await this.db.db.select().from(userTable).where(eq(userTable.id, userId)))[0];
     if (!userRow) {
-      throw new UnauthorizedException('账号不存在');
+      return { accountMissing: true, message: '账号不存在' };
     }
     if (userRow.banned) {
-      throw new ForbiddenException('该账号已被封禁，无法完成授权');
+      return { accountMissing: false, message: '该账号已被封禁，无法完成授权' };
     }
     const playerRow = await this.getPlayerForUser(userId);
     if (playerRow?.banned) {
-      throw new ForbiddenException('该玩家已被封禁，无法完成授权');
+      return { accountMissing: false, message: '该玩家已被封禁，无法完成授权' };
     }
+    return null;
+  }
+
+  /** Revokes every live token pair across all of a user's players (ban cleanup). */
+  async revokeAllTokensForUser(userId: string): Promise<number> {
+    const updated = await this.db.updateReturning(
+      tokenTable,
+      { revokedAt: new Date() },
+      and(
+        isNull(tokenTable.revokedAt),
+        inArray(
+          tokenTable.playerUuid,
+          this.db.db
+            .select({ uuid: playerTable.uuid })
+            .from(playerTable)
+            .where(eq(playerTable.userId, userId)),
+        ),
+      ),
+    );
+    return updated.length;
   }
   /**
    * First launcher authorization (or first website texture upload) provisions
@@ -364,13 +500,14 @@ export class OAuthService {
    * Issues a launcher token pair. Shared by the OAuth code exchange and the
    * authlib-injector `/authserver/authenticate` compatibility endpoint.
    * `clientTokenHash` binds Yggdrasil tokens to the launcher's clientToken so
-   * refreshes can reject mismatches per the Yggdrasil spec.
+   * refreshes can reject mismatches per the Yggdrasil spec. `clientId`/`scope`
+   * record the registered sibling-service client the token was issued for.
    */
   async issueTokens(
     playerRow: PlayerRow,
     userRow: UserRow,
     meta: RequestMeta,
-    clientTokenHash?: string,
+    options: IssueTokensOptions = {},
   ): Promise<OAuthTokenResponse> {
     const accessToken = generateOpaqueToken('mcs_at_');
     const refreshToken = generateOpaqueToken('mcs_rt_');
@@ -379,7 +516,9 @@ export class OAuthService {
       playerUuid: playerRow.uuid,
       accessTokenHash: sha256(accessToken),
       refreshTokenHash: sha256(refreshToken),
-      clientTokenHash: clientTokenHash ?? null,
+      clientTokenHash: options.clientTokenHash ?? null,
+      clientId: options.clientId ?? null,
+      scope: options.scope ?? null,
       deviceName: this.deviceName(meta),
       ip: meta.ip ?? null,
       lastUsedAt: now,
@@ -391,6 +530,7 @@ export class OAuthService {
       token_type: PROTOCOL_TOKEN_TYPE,
       expires_in: this.config.oauthAccessTokenTtlSeconds,
       refresh_token: refreshToken,
+      ...(options.scope !== undefined && options.scope !== null ? { scope: options.scope } : {}),
       user: this.toUserSummary(userRow),
     };
   }

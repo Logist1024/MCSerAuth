@@ -53,6 +53,20 @@ web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等
   `m=65536 KiB, p=4, t=3`，高于 OWASP 最低建议（m=19456, t=2, p=1）；
   如未来显式调参，同步更新此处。
 - 启动器令牌（Yggdrasil/OAuth）：SHA-256 摘要落库，不存明文（`token` 表）。
+- OAuth 客户端 secret（旗下服务接入，ADR 0010）：SHA-256 摘要落库（`oauth_client` 表），
+  明文仅创建/重置时返回一次，校验用时序安全的 `verifySha256`（`oauth.util.ts`）。
+- OAuth 授权码/记住授权：授权码只存哈希、单次使用；注册客户端的 `redirect_uri`
+  精确白名单匹配（叠加 HTTPS/loopback 基础规则防开放重定向）；用户在个人主页
+  「已授权服务」撤销后，该客户端全部令牌立即吊销。
+- 注册客户端令牌交换加固（2026-11-08）：
+  - **公开客户端（未配置 `client_secret`）强制 PKCE**：签发授权码时必须携带
+    `code_challenge`，否则 entry 直接拒绝（页面上提示），不留无凭据可换的授权码。
+  - **交换授权码必须回传 `redirect_uri`** 且与授权请求逐字一致（RFC 6749 §4.1.3）；
+    legacy 启动器流程保持宽松以兼容旧客户端。
+  - **refresh 认证**：机密客户端刷新必须携带 `client_secret`，`client_id` 与令牌
+    记录不一致 → 401；客户端被停用 → 403。
+- 封禁即时生效：管理端封禁（账号级/游戏级）除写入 `banned` 外，同步吊销该用户
+  全部启动器/OAuth 令牌；刷新已被封禁检查拦截，访问令牌不再等待 30 天 TTL 自然过期。
 
 ## 权限矩阵
 

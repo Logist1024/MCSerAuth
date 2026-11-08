@@ -21,10 +21,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type {
-  OAuthAvailabilityResponse,
-  OAuthEntryQuery,
-  OAuthTokenResponse,
+import {
+  OAUTH_SCOPE_LABELS,
+  type OAuthAvailabilityResponse,
+  type OAuthEntryQuery,
+  type OAuthScope,
+  type OAuthTokenResponse,
 } from '@mcserauth/shared';
 import type { Request, Response } from 'express';
 import { ProtocolApi } from '../../common/decorators/protocol-api.decorator.js';
@@ -32,6 +34,7 @@ import { CSP_NONCE_KEY } from '../../common/csp.js';
 import { ProtocolErrorDto } from '../../common/dto/protocol-error.dto.js';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { AuthService } from './auth.service.js';
+import { OAuthClientService } from './oauth-client.service.js';
 import {
   OAuthAuthenticateRequestDto,
   OAuthAvailabilityResponseDto,
@@ -45,6 +48,7 @@ import {
   renderEntryLoginPage,
   type ConsentPageContext,
 } from './entry-page.js';
+import type { OauthClientRow } from './oauth-client.service.js';
 import type { RequestMeta } from './oauth.service.js';
 import { OAuthService } from './oauth.service.js';
 import { isAllowedRedirectUri } from './oauth.util.js';
@@ -55,11 +59,22 @@ function requestMeta(request: Request): RequestMeta {
   };
 }
 /**
+ * Entry authorization request, resolved against the client registry:
+ * - `legacy`  — no client_id, the historical launcher behaviour.
+ * - `client`  — registered and enabled; redirect/scope already validated.
+ * - `invalid` — a client_id was provided but failed validation.
+ */
+type ResolvedEntryClient =
+  | { mode: 'legacy' }
+  | { mode: 'client'; client: OauthClientRow; scopes: OAuthScope[] }
+  | { mode: 'invalid'; problem: string };
+/**
  * Commons-Designs OAuth-style endpoints.
  *
  * The authorization page is rendered by NestJS (project decision A3) so it
  * shares the better-auth cookie with the website. Launchers then exchange the
- * one-time code for an access/refresh pair.
+ * one-time code for an access/refresh pair. Registered sibling-service
+ * clients additionally get remembered consents for one-click re-login.
  */
 @ApiTags('Commons-Designs / OAuth')
 @ProtocolApi()
@@ -69,6 +84,7 @@ export class OAuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly oauth: OAuthService,
+    private readonly clients: OAuthClientService,
     private readonly config: AppConfigService,
   ) {}
   @Get('availability')
@@ -82,9 +98,9 @@ export class OAuthController {
   }
   @Get('entry')
   @ApiOperation({
-    summary: '启动器跳转的授权页',
+    summary: '启动器/旗下服务跳转的授权页',
     description:
-      '未登录时渲染登录表单；已登录时渲染授权确认页。页面由 NestJS 直出，复用 better-auth Cookie。',
+      '未登录时渲染登录表单；已登录时渲染授权确认页。注册客户端在已记住授权时直接 302 带 code 回跳，免二次确认。',
   })
   @ApiOkResponse({
     description: 'HTML 登录页或授权确认页',
@@ -108,7 +124,26 @@ export class OAuthController {
       response.status(HttpStatus.OK).type('html').send(html);
       return;
     }
+    const resolved = await this.resolveEntryClient(query);
+    // Banned accounts never get a code, not even from a remembered grant; the
+    // consent page below renders the reason instead of the confirmation form.
+    const authError = await this.oauth.getAuthorizationBlockReason(session.user.id);
+    // One-click re-login: a remembered consent covering the requested scopes
+    // skips the confirmation page entirely.
+    if (resolved.mode === 'client' && authError === null) {
+      const consent = await this.clients.findConsent(session.user.id, resolved.client.clientId);
+      if (consent && this.clients.consentCovers(consent, resolved.scopes)) {
+        await this.issueCodeAndRedirect(response, session.user.id, resolved, query);
+        return;
+      }
+    }
     const player = await this.oauth.getPlayerForUser(session.user.id);
+    const problem =
+      resolved.mode === 'invalid'
+        ? resolved.problem
+        : resolved.mode === 'legacy'
+          ? this.describeAuthorizationProblem(query)
+          : undefined;
     const context: ConsentPageContext = {
       appUrl: this.config.appUrl,
       query: { ...query, redirect_uri: query.redirect_uri ?? '' },
@@ -116,7 +151,18 @@ export class OAuthController {
       player: player
         ? { nickname: player.nickname, uuid: player.uuid, banned: player.banned }
         : null,
-      redirectUriError: this.describeAuthorizationProblem(query),
+      redirectUriError: problem,
+      authError: authError?.message,
+      client:
+        resolved.mode === 'client'
+          ? {
+              name: resolved.client.name,
+              scopes: resolved.scopes.map((scope) => ({
+                scope,
+                label: OAUTH_SCOPE_LABELS[scope],
+              })),
+            }
+          : undefined,
     };
     const html = renderEntryConsentPage(context, response.locals[CSP_NONCE_KEY]);
     response.setHeader('Cache-Control', 'no-store');
@@ -127,7 +173,7 @@ export class OAuthController {
   @ApiOperation({
     summary: '提交授权确认',
     description:
-      '校验网站会话、redirect_uri 与 PKCE 参数，签发一次性授权码并 302 回跳 redirect_uri。',
+      '校验网站会话、redirect_uri 与 PKCE 参数，签发一次性授权码并 302 回跳 redirect_uri。注册客户端可勾选记住授权。',
   })
   @ApiBody({ type: OAuthEntryConsentDto })
   @ApiConsumes('application/json', 'application/x-www-form-urlencoded')
@@ -153,26 +199,21 @@ export class OAuthController {
     }
     // Fail early on the consent page instead of at token-exchange time.
     await this.oauth.assertUserCanAuthorize(session.user.id);
-    if (!isAllowedRedirectUri(body.redirect_uri)) {
-      throw new BadRequestException(
-        'redirect_uri 不合法：仅允许 HTTPS 或本机（localhost/127.0.0.1）HTTP 地址',
-      );
+    const resolved = await this.resolveEntryClient(body);
+    if (resolved.mode === 'invalid') {
+      throw new BadRequestException(resolved.problem);
     }
-    this.oauth.validatePkceInput(body.code_challenge, body.code_challenge_method);
-    const code = await this.oauth.createAuthorizationCode({
-      userId: session.user.id,
-      clientId: body.client_id,
-      redirectUri: body.redirect_uri,
-      scope: body.scope,
-      codeChallenge: body.code_challenge,
-      codeChallengeMethod: body.code_challenge_method,
-    });
-    const redirect = new URL(body.redirect_uri);
-    redirect.searchParams.set('code', code);
-    if (body.state !== undefined && body.state !== '') {
-      redirect.searchParams.set('state', body.state);
+    if (resolved.mode === 'client') {
+      const remember =
+        body.remember === 'on' ||
+        body.remember === 'true' ||
+        body.remember === '1' ||
+        body.remember === true;
+      if (remember) {
+        await this.clients.saveConsent(session.user.id, resolved.client.clientId, resolved.scopes);
+      }
     }
-    response.redirect(HttpStatus.FOUND, redirect.toString());
+    await this.issueCodeAndRedirect(response, session.user.id, resolved, body);
   }
   @Post('authenticate')
   @HttpCode(HttpStatus.OK)
@@ -180,7 +221,7 @@ export class OAuthController {
   @ApiOperation({
     summary: '授权码换取访问令牌',
     description:
-      '使用一次性 code（或同义字段 token）换取 Bearer 访问令牌与刷新令牌；支持 PKCE code_verifier。',
+      '使用一次性 code（或同义字段 token）换取 Bearer 访问令牌与刷新令牌；支持 PKCE code_verifier；机密客户端需带 client_secret。',
   })
   @ApiBody({ type: OAuthAuthenticateRequestDto })
   @ApiOkResponse({ type: OAuthTokenResponseDto })
@@ -213,7 +254,88 @@ export class OAuthController {
     @Req()
     request: Request,
   ): Promise<OAuthTokenResponse> {
-    return await this.oauth.refreshAccessToken(body.refresh_token, requestMeta(request));
+    return await this.oauth.refreshAccessToken(body, requestMeta(request));
+  }
+  /**
+   * Validates `client_id`/`redirect_uri`/`scope` for the entry endpoints.
+   * Requests without a `client_id` fall through to the legacy launcher path.
+   */
+  private async resolveEntryClient(
+    input: OAuthEntryQuery & { redirect_uri?: string },
+  ): Promise<ResolvedEntryClient> {
+    if (input.client_id === undefined || input.client_id === '') {
+      return { mode: 'legacy' };
+    }
+    const client = await this.clients.findClient(input.client_id);
+    if (!client || !client.enabled) {
+      return { mode: 'invalid', problem: 'client_id 未注册或已被停用。' };
+    }
+    if (
+      input.response_type !== undefined &&
+      input.response_type !== '' &&
+      input.response_type !== 'code'
+    ) {
+      return { mode: 'invalid', problem: '仅支持 response_type=code。' };
+    }
+    if (
+      input.redirect_uri === undefined ||
+      input.redirect_uri === '' ||
+      !client.redirectUris.includes(input.redirect_uri)
+    ) {
+      return { mode: 'invalid', problem: 'redirect_uri 与该客户端注册的回调地址不匹配。' };
+    }
+    // Public (secret-less) clients have no client authentication to fall back
+    // on, so PKCE is mandatory end-to-end (OAuth 2.1 §4.3).
+    if (client.clientSecretHash === null && (input.code_challenge ?? '') === '') {
+      return {
+        mode: 'invalid',
+        problem: '公开客户端必须使用 PKCE：请携带 code_challenge（建议 S256）。',
+      };
+    }
+    try {
+      const scopes = this.clients.resolveRequestedScopes(client, input.scope);
+      return { mode: 'client', client, scopes };
+    } catch (error) {
+      return {
+        mode: 'invalid',
+        problem: error instanceof BadRequestException ? error.message : 'scope 校验失败。',
+      };
+    }
+  }
+  /** Shared tail of both entry endpoints: PKCE check → code → 302 back. */
+  private async issueCodeAndRedirect(
+    response: Response,
+    userId: string,
+    resolved: ResolvedEntryClient,
+    input: OAuthEntryQuery & { redirect_uri?: string },
+  ): Promise<void> {
+    const redirectUri = input.redirect_uri;
+    if (redirectUri === undefined || redirectUri === '') {
+      throw new BadRequestException('缺少 redirect_uri，无法把授权码送回调用方');
+    }
+    if (!isAllowedRedirectUri(redirectUri)) {
+      throw new BadRequestException(
+        'redirect_uri 不合法：仅允许 HTTPS 或本机（localhost/127.0.0.1）HTTP 地址',
+      );
+    }
+    this.oauth.validatePkceInput(input.code_challenge, input.code_challenge_method);
+    const code = await this.oauth.createAuthorizationCode({
+      userId,
+      clientId: resolved.mode === 'client' ? resolved.client.clientId : input.client_id,
+      redirectUri: redirectUri,
+      // Legacy launchers have no scope registry: forcing null keeps their
+      // tokens on the full launcher userinfo view regardless of any stray
+      // `scope` parameter they may send.
+      scope: resolved.mode === 'client' ? resolved.scopes.join(' ') : undefined,
+      codeChallenge: input.code_challenge,
+      codeChallengeMethod: input.code_challenge_method,
+    });
+    const redirect = new URL(redirectUri);
+    redirect.searchParams.set('code', code);
+    if (input.state !== undefined && input.state !== '') {
+      redirect.searchParams.set('state', input.state);
+    }
+    response.redirect(HttpStatus.FOUND, redirect.toString());
   }
   private describeAuthorizationProblem(query: OAuthEntryQuery): string | undefined {
     if (query.redirect_uri === undefined || query.redirect_uri === '') {

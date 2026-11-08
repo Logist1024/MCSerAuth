@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NicknameReservationService } from '../src/modules/auth/nickname-reservation.service.js';
+import { OAuthClientService } from '../src/modules/auth/oauth-client.service.js';
 import { OAuthService } from '../src/modules/auth/oauth.service.js';
 import { user, oauthCode } from '../src/db/schema/index.js';
 import { createTestContext, type TestContext } from './helpers/db.js';
@@ -17,7 +18,12 @@ describe('OAuthService', () => {
     await ctx.db.db
       .insert(user)
       .values({ id: USER_ID, email: 'user@example.com', name: 'User One' });
-    oauth = new OAuthService(ctx.config, ctx.db, new NicknameReservationService(ctx.db));
+    oauth = new OAuthService(
+      ctx.config,
+      ctx.db,
+      new NicknameReservationService(ctx.db),
+      new OAuthClientService(ctx.db),
+    );
   });
   afterEach(async () => {
     await ctx.cleanup();
@@ -80,9 +86,11 @@ describe('OAuthService', () => {
       redirectUri: 'http://localhost:1234/cb',
     });
     const tokens = await oauth.exchangeAuthorizationCode({ code }, {});
-    const rotated = await oauth.refreshAccessToken(tokens.refresh_token, {});
+    const rotated = await oauth.refreshAccessToken({ refresh_token: tokens.refresh_token }, {});
     expect(rotated.refresh_token).not.toBe(tokens.refresh_token);
     expect(await oauth.resolveAccessToken(tokens.access_token)).toBeNull();
-    await expect(oauth.refreshAccessToken(tokens.refresh_token, {})).rejects.toThrow();
+    await expect(
+      oauth.refreshAccessToken({ refresh_token: tokens.refresh_token }, {}),
+    ).rejects.toThrow();
   });
 });

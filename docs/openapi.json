@@ -189,7 +189,7 @@
     },
     "/api/oauth/entry": {
       "get": {
-        "description": "未登录时渲染登录表单；已登录时渲染授权确认页。页面由 NestJS 直出，复用 better-auth Cookie。",
+        "description": "未登录时渲染登录表单；已登录时渲染授权确认页。注册客户端在已记住授权时直接 302 带 code 回跳，免二次确认。",
         "operationId": "OAuthController_getEntry",
         "parameters": [
           {
@@ -265,13 +265,13 @@
             }
           }
         },
-        "summary": "启动器跳转的授权页",
+        "summary": "启动器/旗下服务跳转的授权页",
         "tags": [
           "Commons-Designs / OAuth"
         ]
       },
       "post": {
-        "description": "校验网站会话、redirect_uri 与 PKCE 参数，签发一次性授权码并 302 回跳 redirect_uri。",
+        "description": "校验网站会话、redirect_uri 与 PKCE 参数，签发一次性授权码并 302 回跳 redirect_uri。注册客户端可勾选记住授权。",
         "operationId": "OAuthController_approveEntry",
         "parameters": [],
         "requestBody": {
@@ -332,7 +332,7 @@
     },
     "/api/oauth/authenticate": {
       "post": {
-        "description": "使用一次性 code（或同义字段 token）换取 Bearer 访问令牌与刷新令牌；支持 PKCE code_verifier。",
+        "description": "使用一次性 code（或同义字段 token）换取 Bearer 访问令牌与刷新令牌；支持 PKCE code_verifier；机密客户端需带 client_secret。",
         "operationId": "OAuthController_authenticate",
         "parameters": [],
         "requestBody": {
@@ -451,6 +451,79 @@
           }
         },
         "summary": "刷新访问令牌",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      }
+    },
+    "/api/oauth/userinfo": {
+      "get": {
+        "description": "按授权 scope 返回账号与游戏角色信息：basic 恒有（id/name）；email 追加邮箱；player 追加玩家 UUID/昵称。",
+        "operationId": "OAuthUserinfoController_getUserinfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthUserInfoResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "获取当前授权用户信息",
+        "tags": [
+          "Commons-Designs / OAuth"
+        ]
+      },
+      "post": {
+        "operationId": "OAuthUserinfoController_postUserinfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthUserInfoResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "launcher-token": []
+          }
+        ],
+        "summary": "获取当前授权用户信息（POST 变体）",
         "tags": [
           "Commons-Designs / OAuth"
         ]
@@ -2251,6 +2324,57 @@
         ]
       }
     },
+    "/api/user/oauth/authorizations": {
+      "get": {
+        "description": "来自\"记住授权\"的记录，含服务名、授权范围与活跃令牌数。",
+        "operationId": "UserController_listAuthorizations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "我已授权的旗下服务列表",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/oauth/authorizations/{clientId}": {
+      "delete": {
+        "description": "删除记住的授权并立即吊销该服务持有的全部令牌。",
+        "operationId": "UserController_revokeAuthorization",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "撤销对某服务的授权",
+        "tags": [
+          "User"
+        ]
+      }
+    },
     "/api/users/{id}": {
       "get": {
         "operationId": "PublicUsersController_get",
@@ -3646,6 +3770,239 @@
         ]
       }
     },
+    "/api/admin/oauth-clients": {
+      "get": {
+        "operationId": "AdminOauthClientsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页列表"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "分页列出 OAuth 客户端（oauth.clients）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "description": "client_secret 明文仅在本次响应中返回一次（库中只存哈希）。",
+        "operationId": "AdminOauthClientsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOauthClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminOauthClientDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "client_id 已存在或参数不合法"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "注册 OAuth 客户端（oauth.clients）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/oauth-clients/{clientId}": {
+      "patch": {
+        "operationId": "AdminOauthClientsController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOauthClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminOauthClientDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "更新 OAuth 客户端（oauth.clients）",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "description": "同时吊销其全部令牌并清除记住的授权。",
+        "operationId": "AdminOauthClientsController_remove",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "删除 OAuth 客户端（oauth.clients）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/oauth-clients/{clientId}/secret/reset": {
+      "post": {
+        "description": "新密钥明文仅本次返回；旧密钥立即失效。",
+        "operationId": "AdminOauthClientsController_resetSecret",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "data"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminOauthClientDto"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "重置 client_secret（oauth.clients）",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/admin/site/captcha": {
       "get": {
         "operationId": "AdminCaptchaController_get",
@@ -4496,6 +4853,16 @@
               "S256",
               "plain"
             ]
+          },
+          "remember": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
           }
         },
         "required": [
@@ -4532,6 +4899,9 @@
             "type": "string"
           },
           "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
             "type": "string"
           },
           "redirect_uri": {
@@ -4613,10 +4983,71 @@
           },
           "client_id": {
             "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
           }
         },
         "required": [
           "refresh_token"
+        ]
+      },
+      "OAuthUserInfoUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "description": "仅 scope 含 email 时返回"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "OAuthUserInfoPlayerDto": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "玩家 UUID（32 位无连字符）"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "banned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "uuid",
+          "nickname",
+          "banned"
+        ]
+      },
+      "OAuthUserInfoResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/OAuthUserInfoUserDto"
+          },
+          "player": {
+            "description": "仅 scope 含 player 时返回",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OAuthUserInfoPlayerDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user"
         ]
       },
       "UserPlayerSummaryDto": {
@@ -5776,7 +6207,8 @@
                 "servers.manage",
                 "titles.manage",
                 "banners.manage",
-                "points.adjust"
+                "points.adjust",
+                "oauth.clients"
               ]
             }
           }
@@ -5784,6 +6216,152 @@
         "required": [
           "permissions"
         ]
+      },
+      "AdminOauthClientDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedScopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "player",
+                "email"
+              ]
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "confidential": {
+            "type": "boolean",
+            "description": "机密客户端需在换令牌时提交 client_secret"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-11-08T12:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "example": "2026-11-08T12:00:00.000Z"
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "仅在创建/重置响应中返回一次的明文密钥"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "name",
+          "description",
+          "redirectUris",
+          "allowedScopes",
+          "enabled",
+          "confidential",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateOauthClientDto": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "description": "客户端公开标识；省略时自动生成（mcs_cli_ 前缀）"
+          },
+          "name": {
+            "type": "string",
+            "example": "MC 语音服务"
+          },
+          "description": {
+            "type": "string",
+            "description": "用途说明，展示在授权页"
+          },
+          "redirectUris": {
+            "example": [
+              "https://voice.example.com/oauth/callback"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedScopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "player",
+                "email"
+              ]
+            }
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "机密客户端密钥；省略时自动生成，明文仅返回一次"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "redirectUris"
+        ]
+      },
+      "UpdateOauthClientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedScopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "player",
+                "email"
+              ]
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
       },
       "UpdateCaptchaDto": {
         "type": "object",

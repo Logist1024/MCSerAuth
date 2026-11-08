@@ -20,6 +20,8 @@ export let session: Schema['session'] = undefined as never;
 export let account: Schema['account'] = undefined as never;
 export let player: Schema['player'] = undefined as never;
 export let oauthCode: Schema['oauthCode'] = undefined as never;
+export let oauthClient: Schema['oauthClient'] = undefined as never;
+export let oauthConsent: Schema['oauthConsent'] = undefined as never;
 export let category: Schema['category'] = undefined as never;
 export let nicknameReservation: Schema['nicknameReservation'] = undefined as never;
 export let token: Schema['token'] = undefined as never;
@@ -53,6 +55,8 @@ export function activateSchema(dialect: DatabaseDialect): void {
   account = schema.account;
   player = schema.player;
   oauthCode = schema.oauthCode;
+  oauthClient = schema.oauthClient;
+  oauthConsent = schema.oauthConsent;
   category = schema.category;
   nicknameReservation = schema.nicknameReservation;
   token = schema.token;

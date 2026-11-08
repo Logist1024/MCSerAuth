@@ -25,10 +25,12 @@ import type {
   ActivateTextureResponse,
   DeleteTextureResponse,
   RenamePlayerResponse,
+  UserAuthorizationView,
   UserSettingsResponse,
 } from '@mcserauth/shared';
 import type { Request } from 'express';
 import { AccountAccessService } from '../auth/account-access.service.js';
+import { OAuthClientService } from '../auth/oauth-client.service.js';
 import { RenamePlayerDto, UpdateProfileDto, ChangeEmailDto } from './dto/user.dto.js';
 import { UserService } from './user.service.js';
 /** Current account profile: avatar/signature, rename and textures. */
@@ -40,6 +42,7 @@ export class UserController {
   constructor(
     private readonly accounts: AccountAccessService,
     private readonly users: UserService,
+    private readonly oauthClients: OAuthClientService,
   ) {}
   @Get('settings')
   @SkipThrottle()
@@ -128,6 +131,33 @@ export class UserController {
   ): Promise<DeleteTextureResponse> {
     const user = await this.accounts.requireUser(request);
     return this.users.deleteTexture(user.id, id);
+  }
+  @Get('oauth/authorizations')
+  @SkipThrottle()
+  @ApiOperation({
+    summary: '我已授权的旗下服务列表',
+    description: '来自"记住授权"的记录，含服务名、授权范围与活跃令牌数。',
+  })
+  async listAuthorizations(@Req() request: Request): Promise<{ items: UserAuthorizationView[] }> {
+    const user = await this.accounts.requireUser(request);
+    return { items: await this.oauthClients.listConsentsForUser(user.id) };
+  }
+  @Delete('oauth/authorizations/:clientId')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary: '撤销对某服务的授权',
+    description: '删除记住的授权并立即吊销该服务持有的全部令牌。',
+  })
+  @ApiParam({ name: 'clientId' })
+  async revokeAuthorization(
+    @Req()
+    request: Request,
+    @Param('clientId')
+    clientId: string,
+  ): Promise<{ revoked: boolean }> {
+    const user = await this.accounts.requireUser(request);
+    return { revoked: await this.oauthClients.revokeConsent(user.id, clientId, true) };
   }
 }
 /** Public profile (no email); authenticated users are not required. */

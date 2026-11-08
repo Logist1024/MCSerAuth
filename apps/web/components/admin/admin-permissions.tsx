@@ -23,6 +23,7 @@ const PERMISSION_HINTS: Record<AdminPermission, string> = {
   'titles.manage': '新建特别称号、授予与收回，处理满级称号申请。',
   'banners.manage': '审核玩家购买的首页 Banner，驳回会自动退积分。',
   'points.adjust': '手动增减用户积分并写入积分流水。',
+  'oauth.clients': '注册与管理 OAuth 接入客户端（旗下服务登录）。',
 };
 
 /** Superadmin-only matrix that delegates individual capabilities to staff. */

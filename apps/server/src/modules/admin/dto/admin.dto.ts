@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { SKIN_KINDS, SKIN_STATUSES, type SkinKind, type SkinStatus } from '@mcserauth/shared';
 import {
+  OAUTH_SCOPES,
+  SKIN_KINDS,
+  SKIN_STATUSES,
+  type OAuthScope,
+  type SkinKind,
+  type SkinStatus,
+} from '@mcserauth/shared';
+import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsNotEmpty,
@@ -119,4 +127,111 @@ export class AdminTextureDto {
 
   @ApiProperty({ description: '带签名的短期预览 URL' })
   url!: string;
+}
+
+export class CreateOauthClientDto {
+  @ApiPropertyOptional({
+    description: '客户端公开标识；省略时自动生成（mcs_cli_ 前缀）',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{6,128}$/, {
+    message: 'clientId 仅允许字母、数字、点、下划线与连字符（6–128 位）',
+  })
+  clientId?: string;
+
+  @ApiProperty({ example: 'MC 语音服务' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  name!: string;
+
+  @ApiPropertyOptional({ description: '用途说明，展示在授权页' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @ApiProperty({ type: [String], example: ['https://voice.example.com/oauth/callback'] })
+  @IsArray()
+  redirectUris!: string[];
+
+  @ApiPropertyOptional({ enum: OAUTH_SCOPES, isArray: true })
+  @IsOptional()
+  allowedScopes?: OAuthScope[];
+
+  @ApiPropertyOptional({ description: '机密客户端密钥；省略时自动生成，明文仅返回一次' })
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  clientSecret?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+}
+
+export class UpdateOauthClientDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string | null;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  redirectUris?: string[];
+
+  @ApiPropertyOptional({ enum: OAUTH_SCOPES, isArray: true })
+  @IsOptional()
+  allowedScopes?: OAuthScope[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+}
+
+export class AdminOauthClientDto {
+  @ApiProperty()
+  id!: number;
+
+  @ApiProperty()
+  clientId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ nullable: true })
+  description!: string | null;
+
+  @ApiProperty({ type: [String] })
+  redirectUris!: string[];
+
+  @ApiProperty({ enum: OAUTH_SCOPES, isArray: true })
+  allowedScopes!: OAuthScope[];
+
+  @ApiProperty()
+  enabled!: boolean;
+
+  @ApiProperty({ description: '机密客户端需在换令牌时提交 client_secret' })
+  confidential!: boolean;
+
+  @ApiProperty({ example: '2026-11-08T12:00:00.000Z' })
+  createdAt!: string;
+
+  @ApiProperty({ example: '2026-11-08T12:00:00.000Z' })
+  updatedAt!: string;
+
+  @ApiPropertyOptional({ description: '仅在创建/重置响应中返回一次的明文密钥' })
+  clientSecret?: string;
 }

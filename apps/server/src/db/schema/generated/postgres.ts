@@ -117,6 +117,29 @@ export const oauthCode = pgTable('oauth_code', {
   index('oauth_code_expires_at_idx').on(t.expiresAt),
 ]);
 
+export const oauthClient = pgTable('oauth_client', {
+  id: serial('id').primaryKey(),
+  clientId: varchar('client_id', { length: 191 }).notNull().unique(),
+  clientSecretHash: varchar('client_secret_hash', { length: 128 }),
+  name: varchar('name', { length: 128 }).notNull(),
+  description: text('description'),
+  redirectUris: jsonb('redirect_uris').$type<string[]>().notNull().$defaultFn(() => []),
+  allowedScopes: jsonb('allowed_scopes').$type<string[]>().notNull().$defaultFn(() => []),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
+});
+
+export const oauthConsent = pgTable('oauth_consent', {
+  id: serial('id').primaryKey(),
+  userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
+  clientId: varchar('client_id', { length: 191 }).notNull(),
+  scope: text('scope').notNull(),
+  grantedAt: timestamp('granted_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
+}, (t) => [
+  uniqueIndex('oauth_consent_user_client_unique').on(t.userId, t.clientId),
+]);
+
 export const category = pgTable('category', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
@@ -142,6 +165,8 @@ export const token = pgTable('token', {
   accessTokenHash: varchar('access_token_hash', { length: 128 }).notNull().unique(),
   refreshTokenHash: varchar('refresh_token_hash', { length: 128 }).notNull().unique(),
   clientTokenHash: varchar('client_token_hash', { length: 128 }),
+  clientId: varchar('client_id', { length: 191 }),
+  scope: text('scope'),
   deviceName: varchar('device_name', { length: 128 }),
   ip: varchar('ip', { length: 64 }),
   expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: false }).notNull(),
@@ -151,6 +176,7 @@ export const token = pgTable('token', {
 }, (t) => [
   index('token_player_uuid_idx').on(t.playerUuid),
   index('token_expires_at_idx').on(t.expiresAt),
+  index('token_client_id_idx').on(t.clientId),
 ]);
 
 export const gameSession = pgTable('game_session', {
