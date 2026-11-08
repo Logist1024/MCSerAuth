@@ -4,6 +4,14 @@
   "private": true,
   "description": "MCSerAuth — integrated forum and external login authentication system for third-party Minecraft: Java Edition servers",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Logist1024/MCSerAuth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Logist1024/MCSerAuth/issues"
+  },
+  "homepage": "https://github.com/Logist1024/MCSerAuth#readme",
   "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=22.0.0"
