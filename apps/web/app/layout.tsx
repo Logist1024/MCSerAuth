@@ -3,7 +3,12 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 import { ToastProvider } from '@/components/toast';
-import { APPEARANCE_INIT_SCRIPT } from '@/lib/appearance';
+import {
+  APPEARANCE_INIT_SCRIPT,
+  DEFAULT_ICON_STYLE,
+  DEFAULT_THEME_COLOR,
+  DEFAULT_THEME_MODE,
+} from '@/lib/appearance';
 import { loadSiteDisplay } from '@/lib/site-settings';
 import './globals.css';
 
@@ -32,9 +37,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html
       lang="zh-CN"
       data-scroll-behavior="smooth"
-      data-theme-mode="system"
-      data-theme-color="green"
-      data-icon-style="svg"
+      data-theme-mode={DEFAULT_THEME_MODE}
+      data-theme-color={DEFAULT_THEME_COLOR}
+      data-icon-style={DEFAULT_ICON_STYLE}
       // 内联初始化脚本会在水合前改写这三个 data 属性（外观偏好），
       // 服务端默认值与客户端实际值不同是预期行为，抑制该属性级警告。
       suppressHydrationWarning

@@ -13,11 +13,17 @@ const consoleRewrite =
     ? [{ source: consolePath, destination: '/console' }]
     : [];
 
+const apiProxyTarget = process.env.API_PROXY_TARGET?.trim();
+const apiRewrite =
+  apiProxyTarget !== undefined && apiProxyTarget !== ''
+    ? [{ source: '/api/:path*', destination: `${apiProxyTarget}/api/:path*` }]
+    : [];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   async rewrites() {
-    return consoleRewrite;
+    return [...apiRewrite, ...consoleRewrite];
   },
   async redirects() {
     return [

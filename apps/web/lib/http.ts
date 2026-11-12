@@ -5,7 +5,30 @@ import {
   type ProtocolErrorBody,
 } from '@mcserauth/shared';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+
+/**
+ * Server-side rendering keeps the configured origin (the web process runs next
+ * to the API). In the browser, a localhost-only origin is rewritten to the
+ * current origin when the page itself is served from another host, so a public
+ * preview tunnel can proxy `/api` through the web app.
+ */
+function resolveApiBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return CONFIGURED_API_BASE_URL;
+  }
+  try {
+    const url = new URL(CONFIGURED_API_BASE_URL);
+    if (url.hostname === 'localhost' && window.location.hostname !== 'localhost') {
+      return '';
+    }
+  } catch {
+    return '';
+  }
+  return CONFIGURED_API_BASE_URL;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 export const DEFAULT_TIMEOUT_MS = 15_000;
 
 /** Failure of a unified-envelope endpoint (business code + HTTP status). */

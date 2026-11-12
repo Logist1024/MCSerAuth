@@ -1,0 +1,425 @@
+/* --------------------------------------------------------------- buttons */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.2rem;
+  padding: 0.38rem 0.85rem;
+  /* M3 filled button：主色实心 + on-primary 文字，跟随主题点缀色。 */
+  background: var(--md-primary);
+  border: 1px solid color-mix(in srgb, var(--md-primary) 72%, black);
+  border-radius: calc(var(--radius-sm) + 3px);
+  color: var(--md-on-primary);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background-color var(--md-duration-short) var(--md-ease-standard),
+    border-color var(--md-duration-short) var(--md-ease-standard);
+}
+
+.button.primary {
+  background: var(--md-primary);
+  border-color: color-mix(in srgb, var(--md-primary) 72%, black);
+  color: var(--md-on-primary);
+}
+
+.button:hover,
+.button.primary:hover {
+  background: color-mix(in srgb, var(--md-primary) 88%, black);
+  border-color: color-mix(in srgb, var(--md-primary) 82%, black);
+}
+
+.button:active {
+  background: color-mix(in srgb, var(--md-primary) 80%, black);
+  border-color: color-mix(in srgb, var(--md-primary) 72%, black);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.button.secondary {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--fg);
+  box-shadow: none;
+}
+
+.button.secondary:hover {
+  border-color: var(--muted-strong);
+  background: var(--surface-strong);
+  color: var(--fg-strong);
+}
+
+.button.ghost {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--fg);
+  box-shadow: none;
+}
+
+.button.ghost:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+}
+
+.button.danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: transparent;
+  color: var(--danger);
+  box-shadow: none;
+}
+
+.button.danger:hover {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+}
+
+.button.danger-solid {
+  /* 危险实心按钮：与主按钮同一填充结构，主体为红色系。 */
+  background: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 70%, black);
+  color: #fff;
+}
+
+.button.danger-solid:hover,
+.button.danger-solid:active {
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+.button.small {
+  min-height: 1.9rem;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.button.tiny {
+  min-height: 1.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+}
+
+.button svg {
+  flex: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- surfaces */
+
+.panel,
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.panel {
+  overflow: hidden;
+}
+
+.card {
+  padding: 1.15rem 1.25rem;
+}
+
+.card + .card {
+  margin-top: 1rem;
+}
+
+.card h1,
+.card h2 {
+  margin-top: 0;
+}
+
+.card > h1:first-child,
+.card > h2:first-child {
+  margin-top: 0;
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.8rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.panel-head h2,
+.panel-head h1 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.panel-meta {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-body {
+  padding: 1rem 1.15rem;
+}
+
+/* Cards that embed a panel header (growth centre, leaderboards) get an edge-to-edge strip. */
+.card > .panel-head:first-child {
+  margin: -1.15rem -1.25rem 0.9rem;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-heading h1,
+.section-heading h2 {
+  margin: 0;
+}
+
+.section-heading h1 {
+  font-size: 1.35rem;
+}
+
+.section-heading h2 {
+  font-size: 1rem;
+}
+
+.stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.ok {
+  color: var(--success);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.small {
+  font-size: 0.8125rem;
+}
+
+.tiny-text {
+  font-size: 0.74rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------- page headings */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.page-head h1 {
+  margin: 0.1rem 0 0.3rem;
+  font-size: clamp(1.55rem, 2.8vw, 1.95rem);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.page-eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-description {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--muted);
+}
+
+.page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.breadcrumb a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--accent);
+}
+
+.breadcrumb .sep {
+  opacity: 0.45;
+}
+
+/* Accessible breadcrumbs shared by forum, topic, composer and profile pages. */
+.breadcrumbs {
+  margin: 0 0 0.9rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.breadcrumbs a {
+  border-radius: 4px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumbs li:last-child span:not(.breadcrumbs-sep) {
+  max-width: min(60vw, 28rem);
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumbs-sep {
+  opacity: 0.45;
+}
+
+/* --------------------------------------------------------------- avatars */
+
+.avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  border-radius: 50%;
+  background: hsl(var(--avatar-hue) 42% 43%);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar-fallback {
+  font-size: 0.44em;
+  letter-spacing: 0.02em;
+}
+
+.avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-xs {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+}
+
+.avatar-sm {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.85rem;
+}
+
+.avatar-md {
+  width: 2.45rem;
+  height: 2.45rem;
+  font-size: 1rem;
+}
+
+.avatar-lg {
+  width: 4.75rem;
+  height: 4.75rem;
+  font-size: 1.5rem;
+  border-radius: 1rem;
+}

@@ -42,6 +42,7 @@ export default function SkinPreview({
         if (cancelled || canvas.current === null) {
           return;
         }
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const instance = new SkinViewer({
           canvas: canvas.current,
           width: 300,
@@ -49,10 +50,13 @@ export default function SkinPreview({
           fov: 42,
           zoom: 0.92,
         });
-        instance.autoRotate = true;
+        instance.autoRotate = !reduceMotion;
         instance.autoRotateSpeed = 0.55;
         instance.animation = new IdleAnimation();
         viewer.current = instance;
+        if (reduceMotion) {
+          setRotating(false);
+        }
         setReady(true);
       } catch {
         if (!cancelled) {

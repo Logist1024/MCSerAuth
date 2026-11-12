@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/breadcrumbs';
 import PostEditor from '@/components/post-editor';
-import { Icon } from '@/components/icons';
+import EmptyState from '@/components/ui/empty-state';
 import { findCategory } from '@/lib/categories';
 import { formatDateTime } from '@/lib/format';
 import { serverApiFetch } from '@/lib/server-api';
@@ -33,15 +33,16 @@ export default async function NewPostPage({ searchParams }: PageProps) {
           </div>
         </header>
         <section className="panel">
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="user" width={22} height={22} />
-            </span>
-            <p>发帖需要一个社区账号。登录或注册后会回到这里。</p>
-            <Link className="button primary" href="/login?next=%2Fforum%2Fnew">
-              登录 / 注册
-            </Link>
-          </div>
+          <EmptyState
+            icon="user"
+            title="需要登录"
+            description="发帖需要一个社区账号。登录或注册后会回到这里。"
+            action={
+              <Link className="button primary" href="/login?next=%2Fforum%2Fnew">
+                登录 / 注册
+              </Link>
+            }
+          />
         </section>
       </>
     );
@@ -56,12 +57,12 @@ export default async function NewPostPage({ searchParams }: PageProps) {
           </div>
         </header>
         <section className="panel">
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="alert" width={22} height={22} />
-            </span>
-            <p className="bad">你的账号已被论坛封禁，无法发帖。</p>
-          </div>
+          <EmptyState
+            icon="alert"
+            tone="error"
+            title="无法发帖"
+            description="你的账号已被论坛封禁，无法发帖。"
+          />
         </section>
       </>
     );
@@ -79,14 +80,12 @@ export default async function NewPostPage({ searchParams }: PageProps) {
           </div>
         </header>
         <section className="panel">
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="alert" width={22} height={22} />
-            </span>
-            <p className="bad">
-              你的账号处于禁言状态，解除时间：{formatDateTime(settings.user.mutedUntil)}。
-            </p>
-          </div>
+          <EmptyState
+            icon="alert"
+            tone="error"
+            title="账号处于禁言状态"
+            description={`你的账号处于禁言状态，解除时间：${formatDateTime(settings.user.mutedUntil)}。`}
+          />
         </section>
       </>
     );
@@ -119,12 +118,12 @@ export default async function NewPostPage({ searchParams }: PageProps) {
 
       {categories === null ? (
         <section className="panel">
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="alert" width={22} height={22} />
-            </span>
-            <p>版块数据加载失败，请确认 API 服务已启动。</p>
-          </div>
+          <EmptyState
+            icon="alert"
+            tone="error"
+            title="版块加载失败"
+            description="版块数据加载失败，请确认 API 服务已启动。"
+          />
         </section>
       ) : (
         <PostEditor

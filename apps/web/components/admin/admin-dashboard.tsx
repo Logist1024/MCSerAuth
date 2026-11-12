@@ -7,6 +7,7 @@ import {
   type UserRole,
 } from '@mcserauth/shared';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { KeyboardEvent } from 'react';
 import AdminAnnouncements from './admin-announcements';
 import AdminCategories from './admin-categories';
 import AdminCaptcha from './admin-captcha';
@@ -104,6 +105,31 @@ export default function AdminDashboard({
     router.replace(`/admin?tab=${next}`, { scroll: false });
   }
 
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    let next = index;
+    if (event.key === 'ArrowRight') {
+      next = (index + 1) % visibleTabs.length;
+    } else if (event.key === 'ArrowLeft') {
+      next = (index - 1 + visibleTabs.length) % visibleTabs.length;
+    } else if (event.key === 'Home') {
+      next = 0;
+    } else if (event.key === 'End') {
+      next = visibleTabs.length - 1;
+    }
+    const target = visibleTabs[next];
+    if (target === undefined) {
+      return;
+    }
+    selectTab(target.key);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`admin-tab-${target.key}`)?.focus();
+    });
+  }
+
   return (
     <>
       <section className="card">
@@ -114,14 +140,18 @@ export default function AdminDashboard({
           </span>
         </div>
         <div className="tabs" role="tablist" aria-label="管理后台分区">
-          {visibleTabs.map((item) => (
+          {visibleTabs.map((item, index) => (
             <button
               key={item.key}
+              id={`admin-tab-${item.key}`}
               className={`tab${tab === item.key ? ' active' : ''}`}
               type="button"
               role="tab"
               aria-selected={tab === item.key}
+              aria-controls={`admin-panel-${item.key}`}
+              tabIndex={tab === item.key ? 0 : -1}
               onClick={() => selectTab(item.key)}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
             >
               {item.label}
             </button>
@@ -129,19 +159,27 @@ export default function AdminDashboard({
         </div>
       </section>
 
-      {tab === 'overview' ? <AdminOverview /> : null}
-      {tab === 'reports' ? <AdminReports /> : null}
-      {tab === 'users' ? <AdminUsers role={role} viewerId={viewerId} /> : null}
-      {tab === 'textures' ? <AdminTextures /> : null}
-      {tab === 'growth' ? <AdminGrowth role={role} permissions={permissions} /> : null}
-      {tab === 'rules' ? <AdminRules /> : null}
-      {tab === 'home' ? <AdminHome /> : null}
-      {tab === 'captcha' ? <AdminCaptcha /> : null}
-      {tab === 'site' ? <AdminSite /> : null}
-      {tab === 'categories' ? <AdminCategories /> : null}
-      {tab === 'announcements' ? <AdminAnnouncements /> : null}
-      {tab === 'servers' ? <AdminServers /> : null}
-      {tab === 'permissions' ? <AdminPermissionsPanel /> : null}
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        id={`admin-panel-${tab}`}
+        aria-labelledby={`admin-tab-${tab}`}
+        tabIndex={-1}
+      >
+        {tab === 'overview' ? <AdminOverview /> : null}
+        {tab === 'reports' ? <AdminReports /> : null}
+        {tab === 'users' ? <AdminUsers role={role} viewerId={viewerId} /> : null}
+        {tab === 'textures' ? <AdminTextures /> : null}
+        {tab === 'growth' ? <AdminGrowth role={role} permissions={permissions} /> : null}
+        {tab === 'rules' ? <AdminRules /> : null}
+        {tab === 'home' ? <AdminHome /> : null}
+        {tab === 'captcha' ? <AdminCaptcha /> : null}
+        {tab === 'site' ? <AdminSite /> : null}
+        {tab === 'categories' ? <AdminCategories /> : null}
+        {tab === 'announcements' ? <AdminAnnouncements /> : null}
+        {tab === 'servers' ? <AdminServers /> : null}
+        {tab === 'permissions' ? <AdminPermissionsPanel /> : null}
+      </div>
     </>
   );
 }

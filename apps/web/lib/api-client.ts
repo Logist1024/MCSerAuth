@@ -159,7 +159,13 @@ export function fetchMyProfile(
 
 /** Builds the browser-facing consent URL (NestJS-rendered page). */
 export function buildOAuthEntryUrl(params: OAuthEntryQuery): string {
-  const url = new URL('/api/oauth/entry', API_BASE_URL);
+  const origin =
+    API_BASE_URL !== ''
+      ? API_BASE_URL
+      : typeof window !== 'undefined'
+        ? window.location.origin
+        : 'http://localhost:8000';
+  const url = new URL('/api/oauth/entry', origin);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') {
       url.searchParams.set(key, value);

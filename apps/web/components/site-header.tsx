@@ -29,6 +29,7 @@ export default function SiteHeader({
   const [unread, setUnread] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
   const menu = useRef<HTMLDetailsElement>(null);
+  const mobileNav = useRef<HTMLDetailsElement>(null);
   const inFlight = useRef(false);
   const lastFocusReload = useRef(0);
 
@@ -96,18 +97,20 @@ export default function SiteHeader({
     if (menu.current !== null) {
       menu.current.open = false;
     }
+    if (mobileNav.current !== null) {
+      mobileNav.current.open = false;
+    }
   }, [pathname]);
 
   useEffect(() => {
     const onDocumentClick = (event: MouseEvent): void => {
-      const element = menu.current;
-      if (
-        element !== null &&
-        element.open &&
-        event.target instanceof Node &&
-        !element.contains(event.target)
-      ) {
-        element.open = false;
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+      for (const element of [menu.current, mobileNav.current]) {
+        if (element !== null && element.open && !element.contains(event.target)) {
+          element.open = false;
+        }
       }
     };
     document.addEventListener('click', onDocumentClick);
@@ -116,12 +119,15 @@ export default function SiteHeader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const element = menu.current;
-      if (event.key !== 'Escape' || element === null || !element.open) {
+      if (event.key !== 'Escape') {
         return;
       }
-      element.open = false;
-      element.querySelector<HTMLElement>('summary')?.focus();
+      for (const element of [menu.current, mobileNav.current]) {
+        if (element !== null && element.open) {
+          element.open = false;
+          element.querySelector<HTMLElement>('summary')?.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -197,6 +203,59 @@ export default function SiteHeader({
         </nav>
 
         <div className="header-actions">
+          <details className="mobile-nav" ref={mobileNav}>
+            <summary className="mobile-nav-trigger" aria-label="打开导航菜单">
+              <span className="mobile-nav-bars" aria-hidden="true" />
+            </summary>
+            <nav
+              className="mobile-nav-panel"
+              aria-label="移动端导航"
+              onClick={(event) => {
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest('a') !== null &&
+                  mobileNav.current !== null
+                ) {
+                  mobileNav.current.open = false;
+                }
+              }}
+            >
+              <Link
+                className="mobile-nav-item"
+                href="/forum"
+                aria-current={forumActive ? 'page' : undefined}
+              >
+                论坛
+              </Link>
+              <Link
+                className="mobile-nav-item"
+                href="/textures"
+                aria-current={texturesActive ? 'page' : undefined}
+              >
+                游戏账号管理
+              </Link>
+              {signedIn ? (
+                <Link className="mobile-nav-item" href="/forum/growth">
+                  成长中心
+                </Link>
+              ) : null}
+              {signedIn ? (
+                <Link className="mobile-nav-item" href={composeHref}>
+                  发起新话题
+                </Link>
+              ) : null}
+              {signedIn && isModerator ? (
+                <Link className="mobile-nav-item" href="/admin">
+                  管理后台
+                </Link>
+              ) : null}
+              {!signedIn && !onLoginPage ? (
+                <Link className="mobile-nav-item" href={loginHref}>
+                  登录 / 注册
+                </Link>
+              ) : null}
+            </nav>
+          </details>
           <AppearanceMenu />
           {signedIn ? (
             <Link

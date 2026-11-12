@@ -27,6 +27,7 @@
     "typecheck": "pnpm --filter @mcserauth/shared build && pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
+    "visual:baseline": "node apps/web/scripts/visual-baseline.mjs",
     "db:generate": "pnpm --filter @mcserauth/server db:generate:all",
     "db:generate:sqlite": "pnpm --filter @mcserauth/server db:generate",
     "db:generate:schemas": "pnpm --filter @mcserauth/server db:generate:schemas",
@@ -50,6 +51,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.10",
+    "playwright": "1.63.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.2"
   },
@@ -65,7 +67,9 @@
   "pnpm": {
     "overrides": {
       "body-parser": "^2.4.0",
-      "multer": "^2.5.0"
+      "multer": "^2.5.0",
+      "@angular-devkit/schematics>magic-string": "0.30.21",
+      "@angular-devkit/schematics>ora": "5.4.1"
     }
   }
 }

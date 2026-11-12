@@ -1,0 +1,144 @@
+/* ==========================================================================
+   Icon dual render & appearance menu
+   Icon renders both an SVG and an emoji span; html[data-icon-style] picks one.
+   ========================================================================== */
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.icon-emoji {
+  display: none;
+}
+
+[data-icon-style='emoji'] .icon-svg {
+  display: none;
+}
+
+[data-icon-style='emoji'] .icon-emoji {
+  display: inline;
+}
+
+.appearance-menu {
+  position: relative;
+}
+
+.appearance-menu-trigger {
+  cursor: pointer;
+  list-style: none;
+}
+
+.appearance-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.appearance-menu-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 0.7rem;
+  width: 14.5rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: pop-in 0.12s ease-out;
+}
+
+.appearance-menu-title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.appearance-section {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.appearance-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.appearance-segment {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.appearance-segment button {
+  flex: 1;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.appearance-segment button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.appearance-colors {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.appearance-color-dot {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.appearance-color-dot:hover {
+  transform: scale(1.1);
+}
+
+.appearance-color-dot[data-active='true'] {
+  border-color: var(--fg-strong);
+}
+
+.appearance-color-dot[data-color='green'] {
+  background: #0c6f4d;
+}
+
+.appearance-color-dot[data-color='blue'] {
+  background: #1f6feb;
+}
+
+.appearance-color-dot[data-color='purple'] {
+  background: #7c3aed;
+}
+
+.appearance-color-dot[data-color='orange'] {
+  background: #d97a06;
+}
+
+.appearance-color-dot[data-color='pink'] {
+  background: #d6336c;
+}

@@ -7,7 +7,7 @@ import type {
 } from '@mcserauth/shared';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -15,6 +15,7 @@ import {
 } from '@/lib/api-client';
 import { describeApiError } from '@/lib/errors';
 import { formatDateTime, formatRelativeTime } from '@/lib/format';
+import EmptyState from '@/components/ui/empty-state';
 import { Icon, type IconName } from '@/components/icons';
 import Pagination from '@/components/pagination';
 import { useToast } from '@/components/toast';
@@ -115,6 +116,23 @@ function NotificationsContent() {
     });
   }, [data, statusFilter, typeFilter]);
 
+  function onStatusTabKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    let next: 'all' | 'unread' = statusFilter === 'all' ? 'unread' : 'all';
+    if (event.key === 'Home') {
+      next = 'all';
+    } else if (event.key === 'End') {
+      next = 'unread';
+    }
+    setStatusFilter(next);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`notif-tab-${next}`)?.focus();
+    });
+  }
+
   function markLocally(notification: ForumNotification): void {
     setData((current) => {
       if (current === null) {
@@ -199,21 +217,29 @@ function NotificationsContent() {
         <div className="notification-toolbar">
           <div className="filter-tabs" role="tablist" aria-label="通知状态">
             <button
+              id="notif-tab-all"
               className={`filter-tab${statusFilter === 'all' ? ' active' : ''}`}
               type="button"
               role="tab"
               aria-selected={statusFilter === 'all'}
+              aria-controls="notif-panel"
+              tabIndex={statusFilter === 'all' ? 0 : -1}
               onClick={() => setStatusFilter('all')}
+              onKeyDown={onStatusTabKeyDown}
             >
               全部
               {data !== null ? <span className="filter-tab-count">{data.items.length}</span> : null}
             </button>
             <button
+              id="notif-tab-unread"
               className={`filter-tab${statusFilter === 'unread' ? ' active' : ''}`}
               type="button"
               role="tab"
               aria-selected={statusFilter === 'unread'}
+              aria-controls="notif-panel"
+              tabIndex={statusFilter === 'unread' ? 0 : -1}
               onClick={() => setStatusFilter('unread')}
+              onKeyDown={onStatusTabKeyDown}
             >
               未读
               {data !== null ? <span className="filter-tab-count">{data.unreadCount}</span> : null}
@@ -234,89 +260,97 @@ function NotificationsContent() {
           </select>
         </div>
 
-        {loading ? (
-          <div className="loading-state" aria-label="加载中">
-            {[0, 1, 2, 3].map((index) => (
-              <div className="skeleton-line" key={index} />
-            ))}
-          </div>
-        ) : error !== null ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="alert" width={22} height={22} />
-            </span>
-            <p className="bad">{error}</p>
-            <Link className="button primary" href="/login?next=%2Fnotifications">
-              去登录
-            </Link>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">
-              <Icon name="inbox" width={22} height={22} />
-            </span>
-            <p>{statusFilter === 'unread' ? '没有未读通知。' : '暂时没有通知。'}</p>
-            <Link className="button ghost" href="/forum">
-              返回论坛
-            </Link>
-          </div>
-        ) : (
-          <ul className="notification-list">
-            {filtered.map((notification) => (
-              <li key={notification.id}>
-                <button
-                  className={`notification-row${notification.readAt === null ? ' unread' : ''}`}
-                  type="button"
-                  onClick={() => void open(notification)}
-                  disabled={busyId === notification.id}
-                  aria-label={`${TYPE_LABELS[notification.type]}通知：${notificationText(notification)}`}
-                >
-                  <span className={`notification-icon ${notification.type}`}>
-                    <Icon name={TYPE_ICONS[notification.type]} width={17} height={17} />
-                  </span>
-                  <span className="notification-body">
-                    <span className="notification-title">
-                      {notification.actor !== null ? (
-                        <strong>{notification.actor.name}</strong>
-                      ) : (
-                        <strong>{TYPE_LABELS[notification.type]}</strong>
-                      )}
-                      <span>{notificationText(notification)}</span>
+        <div
+          role="tabpanel"
+          id="notif-panel"
+          aria-labelledby={`notif-tab-${statusFilter}`}
+          tabIndex={-1}
+        >
+          {loading ? (
+            <div className="loading-state" aria-label="加载中">
+              {[0, 1, 2, 3].map((index) => (
+                <div className="skeleton-line" key={index} />
+              ))}
+            </div>
+          ) : error !== null ? (
+            <EmptyState
+              icon="alert"
+              tone="error"
+              description={error}
+              action={
+                <Link className="button primary" href="/login?next=%2Fnotifications">
+                  去登录
+                </Link>
+              }
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon="inbox"
+              description={statusFilter === 'unread' ? '没有未读通知。' : '暂时没有通知。'}
+              action={
+                <Link className="button ghost" href="/forum">
+                  返回论坛
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="notification-list">
+              {filtered.map((notification) => (
+                <li key={notification.id}>
+                  <button
+                    className={`notification-row${notification.readAt === null ? ' unread' : ''}`}
+                    type="button"
+                    onClick={() => void open(notification)}
+                    disabled={busyId === notification.id}
+                    aria-label={`${TYPE_LABELS[notification.type]}通知：${notificationText(notification)}`}
+                  >
+                    <span className={`notification-icon ${notification.type}`}>
+                      <Icon name={TYPE_ICONS[notification.type]} width={17} height={17} />
                     </span>
-                    <time
-                      className="notification-time"
-                      dateTime={notification.createdAt}
-                      title={formatDateTime(notification.createdAt)}
-                    >
-                      {formatRelativeTime(notification.createdAt)}
-                    </time>
-                  </span>
-                  {notification.readAt === null ? (
-                    <span className="notification-unread-dot" aria-label="未读" />
-                  ) : (
-                    <span aria-hidden="true" />
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                    <span className="notification-body">
+                      <span className="notification-title">
+                        {notification.actor !== null ? (
+                          <strong>{notification.actor.name}</strong>
+                        ) : (
+                          <strong>{TYPE_LABELS[notification.type]}</strong>
+                        )}
+                        <span>{notificationText(notification)}</span>
+                      </span>
+                      <time
+                        className="notification-time"
+                        dateTime={notification.createdAt}
+                        title={formatDateTime(notification.createdAt)}
+                      >
+                        {formatRelativeTime(notification.createdAt)}
+                      </time>
+                    </span>
+                    {notification.readAt === null ? (
+                      <span className="notification-unread-dot" aria-label="未读" />
+                    ) : (
+                      <span aria-hidden="true" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
-        {filtered.length > 0 ? (
-          <div className="notification-page-foot">
-            <Link href="/forum">返回论坛</Link>
-          </div>
-        ) : null}
+          {filtered.length > 0 ? (
+            <div className="notification-page-foot">
+              <Link href="/forum">返回论坛</Link>
+            </div>
+          ) : null}
 
-        {data !== null ? (
-          <Pagination
-            page={data.page}
-            pageSize={data.pageSize}
-            total={data.total}
-            buildHref={(target) => `/notifications?page=${target}`}
-            label="通知分页"
-          />
-        ) : null}
+          {data !== null ? (
+            <Pagination
+              page={data.page}
+              pageSize={data.pageSize}
+              total={data.total}
+              buildHref={(target) => `/notifications?page=${target}`}
+              label="通知分页"
+            />
+          ) : null}
+        </div>
       </section>
     </>
   );

@@ -20,6 +20,7 @@ import {
 import { describeApiError } from '@/lib/errors';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { roleClass, roleLabel } from '@/lib/forum-ui';
+import ConfirmDialog from '@/components/confirm-dialog';
 
 const ROLE_OPTIONS: UserRole[] = ['user', 'reviewer', 'admin', 'superadmin'];
 type Tab = 'site' | 'staff';
@@ -54,6 +55,7 @@ export default function ConsoleClient() {
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
   const [clearSmtpPass, setClearSmtpPass] = useState(false);
+  const [confirmSmtpOpen, setConfirmSmtpOpen] = useState(false);
 
   const applySettings = useCallback((current: SiteSettings) => {
     setSettings(current);
@@ -140,25 +142,22 @@ export default function ConsoleClient() {
 
   async function saveSettings(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    // Guard the silent trap of filling in SMTP credentials while the provider
+    // stays on console: every mail would only land in the server log.
+    if (
+      mailProvider === 'console' &&
+      (smtpHost.trim() !== '' || smtpUser.trim() !== '' || smtpPass.trim() !== '')
+    ) {
+      setConfirmSmtpOpen(true);
+      return;
+    }
+    await persistSettings(mailProvider);
+  }
+
+  async function persistSettings(provider: SiteSettings['mailProvider']): Promise<void> {
     setBusy(true);
     setError(null);
     setNotice(null);
-    // Guard the silent trap of filling in SMTP credentials while the provider
-    // stays on console: every mail would only land in the server log.
-    let provider = mailProvider;
-    if (
-      provider === 'console' &&
-      (smtpHost.trim() !== '' || smtpUser.trim() !== '' || smtpPass.trim() !== '')
-    ) {
-      if (
-        window.confirm(
-          'SMTP 参数已填写，但发件方式仍为 console，邮件不会真实发送。是否切换为 SMTP？',
-        )
-      ) {
-        provider = 'smtp';
-        setMailProvider('smtp');
-      }
-    }
     try {
       const updated = await consoleUpdateSettings({
         siteName: siteName.trim(),
@@ -303,6 +302,22 @@ export default function ConsoleClient() {
 
   return (
     <div className="stack">
+      <ConfirmDialog
+        open={confirmSmtpOpen}
+        title="发件方式仍为 console"
+        description="SMTP 参数已填写，但发件方式仍为 console，邮件不会真实发送。是否切换为 SMTP？"
+        confirmLabel="切换为 SMTP"
+        cancelLabel="保持 console"
+        onCancel={() => {
+          setConfirmSmtpOpen(false);
+          void persistSettings('console');
+        }}
+        onConfirm={() => {
+          setConfirmSmtpOpen(false);
+          setMailProvider('smtp');
+          void persistSettings('smtp');
+        }}
+      />
       <section className="card">
         <div className="section-heading">
           <div>
