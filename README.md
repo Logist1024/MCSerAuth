@@ -201,6 +201,41 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | 社区成长       | 等级 / 称号 / 签到 / 积分 / 商店 / 打赏 / 首页 Banner                           | [features.md §6](docs/features.md) |
 | 人机验证       | 内置 SVG 算术题或 Cloudflare Turnstile / hCaptcha，生产默认开启                 | [features.md §6](docs/features.md) |
 
+## 已知限制
+
+按当前实现如实列出；括号内是实现位置，可自行核对。
+
+**协议与进服**
+
+1. `/api/sessionserver/*`（authlib-injector 兼容层）按 Yggdrasil 语义接受**任意握手哈希**，
+   不校验服务器白名单；只有原生 `/api/session/*` 要求管理员登记过的 `serverId`
+   （`yggdrasil-session.controller.ts` 传 `enforceServerWhitelist: false`，
+   `session.service.ts` 的 `assertServerAllowed`）。
+2. 元数据**不提供 `signaturePublickey`**（`yggdrasil.service.ts` 的 `metadata()`），
+   纹理属性不带 Yggdrasil 签名；依赖签名校验的第三方工具可能不适用。
+3. **本仓库不含 Paper 插件**——进服需要客户端与 Paper 两侧都注入 authlib-injector
+   （`online-mode=false` + `-javaagent`），见[接入拓扑](#接入拓扑)。
+
+**账号与纹理**
+
+4. 一个账号只有一个游戏身份：账号与 player 严格 1:1（`oauth.service.ts` 的
+   `ensurePlayerForUser`），不支持一个账号挂多个角色。
+5. 只支持原版尺寸纹理：皮肤 64×32 / 64×64、披风 64×32、≤ 1 MiB，`sharp` 校验，
+   高清纹理直接拒绝（`texture.service.ts` 的 `ALLOWED_DIMENSIONS` / `assertValidPng`）。
+6. 披风上传需先在积分商店解锁，未解锁返回 403（`xp.service.ts` 的 `assertCapeUnlocked`）；
+   皮肤不受影响。
+7. 登录方式只有**邮箱 + 密码**（better-auth `emailAndPassword`，未配置社交登录 provider）；
+   启动器直登时「用户名」填的是网站邮箱。
+
+**运维**
+
+8. 限流、验证码、进程内缓存都是**内存态，只能单进程运行**；pm2 cluster 或多实例会把
+   限流阈值按进程数稀释、并让一次性验证码令牌跨进程失效
+   （`deploy/ecosystem.config.cjs` 注释、[`docs/deploy.md`](docs/deploy.md) §7）。
+9. 玩家侧「已授权设备」页与 `/api/user/tokens` 已于 2026-10-25 移除，
+   当前吊销启动器令牌的入口只有启动器侧 `POST /api/authserver/invalidate`。
+10. 没有长期在线的演示站；本 README 截图均来自本地 `pnpm dev`。
+
 ## 常用命令
 
 根目录执行（`package.json` → `scripts`）：
