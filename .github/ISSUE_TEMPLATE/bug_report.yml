@@ -1,0 +1,66 @@
+name: Bug 报告
+description: 报告一个可复现的问题。请尽量填全，缺复现命令的 bug 很难排查。
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认：
+        1. 已按 README「部署前必读」与 `docs/deploy.md` 配置生产环境；
+        2. 已搜索过现有 issue，没有重复报告。
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 运行 `curl https://你的域名/health` 查看 `version` 字段，或对照 [Releases](../../releases) 页。
+      placeholder: '例如：1.0.0（来自 /health 返回）'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dialect
+    attributes:
+      label: 数据库方言
+      description: '`DATABASE_URL` 指向的数据库类型。'
+      options:
+        - SQLite（默认）
+        - MySQL 8.0+
+        - PostgreSQL 16+
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现命令
+      description: |
+        从零到出错的最短命令序列（curl / pnpm / 启动器操作步骤均可）。
+        请贴你**实际执行**的命令与参数，不要写「照文档做的」。
+      placeholder: |
+        1. curl -s https://auth.example.com/health/ready
+        2. HMCL 认证服务器填 https://auth.example.com/api，登录 …
+        3. 出错：401 …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为与实际行为
+      placeholder: '期望 X，实际得到 Y（附完整报错原文，不要截图代替文字日志）'
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 服务端日志（可选）
+      description: pm2 日志（Linux：`/var/log/mcserauth/`）或 NSSM 输出文件中与问题相关的片段；敏感字段日志已自动脱敏。
+      render: shell
+
+  - type: input
+    id: env
+    attributes:
+      label: 部署环境（可选）
+      placeholder: '例如：Ubuntu 24.04 VPS + Caddy / Windows Server 2022 + NSSM + 宝塔反代'

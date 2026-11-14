@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/Logist1024/MCSerAuth/blob/main/SECURITY.md
+    about: 请勿用公开 issue 报告安全漏洞，按 SECURITY.md 私密报告。
+  - name: 部署文档
+    url: https://github.com/Logist1024/MCSerAuth/blob/main/docs/deploy.md
+    about: 上线 / .env / 备份恢复的 runbook，多数部署问题在这里已有答案。

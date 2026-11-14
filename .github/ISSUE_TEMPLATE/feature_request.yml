@@ -1,0 +1,25 @@
+name: 功能建议
+description: 提议一个新功能或行为变更。
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先讲场景（你是服主还是玩家、在哪个页面/流程），再讲问题。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你期望的做法
+      description: 如果你能指到 `apps/server/src/modules/` 或 `apps/web/app/` 里相关的文件，请一并写上。
+
+  - type: checkboxes
+    id: protocol
+    attributes:
+      label: 是否涉及 Commons-Designs 协议字段
+      options:
+        - label: 不涉及（纯网站/论坛/部署侧）
+        - label: 涉及（请说明影响哪些端点；协议字段以 `packages/shared/src/protocol/` 为准）
