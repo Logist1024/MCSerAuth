@@ -1,0 +1,29 @@
+# 单镜像构建上下文裁剪：源码与清单进镜像，其余一律排除。
+# 注意保留 docker/（entrypoint.sh 从这里拷入镜像）。
+
+.git
+.github
+.zcode
+.husky
+docs
+deploy
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+LICENSE
+README.md
+README.en.md
+SECURITY.md
+**/*.md
+!apps/web/AGENTS.md
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/tsconfig.tsbuildinfo
+**/data
+**/test
+**/tests
+**/*.log
+**/.env
+**/.env.*

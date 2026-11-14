@@ -1,0 +1,28 @@
+# MCSerAuth 单镜像部署示例（docker compose up -d）。
+#
+# 生产建议仍由宿主机 Caddy/Nginx 终止 TLS 后反代到下面两个端口（参见
+# deploy/Caddyfile），因此端口默认只绑定到 127.0.0.1；如需直接对外暴露，
+# 去掉 127.0.0.1: 前缀并自行保证 HTTPS（生产环境 COOKIE_SECURE 必须为 true，
+# 且 APP_URL/AUTH_URL 不能是回环地址，server 启动时强校验）。
+#
+# 环境变量逐项说明见 docs/deploy.md 第 3 节；同目录提供 env.docker.example。
+
+services:
+  mcserauth:
+    build: .
+    image: mcserauth:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - '127.0.0.1:8000:8000' # server：API / 认证协议 / OpenAPI（对应 AUTH_URL）
+      - '127.0.0.1:3000:3000' # web：论坛站点（对应 APP_URL），并代理 /api
+    volumes:
+      # SQLite 数据库、上传的皮肤/附件都在这里；改用 MySQL/PostgreSQL 时
+      # 该卷仍存放上传文件，删掉注释即可外接数据库：
+      # environment:
+      #   DATABASE_URL: postgres://mcserauth:密码@host:5432/mcserauth
+      - mcserauth-data:/app/server/data
+
+volumes:
+  mcserauth-data:

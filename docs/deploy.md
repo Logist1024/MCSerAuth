@@ -1,7 +1,8 @@
 # 生产部署与备份
 
 > 目标形态：**单台 VPS + Caddy 反代 + pm2 两个进程**，数据库按规模选 SQLite / MySQL 8.0+ /
-> PostgreSQL 16+。不引入 Docker、Redis、对象存储（保持单体部署的简单性）。
+> PostgreSQL 16+。不引入 Redis、对象存储（保持单体部署的简单性）。除下述手动 runbook 外，
+> 另提供**可选的单镜像 Docker 部署**（见第 9 节），两种方式共享同一套环境变量约定。
 >
 > **决策记录**：部署采用**手动 runbook + 仓库内的配置实例**（`deploy/`），
 > 不做 GitHub Actions 部署 workflow。理由：单人维护、单实例、无多环境发布需求，
@@ -340,3 +341,51 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
   `apt install -y build-essential python3` 再 `pnpm install`。
 - 进服半环（客户端与 Paper 两侧 authlib-injector 握手）不属于纯本站部署能自证的
   范围，需服主自行验证；本站侧的协议链路可用 §2.3 的 curl 冒烟覆盖。
+
+---
+
+## 9. Docker 单镜像部署（可选）
+
+不想装 Node/pnpm/pm2 时，可用仓库根目录的单镜像方案：server 与 web 同容器运行，
+`entrypoint` 先执行数据库迁移再拉起两个进程，任一进程退出即整体退出（交 Docker 重启）。
+与 pm2 方案共享同一套 env 约束（§1、§3 全部适用，含「单进程」内存态限流约束——
+**不要给该服务扩多副本**）。
+
+### 9.1 构建与启动
+
+```bash
+cp deploy/env.docker.example .env      # 按注释填好必填项
+docker compose up -d --build           # 构建 mcserauth:latest 并启动
+docker compose logs -f                 # 观察迁移与启动日志
+```
+
+- 端口默认只绑定到 `127.0.0.1:8000` / `127.0.0.1:3000`，仍由宿主机 Caddy 终止 TLS
+  后反代（§2.1 的 Caddyfile 原样可用）；容器内的 web 会把 `/api` 代理给同容器的
+  server，因此单域布局下宿主机也可以把整站反代到 `127.0.0.1:3000` 一个端口。
+- 数据落盘在命名卷 `mcserauth-data`（容器的 `/app/server/data`：SQLite 数据库 +
+  上传文件）。改用 MySQL/PG 时在 compose 的 `environment` 里设 `DATABASE_URL`，
+  卷仍用于上传文件。
+- 健康检查已内置（Dockerfile `HEALTHCHECK` 同时探测 8000 与 3000）。
+
+### 9.2 与裸机方案的差异（运维速查）
+
+| 操作       | pm2 方案                            | Docker 方案                                                                                                               |
+| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 数据库迁移 | `pnpm db:migrate`                   | 容器启动时自动执行（也可 `docker compose run --rm mcserauth node scripts/migrate.mjs` 手动跑）                            |
+| 备份       | `backup.cron` + `pnpm db:backup`    | `docker compose exec mcserauth node /app/server/scripts/backup.mjs`（产物在卷内 `data/backups/`，记得同步纳入宿主机备份） |
+| 授予管理员 | `pnpm admin:grant`                  | 镜像内无 tsx，改用根控制台：设 `CONSOLE_KEY` 后在 `/console` 操作                                                         |
+| 查看日志   | pm2 logs                            | `docker compose logs -f`                                                                                                  |
+| 升级       | `git pull && pnpm install && build` | `git pull && docker compose up -d --build`（数据在卷中不受影响）                                                          |
+
+### 9.3 镜像相关的实现备注
+
+- 构建上下文必须是**仓库根目录**（web/server 依赖 workspace 里的 `packages/shared`）。
+- `next.config.ts` 的 `API_PROXY_TARGET` rewrite 在 `next build` 时被序列化进 standalone
+  产物，运行时改环境变量**不生效**；镜像构建时已烘焙 `http://127.0.0.1:8000`。
+  `CONSOLE_PATH` 同理，若需自定义要在构建时传入（给 Dockerfile 中 web 构建步骤加 env）。
+- 服务端生产依赖经 `pnpm deploy --prod` 裁剪（`dotenv` 已改为生产依赖，迁移/备份脚本
+  在镜像内可用）；web 使用 Next `output: 'standalone'` 产物，monorepo 布局下
+  `server.js` 位于 `standalone/apps/web/`（Turbopack 要求工作区根覆盖根 node_modules，
+  见 `next.config.ts` 注释）。
+- `apps/server/scripts/` 中 `seed.ts`、`grant-role.ts`、`copy-data.ts` 依赖 tsx（开发
+  依赖），镜像内不可用；如需跑这些脚本，在开发机检出仓库执行并指向同一数据库。
