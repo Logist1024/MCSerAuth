@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import Avatar from '@/components/avatar';
 import Breadcrumbs from '@/components/breadcrumbs';
+import CopyButton from '@/components/copy-button';
 import { LevelBadge, TitleBadge } from '@/components/growth/user-badges';
 import { Icon } from '@/components/icons';
 import PostList from '@/components/post-list';
@@ -87,7 +88,10 @@ export default async function UserPage({ params }: PageProps) {
                   <Icon name="gamepad" width={12} height={12} />
                   {profile.player.nickname}
                 </span>
-                <span className="mono tiny-text">{profile.player.uuid}</span>
+                <CopyButton
+                  value={profile.player.uuid}
+                  label={`${profile.player.uuid.slice(0, 8)}…`}
+                />
                 {profile.player.banned ? <span className="bad small">游戏已封禁</span> : null}
               </>
             ) : (

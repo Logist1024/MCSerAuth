@@ -403,3 +403,20 @@
 .strength-label {
   flex: none;
 }
+
+.copy-button {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.1rem 0.35rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: copy;
+}
+
+.copy-button:hover {
+  color: var(--fg-strong);
+  border-color: var(--accent);
+}
