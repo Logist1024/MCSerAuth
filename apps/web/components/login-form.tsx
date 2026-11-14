@@ -84,6 +84,7 @@ export default function LoginForm() {
         await signUpWithEmail(
           { email: email.trim(), password, name: name.trim() },
           captchaToken ?? undefined,
+          next,
         );
         // Sign-up without verification leaves the account logged out; guide
         // the user through the email round-trip instead of navigating away.
@@ -113,10 +114,10 @@ export default function LoginForm() {
     }
   }
 
-  async function resend(to: string): Promise<void> {
+  async function resend(to: string, nextPath: string): Promise<void> {
     setBusy(true);
     try {
-      await resendVerificationEmail(to);
+      await resendVerificationEmail(to, nextPath);
       toast.success('验证邮件已重新发送，请查收');
     } catch (authError) {
       toast.error(describeAuthError(authError));
@@ -197,7 +198,7 @@ export default function LoginForm() {
             className="button ghost"
             type="button"
             disabled={busy}
-            onClick={() => void resend(pendingVerification)}
+            onClick={() => void resend(pendingVerification, next)}
           >
             {busy ? '发送中…' : '重新发送验证邮件'}
           </button>
@@ -346,7 +347,7 @@ export default function LoginForm() {
             className="button ghost"
             type="button"
             disabled={busy}
-            onClick={() => void resend(unverifiedHint)}
+            onClick={() => void resend(unverifiedHint, next)}
           >
             {busy ? '发送中…' : '重新发送验证邮件'}
           </button>

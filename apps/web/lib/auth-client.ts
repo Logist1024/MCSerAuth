@@ -99,9 +99,20 @@ export async function fetchWebsiteSession(): Promise<WebsiteSession | null> {
   return authRequest<WebsiteSession>('/api/auth/get-session');
 }
 
+/** Verification mail lands back on /login; keep the original destination. */
+function verificationCallbackURL(nextPath?: string): string {
+  const url = new URL('/login', window.location.origin);
+  url.searchParams.set('verified', '1');
+  if (nextPath !== undefined && nextPath.startsWith('/') && !nextPath.startsWith('//')) {
+    url.searchParams.set('next', nextPath);
+  }
+  return url.toString();
+}
+
 export async function signUpWithEmail(
   input: { email: string; password: string; name: string },
   captchaToken?: string,
+  nextPath?: string,
 ): Promise<void> {
   await authRequest('/api/auth/sign-up/email', {
     method: 'POST',
@@ -109,7 +120,7 @@ export async function signUpWithEmail(
       ...input,
       // After the user opens the verification link, better-auth redirects
       // back here (autoSignInAfterVerification creates the session).
-      callbackURL: `${window.location.origin}/login?verified=1`,
+      callbackURL: verificationCallbackURL(nextPath),
     },
     headers: captchaHeaders(captchaToken),
   });
@@ -135,12 +146,12 @@ export async function signOut(): Promise<void> {
  * Used after sign-up (the account has no session yet) and when sign-in is
  * rejected because the address is not verified.
  */
-export async function resendVerificationEmail(email: string): Promise<void> {
+export async function resendVerificationEmail(email: string, nextPath?: string): Promise<void> {
   await authRequest('/api/auth/send-verification-email', {
     method: 'POST',
     body: {
       email,
-      callbackURL: `${window.location.origin}/login?verified=1`,
+      callbackURL: verificationCallbackURL(nextPath),
     },
   });
 }
