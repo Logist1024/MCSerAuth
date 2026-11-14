@@ -448,6 +448,9 @@ to `apps/web/.env.local` to activate.
 | [`docs/features.md`](docs/features.md)                   | Full feature list: auth/session/textures/forum/growth, with implementation locations |
 | [`docs/database.md`](docs/database.md)                   | Three-dialect config, schema workflow, migration / copy / backup                     |
 | [`docs/deploy.md`](docs/deploy.md)                       | Production runbook: VPS checklist, `.env` reference, backup & restore drills         |
+| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows/panel-host path: Node 22 → NSSM services → Caddy 443 → Paper `.bat` setup    |
+| [`docs/player-guide.md`](docs/player-guide.md)           | Player-facing: external login steps for HMCL / PCL2 / Prism Launcher                 |
+| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | Why no Dockerfile/Compose for now, and when to revisit                               |
 | [`docs/security.md`](docs/security.md)                   | Security baseline: CSP, security headers, hashing                                    |
 | [`docs/oauth-integration.md`](docs/oauth-integration.md) | OAuth SSO guide for sibling services: client registration, scopes, PKCE              |
 | [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI contract artifact (`pnpm openapi:export`)                                    |

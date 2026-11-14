@@ -364,16 +364,19 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 ## 文档导航
 
-| 文档                                                     | 内容                                                                       |
-| -------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                          |
-| [`docs/features.md`](docs/features.md)                   | 完整功能清单：认证/会话/纹理/论坛/成长体系，含实现位置与 API 路径          |
-| [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                       |
-| [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                    |
-| [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
-| [`docs/security.md`](docs/security.md)                   | 安全基线：CSP、安全响应头、审计豁免与哈希                                  |
-| [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                       |
-| [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
+| 文档                                                     | 内容                                                                        |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                           |
+| [`docs/features.md`](docs/features.md)                   | 完整功能清单：认证/会话/纹理/论坛/成长体系，含实现位置与 API 路径           |
+| [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                        |
+| [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                     |
+| [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练  |
+| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows / 宝塔服主路径：Node 22 → NSSM 服务 → Caddy 443 → Paper `.bat` 接入 |
+| [`docs/player-guide.md`](docs/player-guide.md)           | 玩家侧：HMCL / PCL2 / Prism Launcher 三端外置登录图文步骤                   |
+| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | 为什么暂不提供 Dockerfile / Compose 的评估记录与再评审触发条件              |
+| [`docs/security.md`](docs/security.md)                   | 安全基线：CSP、安全响应头、审计豁免与哈希                                   |
+| [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                        |
+| [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                   |
 
 ## License
 
