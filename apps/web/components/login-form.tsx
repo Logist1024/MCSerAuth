@@ -9,6 +9,7 @@ import {
   fetchWebsiteSession,
   signOut,
   resendVerificationEmail,
+  describeAuthError,
   isUnverifiedEmailError,
   type WebsiteSession,
 } from '@/lib/auth-client';
@@ -94,8 +95,7 @@ export default function LoginForm() {
         router.refresh();
       });
     } catch (authError) {
-      const message = authError instanceof Error ? authError.message : String(authError);
-      setError(message);
+      setError(describeAuthError(authError));
       if (mode === 'signin' && isUnverifiedEmailError(authError)) {
         setUnverifiedHint(email.trim());
       }
@@ -112,7 +112,7 @@ export default function LoginForm() {
       await resendVerificationEmail(to);
       toast.success('验证邮件已重新发送，请查收');
     } catch (authError) {
-      toast.error(authError instanceof Error ? authError.message : '重新发送失败，稍后再试');
+      toast.error(describeAuthError(authError));
     } finally {
       setBusy(false);
     }
@@ -134,7 +134,7 @@ export default function LoginForm() {
       window.dispatchEvent(new Event('mcserauth:session-changed'));
       toast.info('已退出当前账号');
     } catch (authError) {
-      toast.error(authError instanceof Error ? authError.message : '退出登录失败');
+      toast.error(describeAuthError(authError));
     } finally {
       setBusy(false);
     }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import { requestPasswordReset } from '@/lib/auth-client';
+import { describeAuthError, requestPasswordReset } from '@/lib/auth-client';
 import CaptchaField from './captcha-field';
 
 /** Step 1 of «forgot password»: email in → one-hour reset link out. */
@@ -26,7 +26,7 @@ export default function ForgotPasswordForm() {
       setSentTo(address);
       setCaptchaReset((current) => current + 1);
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : String(authError));
+      setError(describeAuthError(authError));
       // The captcha token is consumed before the mail request is processed, so
       // any rejection — including rate limits — burns it.
       setCaptchaReset((current) => current + 1);

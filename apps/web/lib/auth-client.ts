@@ -173,11 +173,16 @@ export async function resetPassword(token: string, newPassword: string): Promise
 /** better-auth machine codes → readable messages; unknown codes fall through. */
 const AUTH_CODE_MESSAGES: Record<string, string> = {
   INVALID_PASSWORD: '当前密码不正确',
+  INVALID_EMAIL_OR_PASSWORD: '邮箱或密码不正确',
   PASSWORD_TOO_SHORT: '新密码太短（至少 8 位）',
   PASSWORD_TOO_LONG: '新密码太长',
+  USER_ALREADY_EXISTS: '该邮箱已被注册，试试直接登录',
+  USER_NOT_FOUND: '账号不存在，请先注册',
   CREDENTIAL_ACCOUNT_NOT_FOUND: '该账号未设置密码登录',
   EMAIL_NOT_VERIFIED: '邮箱尚未验证，请先到邮箱打开验证链接',
   INVALID_TOKEN: '链接无效或已过期，请重新申请',
+  INVALID_EMAIL: '邮箱格式不正确',
+  FAILED_TO_CREATE_USER: '注册暂时失败，请稍后再试',
 };
 
 export function describeAuthError(error: unknown): string {
@@ -191,6 +196,18 @@ export function describeAuthError(error: unknown): string {
     }
     if (/invalid password/i.test(error.message)) {
       return '当前密码不正确';
+    }
+    if (/invalid email or password/i.test(error.message)) {
+      return '邮箱或密码不正确';
+    }
+    if (/user already exists/i.test(error.message)) {
+      return '该邮箱已被注册，试试直接登录';
+    }
+    if (/invalid email\b/i.test(error.message)) {
+      return '邮箱格式不正确';
+    }
+    if (/failed to create user/i.test(error.message)) {
+      return '注册暂时失败，请稍后再试';
     }
   }
   return error instanceof Error ? error.message : String(error);
