@@ -4,24 +4,84 @@
 
 </div>
 
+<div align="center">
+
 # MCSerAuth
 
-面向第三方 Minecraft: Java Edition 服务器的**一体化社区论坛 + 外置登录认证服务**。
+**面向第三方 Minecraft: Java Edition 服务器的一体化「社区论坛 + 外置登录认证服务」**
 
-认证侧实现 Commons-Designs 服务端协议（启动器 HMCL/PCL2 直接可用），社区侧提供论坛与玩家档案；
-两块业务共用同一账号体系与基础设施，单体部署；默认 SQLite，生产可切换
-MySQL 8.0+ / PostgreSQL 16+。
+认证侧实现 Commons-Designs 服务端协议：
+HMCL / PCL2 / Prism Launcher 填一个认证地址即可外置登录；社区侧提供论坛与玩家档案。
+两块业务共用同一账号体系，单体部署；默认 SQLite，生产可切换 MySQL 8.0+ / PostgreSQL 16+。
 
-> **当前状态**：核心功能已齐备，发布基线 [v1.0.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.0.0)，
-> 持续打磨生产可用性（多库 CI 矩阵、部署与备份、可观测性、HTTP e2e 测试层均已就绪）。
->
-> **已实现**：better-auth 网站会话、OAuth 授权码 + PKCE、注册 OAuth 客户端与作用域 SSO
-> （basic/player/email，含 userinfo 端点）、启动器令牌轮换、
-> 会话服务（joinServer/hasJoined）、档案查询、皮肤/披风上传与签名分发、authlib-injector 直登；
-> 论坛（版块/帖子/回复/点赞/通知/举报/图片上传/游客浏览/排序与标题搜索）、公开个人主页、
-> 游戏账号管理（资料/改名/纹理切换）、外观设置（浅色/深色/跟随系统、五色点缀主题、
-> Emoji 图标替换）、四级角色 + 9 项能力下放 + 密钥超级后台、人机验证、成长体系
-> （等级/称号/签到/积分/商店/打赏/首页 Banner）、找回密码、RSS/sitemap、三库支持。
+[![CI](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml/badge.svg)](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Logist1024/MCSerAuth)](https://github.com/Logist1024/MCSerAuth/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Node.js](https://img.shields.io/badge/node-%E2%89%A522-brightgreen)
+
+| 首页                                                                    | 论坛                                                      |
+| ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| ![首页：三步开始与社区入口](docs/images/screenshot-home.png)            | ![论坛：版块与主题列表](docs/images/screenshot-forum.png) |
+| **游戏账号管理**（皮肤/披风，登录后）                                   | **管理后台**（超级管理员）                                |
+| ![游戏账号管理：3D 预览与皮肤上传](docs/images/screenshot-textures.png) | ![管理后台：运营概览](docs/images/screenshot-admin.png)   |
+
+_截图来自本地 `pnpm dev`（种子数据 + 演示账号）。_
+
+</div>
+
+## 适合谁 / 不适合谁
+
+**适合谁：**
+
+- 想给玩家一个「注册账号 → 发帖交流 → 传皮肤 → 启动器外置登录 → 进服」完整闭环的中小型 MC 服务器；
+- 有一台自己的主机（Linux VPS 或 Windows 面板机）和一个域名，愿意照部署文档复制粘贴命令完成上线；
+- 想让论坛账号与游戏外置登录共用同一套账号，玩家改密/找回/换肤只去一个地方。
+
+**不适合谁：**
+
+- 想要 Docker 一键部署或图形化安装面板的——当前只提供裸机部署 runbook 与
+  Caddy/pm2/cron/logrotate 配置实例（见 [`docs/deploy.md`](docs/deploy.md)）；
+- 需要高清纹理（HD skin / 4K 皮肤）或依赖皮肤签名校验（`signaturePublickey`）的服主——
+  只支持原版尺寸纹理，且本实现不提供纹理签名（详见[已知限制](#已知限制)）；
+- 需要多实例 / 集群部署的大规模社区——限流、验证码、进程内缓存都是内存态，**只能单进程运行**
+  （见 [`docs/deploy.md`](docs/deploy.md) §7）。
+
+## 为什么不用现成方案
+
+- **与 Commons-Designs 的其他实现相比**：多数开源实现是「纯认证 API / 皮肤站」，不包含玩家社区。
+  MCSerAuth 把认证、玩家档案、论坛放在同一个账号体系里，一次部署同时拿到两块，玩家只需要注册一次。
+- **与「直接把启动器指到公共认证服务器」相比**：那意味着玩家的邮箱、密码、皮肤数据都存在别人那里，
+  也没有属于自己的社区阵地。自建 MCSerAuth 后，账号数据、纹理文件、论坛运营全部在你自己的服务器上，
+  且启动器侧不需要装任何额外插件（标准 authlib-injector 协议）。
+
+## 接入拓扑
+
+```mermaid
+flowchart LR
+    B["玩家浏览器"]
+    L["启动器<br/>HMCL / PCL2 / Prism Launcher"]
+    G["Paper 服务端<br/>online-mode=false<br/>-javaagent:authlib-injector.jar"]
+    W["web :3000<br/>论坛 · 游戏账号管理 · 管理后台"]
+    S["server :8000<br/>/api（Commons-Designs 协议）"]
+    D[("SQLite / MySQL / PostgreSQL")]
+
+    B -- "HTTPS（生产由 Caddy 反代 TLS）" --> W
+    L -- "认证服务器地址 = https://auth.example.com/api<br/>authenticate / refresh / join" --> S
+    G -- "hasJoined 进服校验" --> S
+    S --> D
+```
+
+纯文本版（GitHub 之外的查看器用）：
+
+```text
+玩家浏览器 ──HTTPS(Caddy)──▶ web :3000   论坛 / 游戏账号管理 / 管理后台
+玩家启动器 ──HTTPS(Caddy)──▶ server :8000 /api   认证服务器地址（元数据、authenticate、join）
+Paper 服  ──HTTPS(Caddy)──▶ server :8000 /api   hasJoined 校验（online-mode=false + authlib-injector 注入）
+                                        └──▶ SQLite / MySQL / PostgreSQL
+```
+
+> 进服需要**客户端和 Paper 两侧都注入** authlib-injector（Paper 侧 `online-mode=false` +
+> `-javaagent:authlib-injector.jar=https://auth.example.com/api`）。本仓库不含 Paper 插件。
 
 ## 技术栈
 
