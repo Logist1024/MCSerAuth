@@ -319,6 +319,10 @@ export default function SiteHeader({
                     <Icon name="user" width={16} height={16} />
                     个人主页
                   </Link>
+                  <Link className="user-menu-item" href={`/users/${session.user.id}#security`}>
+                    <Icon name="settings" width={16} height={16} />
+                    账号与安全
+                  </Link>
                   <Link className="user-menu-item" href="/forum/growth">
                     <Icon name="star" width={16} height={16} />
                     成长中心

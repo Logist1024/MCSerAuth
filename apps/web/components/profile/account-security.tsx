@@ -16,7 +16,7 @@ export default function AccountSecurity({ currentEmail }: { currentEmail: string
   const [emailOpen, setEmailOpen] = useState(false);
 
   return (
-    <section className="side-card">
+    <section className="side-card" id="security">
       <div className="section-heading">
         <h2>账号安全</h2>
       </div>
