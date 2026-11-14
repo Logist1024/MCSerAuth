@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import {
+  ApiError,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -73,7 +74,7 @@ function NotificationsContent() {
   const toast = useToast();
   const [data, setData] = useState<NotificationListResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; unauthorized: boolean } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [readingAll, setReadingAll] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'unread'>('all');
@@ -89,7 +90,10 @@ function NotificationsContent() {
         setData(await fetchNotifications({ page: targetPage, pageSize: 20 }));
       } catch (fetchError) {
         setData(null);
-        setError(describeApiError(fetchError));
+        setError({
+          message: describeApiError(fetchError),
+          unauthorized: fetchError instanceof ApiError && fetchError.status === 401,
+        });
       } finally {
         setLoading(false);
       }
@@ -276,11 +280,17 @@ function NotificationsContent() {
             <EmptyState
               icon="alert"
               tone="error"
-              description={error}
+              description={error.message}
               action={
-                <Link className="button primary" href="/login?next=%2Fnotifications">
-                  去登录
-                </Link>
+                error.unauthorized ? (
+                  <Link className="button primary" href="/login?next=%2Fnotifications">
+                    去登录
+                  </Link>
+                ) : (
+                  <button className="button primary" type="button" onClick={() => void load()}>
+                    重试
+                  </button>
+                )
               }
             />
           ) : filtered.length === 0 ? (
