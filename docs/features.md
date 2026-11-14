@@ -37,8 +37,9 @@ Emoji 图标替换）、四级角色 + 9 项能力下放 + 密钥超级后台、
 HTTPS/localhost 回跳、全部作用域）。接入步骤见
 [`docs/oauth-integration.md`](oauth-integration.md)。
 
-浏览器演示：<http://localhost:3000> 的「网站会话」与「发起一次 OAuth 授权」面板会跑完整条链路，
-回调页展示 `/me` 与 refresh 轮换结果。
+授权页由 NestJS 直出（`/api/oauth/entry`：未登录显示登录表单、已登录显示授权确认），
+与网站共享会话 Cookie；web 侧保留回调处理页 `apps/web/app/oauth/callback`
+（换令牌 → userinfo → refresh 轮换的结果展示，供接入联调参考）。
 
 **找回密码**：登录页「忘记密码？」→ `/forgot-password`（人机验证后提交邮箱）→
 `POST /api/auth/request-password-reset` 发出 1 小时有效的一次性链接 →

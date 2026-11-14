@@ -19,6 +19,7 @@ pnpm db:generate        # 生成三方言 schema + 迁移（改表后必跑）
 pnpm db:check           # CI 校验：生成物与源模型必须一致
 pnpm db:migrate / db:seed
 pnpm openapi:export     # 改契约后刷新 docs/openapi.json
+pnpm visual:baseline    # Playwright 截取 web 基线截图（需 web 在 :3000 运行）
 docker compose up -d --build   # 可选：单镜像 Docker 构建并启动（用法见 docs/deploy.md §9）
 ```
 
@@ -49,5 +50,7 @@ docker compose up -d --build   # 可选：单镜像 Docker 构建并启动（用
 | Docker / 镜像 | `docs/deploy.md`（§9）      |
 | 安全基线      | `docs/security.md`          |
 | OAuth 集成    | `docs/oauth-integration.md` |
+
+快速理清核心链路（登录→进服、模块与表顺序、秘密存储位置）可读 `docs/ARCHITECTURE-FOR-AUTHOR.md`（每句话标注了源码位置）。Windows 部署见 `docs/deploy-windows.md`，玩家视角功能说明见 `docs/player-guide.md`。
 
 协作入口与完整规则见 `CONTRIBUTING.md`。

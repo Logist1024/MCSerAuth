@@ -177,8 +177,8 @@ Authorization: Bearer mcs_at_…
 
 1. `pnpm dev`（server :8000，web :3000）；管理员注册客户端，
    测试环境回调可登记 `http://localhost:3000/...`。
-2. 浏览器打开 `GET /api/oauth/entry?...` 走一遍流程，或参考网站自带的
-   调试页 `apps/web/app/oauth/callback`（发起 → 回调 → 换令牌 → userinfo →
-   刷新的全链路演示）。
+2. 浏览器打开 `GET /api/oauth/entry?...` 走一遍流程；web 侧的
+   `apps/web/app/oauth/callback` 回调页演示了「换令牌 → userinfo → 刷新」
+   的完整链路（含源码，可作为接入参考）。
 3. 完整接口定义见 `docs/openapi.json`（`/docs` 有 Swagger UI）；
    安全基线见 `docs/security.md`。

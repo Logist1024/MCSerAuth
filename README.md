@@ -303,8 +303,9 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 - **三库支持**：SQLite（默认，WAL + 外键 + `busy_timeout`）、MySQL 8.0+、PostgreSQL 16+。
   方言由 `DATABASE_URL` 自动识别；完整配置、迁移与运维说明见
-  [`docs/database.md`](docs/database.md)。三方言各一份 31 表 `0000` 基线（旧 SQLite 12 版
-  历史已移除），后续变更以增量迁移追加。
+  [`docs/database.md`](docs/database.md)。三方言迁移历史对齐：`0000` 基线 29 表
+  （旧 SQLite 12 版历史已移除）+ `0001` 增量（OAuth 客户端两表），当前共 31 表，
+  后续变更以增量迁移追加。
 - **单一逻辑模型**：31 张表在 `apps/server/src/db/schema/model.ts` 声明一次，
   `scripts/generate-schema.ts` 生成 SQLite/MySQL/PostgreSQL 三套 Drizzle schema 与运行时
   facade。改表只改 `model.ts`，然后 `pnpm db:generate`；生成文件禁止手改。

@@ -343,8 +343,10 @@ to `apps/web/.env.local` to activate.
 - **Three databases**: SQLite (default, WAL + foreign keys + `busy_timeout`),
   MySQL 8.0+, PostgreSQL 16+. The dialect is auto-detected from `DATABASE_URL`;
   full configuration, migration and ops notes in [`docs/database.md`](docs/database.md).
-  Each dialect ships one 31-table `0000` baseline (the old 12-migration SQLite
-  history was removed), with later changes appended as paired incremental migrations.
+  Migration history is aligned per dialect: a 29-table `0000` baseline (the old
+  12-migration SQLite history was removed) plus an incremental `0001` (the two
+  OAuth client tables), 31 tables in total, with later changes appended as
+  paired incremental migrations.
 - **Single logical model**: all 31 tables are declared once in
   `apps/server/src/db/schema/model.ts`; `scripts/generate-schema.ts` generates
   the SQLite/MySQL/PostgreSQL Drizzle schemas and a runtime facade. To change

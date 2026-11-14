@@ -68,14 +68,14 @@ apps/server/src/db/schema/
     └── postgres.ts          # 生成
 
 apps/server/drizzle/
-├── sqlite/                  # 0000 基线（与 MySQL/PG 对齐）
-├── mysql/                   # 0000 基线
-└── postgres/                # 0000 基线
+├── sqlite/                  # 0000 基线（29 表）+ 0001 增量，与 MySQL/PG 对齐
+├── mysql/                   # 同上
+└── postgres/                # 同上
 ```
 
-三个方言的迁移历史共同对齐到 31 表基线（后续版本成对追加；当前
-`0001` 新增 `oauth_client`/`oauth_consent` 表并为 `token` 表加 `client_id`/`scope`
-可空列）：改 `model.ts` 后
+三个方言的迁移历史共同对齐（`0000` 基线 29 表，当前 `0001` 新增
+`oauth_client`/`oauth_consent` 表并为 `token` 表加 `client_id`/`scope`
+可空列，合计 31 表；后续版本成对追加）：改 `model.ts` 后
 `pnpm db:generate` 会在三个目录**同时**追加一个同语义版本；任何一侧单独出现
 新版本都说明生成流程被跳过。1.x 的 SQLite 12 版历史已移除（git 历史可考），
 存量库升级见下文「迁移基线对齐升级」。
