@@ -348,3 +348,30 @@
 .auth-alt a:hover {
   color: var(--accent);
 }
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 2.6rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  padding: 0.35rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: var(--fg-strong);
+  background: var(--surface-strong);
+}

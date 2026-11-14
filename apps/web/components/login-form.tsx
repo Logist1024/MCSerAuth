@@ -14,6 +14,7 @@ import {
   type WebsiteSession,
 } from '@/lib/auth-client';
 import CaptchaField from './captcha-field';
+import PasswordInput from './password-input';
 import { useToast } from './toast';
 
 function safeNext(value: string | null): string {
@@ -262,13 +263,13 @@ export default function LoginForm() {
 
         <div className="field">
           <label htmlFor="login-password">密码</label>
-          <input
+          <PasswordInput
             id="login-password"
-            type="password"
             value={password}
+            onChange={setPassword}
             minLength={8}
+            maxLength={128}
             autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            onChange={(event) => setPassword(event.target.value)}
             placeholder={mode === 'signup' ? '至少 8 个字符' : '输入密码'}
             required
           />
