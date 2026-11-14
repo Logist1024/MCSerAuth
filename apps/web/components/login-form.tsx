@@ -47,6 +47,8 @@ export default function LoginForm() {
   const [pendingVerification, setPendingVerification] = useState<string | null>(null);
   /** Sign-in was rejected because the address is not verified yet. */
   const [unverifiedHint, setUnverifiedHint] = useState<string | null>(null);
+  /** Seconds until the verification-mail resend button unlocks again. */
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +67,16 @@ export default function LoginForm() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown === 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -119,6 +131,7 @@ export default function LoginForm() {
     try {
       await resendVerificationEmail(to, nextPath);
       toast.success('验证邮件已重新发送，请查收');
+      setResendCooldown(60);
     } catch (authError) {
       toast.error(describeAuthError(authError));
     } finally {
@@ -197,10 +210,14 @@ export default function LoginForm() {
           <button
             className="button ghost"
             type="button"
-            disabled={busy}
+            disabled={busy || resendCooldown > 0}
             onClick={() => void resend(pendingVerification, next)}
           >
-            {busy ? '发送中…' : '重新发送验证邮件'}
+            {busy
+              ? '发送中…'
+              : resendCooldown > 0
+                ? `重新发送（${resendCooldown}s）`
+                : '重新发送验证邮件'}
           </button>
           <Link className="button ghost" href="/forum">
             先去论坛看看
@@ -346,10 +363,14 @@ export default function LoginForm() {
           <button
             className="button ghost"
             type="button"
-            disabled={busy}
+            disabled={busy || resendCooldown > 0}
             onClick={() => void resend(unverifiedHint, next)}
           >
-            {busy ? '发送中…' : '重新发送验证邮件'}
+            {busy
+              ? '发送中…'
+              : resendCooldown > 0
+                ? `重新发送（${resendCooldown}s）`
+                : '重新发送验证邮件'}
           </button>
         ) : null}
 
