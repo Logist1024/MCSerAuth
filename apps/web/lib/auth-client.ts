@@ -6,6 +6,7 @@
  */
 import type { UserRole } from '@mcserauth/shared';
 import { API_BASE_URL } from './api-client';
+import { isSafeRelativePath } from './safe-path';
 
 export interface WebsiteSession {
   session: {
@@ -103,7 +104,7 @@ export async function fetchWebsiteSession(): Promise<WebsiteSession | null> {
 function verificationCallbackURL(nextPath?: string): string {
   const url = new URL('/login', window.location.origin);
   url.searchParams.set('verified', '1');
-  if (nextPath !== undefined && nextPath.startsWith('/') && !nextPath.startsWith('//')) {
+  if (isSafeRelativePath(nextPath)) {
     url.searchParams.set('next', nextPath);
   }
   return url.toString();

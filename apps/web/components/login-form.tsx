@@ -17,12 +17,10 @@ import CaptchaField from './captcha-field';
 import PasswordInput from './password-input';
 import { useToast } from './toast';
 import { passwordStrength } from '@/lib/password-strength';
+import { isSafeRelativePath } from '@/lib/safe-path';
 
 function safeNext(value: string | null): string {
-  if (value !== null && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')) {
-    return value;
-  }
-  return '/forum';
+  return isSafeRelativePath(value) ? value : '/forum';
 }
 
 export default function LoginForm() {
@@ -230,6 +228,8 @@ export default function LoginForm() {
     );
   }
 
+  const strength = passwordStrength(password);
+
   return (
     <div className="auth-card">
       <div className="auth-switch" role="tablist" aria-label="登录或注册">
@@ -335,13 +335,11 @@ export default function LoginForm() {
                   {[1, 2, 3].map((segment) => (
                     <span
                       key={segment}
-                      className={`strength-segment${passwordStrength(password).score >= segment ? ' on' : ''}`}
+                      className={`strength-segment${strength.score >= segment ? ' on' : ''}`}
                     />
                   ))}
                 </div>
-                <span className="strength-label small muted">
-                  {passwordStrength(password).label}
-                </span>
+                <span className="strength-label small muted">{strength.label}</span>
               </div>
             ) : null}
           </>

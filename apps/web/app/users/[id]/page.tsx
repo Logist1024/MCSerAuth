@@ -88,10 +88,7 @@ export default async function UserPage({ params }: PageProps) {
                   <Icon name="gamepad" width={12} height={12} />
                   {profile.player.nickname}
                 </span>
-                <CopyButton
-                  value={profile.player.uuid}
-                  label={`${profile.player.uuid.slice(0, 8)}…`}
-                />
+                <CopyButton value={profile.player.uuid} />
                 {profile.player.banned ? <span className="bad small">游戏已封禁</span> : null}
               </>
             ) : (

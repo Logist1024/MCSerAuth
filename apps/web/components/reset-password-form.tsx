@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { describeAuthError, resetPassword as resetPasswordRequest } from '@/lib/auth-client';
+import PasswordInput from './password-input';
 
 /**
  * Step 2 of «forgot password»: better-auth's `/reset-password/:token`
@@ -96,14 +97,13 @@ export default function ResetPasswordForm() {
       <form className="auth-form" onSubmit={submit}>
         <div className="field">
           <label htmlFor="reset-password-input">新密码</label>
-          <input
+          <PasswordInput
             id="reset-password-input"
-            type="password"
             value={password}
             minLength={8}
             maxLength={128}
             autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
             placeholder="至少 8 个字符"
             required
           />
@@ -111,14 +111,18 @@ export default function ResetPasswordForm() {
 
         <div className="field">
           <label htmlFor="reset-confirm">再输入一次</label>
-          <input
+          <PasswordInput
             id="reset-confirm"
-            type="password"
             value={confirm}
+            maxLength={128}
             autoComplete="new-password"
-            onChange={(event) => setConfirm(event.target.value)}
+            onChange={setConfirm}
+            placeholder="和上面保持一致"
             required
           />
+          {confirm.length > 0 && confirm !== password ? (
+            <p className="bad small">两次输入的密码不一致</p>
+          ) : null}
         </div>
 
         {error !== null ? (
