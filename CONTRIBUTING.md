@@ -48,6 +48,7 @@ PR 模板自带检查单（lint / typecheck / test / build、涉库改动的 `db
 | ------------- | -------------------------------------------------------- |
 | 数据库 / 迁移 | [`docs/database.md`](docs/database.md)                   |
 | 部署 / 备份   | [`docs/deploy.md`](docs/deploy.md)                       |
+| Docker / 镜像 | [`docs/deploy.md`](docs/deploy.md)（§9）                 |
 | 安全基线      | [`docs/security.md`](docs/security.md)                   |
 | OAuth 集成    | [`docs/oauth-integration.md`](docs/oauth-integration.md) |
 

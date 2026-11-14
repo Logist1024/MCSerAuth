@@ -39,8 +39,9 @@ _截图来自本地 `pnpm dev`（种子数据 + 演示账号）。_
 
 **不适合谁：**
 
-- 想要 Docker 一键部署或图形化安装面板的——当前只提供裸机部署 runbook 与
-  Caddy/pm2/cron/logrotate 配置实例（见 [`docs/deploy.md`](docs/deploy.md)）；
+- 想要图形化安装面板的——提供裸机部署 runbook 与 Caddy/pm2/cron/logrotate 配置实例，
+  另有可选的单镜像 Docker 部署（`docker compose up -d --build`，见
+  [`docs/deploy.md`](docs/deploy.md) §9），但无图形化安装器；
 - 需要高清纹理（HD skin / 4K 皮肤）或依赖皮肤签名校验（`signaturePublickey`）的服主——
   只支持原版尺寸纹理，且本实现不提供纹理签名（详见[已知限制](#已知限制)）；
 - 需要多实例 / 集群部署的大规模社区——限流、验证码、进程内缓存都是内存态，**只能单进程运行**
@@ -109,6 +110,7 @@ MCSerAuth/
 ├── packages/
 │   └── shared/              跨端类型/DTO/错误码/zod schema（单一事实来源）
 ├── deploy/                  Caddy / pm2 / cron / logrotate 生产配置实例
+├── Dockerfile 等            可选的单镜像 Docker 部署（docker/entrypoint.sh + docker-compose.yml）
 ├── docs/                    部署 / 数据库 / OAuth 集成指南与 OpenAPI 产物
 └── .github/workflows/ci.yml
 ```

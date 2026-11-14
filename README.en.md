@@ -45,9 +45,10 @@ _Screenshots taken from a local `pnpm dev` instance (seed data + demo account)._
 
 **Not for you if:**
 
-- You want a Docker one-click deploy or a graphical installer — the project only
-  ships a bare-metal runbook plus Caddy/pm2/cron/logrotate config examples (see
-  [`docs/deploy.md`](docs/deploy.md));
+- You want a graphical installer — the project ships a bare-metal runbook plus
+  Caddy/pm2/cron/logrotate config examples, and an optional single-image Docker
+  deployment (`docker compose up -d --build`, see
+  [`docs/deploy.md`](docs/deploy.md) §9), but no graphical installer;
 - You need HD textures (4K skins) or rely on skin signature verification
   (`signaturePublickey`) — only vanilla-size textures are supported and this
   implementation provides no texture signatures (see
@@ -125,6 +126,7 @@ MCSerAuth/
 ├── packages/
 │   └── shared/              cross-app types/DTOs/error codes/zod schemas (single source of truth)
 ├── deploy/                  production config examples: Caddy / pm2 / cron / logrotate
+├── Dockerfile etc.          optional single-image Docker deployment (docker/entrypoint.sh + docker-compose.yml)
 ├── docs/                    deployment / database / OAuth integration guides + OpenAPI artifact
 └── .github/workflows/ci.yml
 ```

@@ -10,6 +10,19 @@ Commits，括号内为提交短哈希，可直接在 GitHub 上跳转。
 
 <!-- 发布日期与 GitHub Release 链接：打 v1.1.0 tag 后补到本行下方 -->
 
+## Unreleased
+
+### Added（新增）
+
+- 可选的单镜像 Docker 部署：多阶段 `Dockerfile`（server 经 `pnpm deploy --prod`
+  裁剪、web 走 `output: 'standalone'`）、`docker/entrypoint.sh`（迁移 + 双进程监管）、
+  `docker-compose.yml` 与 `deploy/env.docker.example`，用法见 `docs/deploy.md` 第 9 节。
+
+### Changed（变更）
+
+- `dotenv` 从 apps/server 的 devDependencies 移入 dependencies：`scripts/migrate.mjs`
+  与 `scripts/backup.mjs` 是生产路径脚本，生产依赖裁剪后必须可用。
+
 ## v1.1.0
 
 ### Added（新增）

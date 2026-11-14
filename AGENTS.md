@@ -7,7 +7,7 @@
 - `apps/server` — NestJS 12 单体后端（Express 5），端口 8000。`src/config/`（zod 校验的唯一 env 入口）、`src/common/`（过滤器/守卫/拦截器/日志脱敏）、`src/db/`（Drizzle）、`src/modules/`（auth·session·profiles·forum·user·admin·site·growth·captcha·mail·maintenance·health）。账号/会话基于 better-auth（`src/modules/auth/auth.instance.ts`），改认证逻辑先看它。
 - `apps/web` — Next.js 16 App Router（React 19），端口 3000，**纯渲染层，业务逻辑都在 NestJS**。
 - `packages/shared` — 跨端契约唯一事实来源：DTO、错误码、枚举、zod schema、协议暂定字段（`src/protocol/`）。
-- `deploy/` 生产配置实例；`docs/` 部署/数据库/OAuth 集成指南与 OpenAPI 产物；`.github/workflows/ci.yml` CI。
+- `deploy/` 生产配置实例；根目录 `Dockerfile` + `docker/entrypoint.sh` + `docker-compose.yml` 提供**可选的单镜像 Docker 部署**（server/web 同容器，entrypoint 先迁移后拉起两进程）；`docs/` 部署/数据库/OAuth 集成指南与 OpenAPI 产物；`.github/workflows/ci.yml` CI。
 
 ## 常用命令
 
@@ -19,6 +19,7 @@ pnpm db:generate        # 生成三方言 schema + 迁移（改表后必跑）
 pnpm db:check           # CI 校验：生成物与源模型必须一致
 pnpm db:migrate / db:seed
 pnpm openapi:export     # 改契约后刷新 docs/openapi.json
+docker compose up -d --build   # 可选：单镜像 Docker 构建并启动（用法见 docs/deploy.md §9）
 ```
 
 `pnpm typecheck` 会先构建 shared（web/server 都从 shared 的 `dist` 导入，改 shared 后必须重新构建）。
@@ -45,6 +46,7 @@ pnpm openapi:export     # 改契约后刷新 docs/openapi.json
 | ------------- | --------------------------- |
 | 数据库 / 迁移 | `docs/database.md`          |
 | 部署 / 备份   | `docs/deploy.md`            |
+| Docker / 镜像 | `docs/deploy.md`（§9）      |
 | 安全基线      | `docs/security.md`          |
 | OAuth 集成    | `docs/oauth-integration.md` |
 
