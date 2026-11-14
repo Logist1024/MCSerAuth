@@ -375,3 +375,31 @@
   color: var(--fg-strong);
   background: var(--surface-strong);
 }
+
+.strength-meter {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: -0.35rem;
+}
+
+.strength-bar {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+}
+
+.strength-segment {
+  height: 3px;
+  flex: 1;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.strength-segment.on {
+  background: var(--accent);
+}
+
+.strength-label {
+  flex: none;
+}

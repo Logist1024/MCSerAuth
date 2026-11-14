@@ -16,6 +16,7 @@ import {
 import CaptchaField from './captcha-field';
 import PasswordInput from './password-input';
 import { useToast } from './toast';
+import { passwordStrength } from '@/lib/password-strength';
 
 function safeNext(value: string | null): string {
   if (value !== null && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')) {
@@ -36,6 +37,7 @@ export default function LoginForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -68,6 +70,10 @@ export default function LoginForm() {
     event.preventDefault();
     if (mode === 'signup' && name.trim().length < 2) {
       setError('昵称至少需要 2 个字符');
+      return;
+    }
+    if (mode === 'signup' && password !== confirm) {
+      setError('两次输入的密码不一致');
       return;
     }
     setBusy(true);
@@ -124,6 +130,7 @@ export default function LoginForm() {
     setError(null);
     setPendingVerification(null);
     setUnverifiedHint(null);
+    setConfirm('');
     setCaptchaReset((current) => current + 1);
   }
 
@@ -241,7 +248,10 @@ export default function LoginForm() {
               minLength={2}
               maxLength={32}
               autoComplete="nickname"
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError(null);
+              }}
               placeholder="社区里显示的名字"
               required
             />
@@ -255,7 +265,10 @@ export default function LoginForm() {
             type="email"
             value={email}
             autoComplete="email"
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError(null);
+            }}
             placeholder="you@example.com"
             required
           />
@@ -266,7 +279,10 @@ export default function LoginForm() {
           <PasswordInput
             id="login-password"
             value={password}
-            onChange={setPassword}
+            onChange={(value) => {
+              setPassword(value);
+              setError(null);
+            }}
             minLength={8}
             maxLength={128}
             autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -274,6 +290,44 @@ export default function LoginForm() {
             required
           />
         </div>
+
+        {mode === 'signup' ? (
+          <>
+            <div className="field">
+              <label htmlFor="login-confirm">再输入一次密码</label>
+              <PasswordInput
+                id="login-confirm"
+                value={confirm}
+                onChange={(value) => {
+                  setConfirm(value);
+                  setError(null);
+                }}
+                maxLength={128}
+                autoComplete="new-password"
+                placeholder="和上面保持一致"
+                required
+              />
+              {confirm.length > 0 && confirm !== password ? (
+                <p className="bad small">两次输入的密码不一致</p>
+              ) : null}
+            </div>
+            {password.length > 0 ? (
+              <div className="strength-meter" aria-live="polite">
+                <div className="strength-bar" aria-hidden="true">
+                  {[1, 2, 3].map((segment) => (
+                    <span
+                      key={segment}
+                      className={`strength-segment${passwordStrength(password).score >= segment ? ' on' : ''}`}
+                    />
+                  ))}
+                </div>
+                <span className="strength-label small muted">
+                  {passwordStrength(password).label}
+                </span>
+              </div>
+            ) : null}
+          </>
+        ) : null}
 
         <CaptchaField
           onToken={setCaptchaToken}

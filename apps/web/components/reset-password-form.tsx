@@ -101,6 +101,7 @@ export default function ResetPasswordForm() {
             type="password"
             value={password}
             minLength={8}
+            maxLength={128}
             autoComplete="new-password"
             onChange={(event) => setPassword(event.target.value)}
             placeholder="至少 8 个字符"
