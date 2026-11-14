@@ -113,6 +113,43 @@ MCSerAuth/
 └── .github/workflows/ci.yml
 ```
 
+## 部署前必读
+
+> 本地试跑可以跳过这一节（开发默认值够用）；**打算给真实玩家用之前，请逐条确认。**
+
+**1. 域名与 HTTPS 是硬前提，不是加分项**
+
+- 网站会话 Cookie 为 `HttpOnly / SameSite=Lax`，`Secure` 属性由 `COOKIE_SECURE` 开启
+  （`apps/server/src/modules/auth/auth.instance.ts`），且 `NODE_ENV=production` 时
+  `COOKIE_SECURE=true` 是启动强校验——配错进程直接拒绝启动
+  （`apps/server/src/config/env.ts`）。这意味着生产部署**必须走 HTTPS**，
+  即需要一个域名 + 反代 TLS（`deploy/Caddyfile` 是现成实例，自动签发 Let's Encrypt）。
+- `APP_URL`（网站）与 `AUTH_URL`（认证服务）必须属于**同一个注册域**
+  （如 `example.com` + `auth.example.com`），否则 better-auth 的 Lax Cookie 跨站不带，
+  症状是「登录成功但所有接口 401」。生产环境还**禁止回环地址**（localhost/127.0.0.1），
+  否则验证邮件会生成打不开的链接——这也是启动即报错的强校验。
+- 在中国大陆提供公网服务，域名需完成 ICP 备案；这是部署环境的要求，与本仓库代码无关，
+  但决定了你能不能把 80/443 正常开出来。
+
+**2. 生产环境至少要改这些（详见 [`docs/deploy.md`](docs/deploy.md) §3 的逐项清单）**
+
+| 变量                   | 怎么给                                | 不改会怎样                                                                                      |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `openssl rand -base64 48`             | 生产拒绝用开发默认值启动；它还兼作 SMTP 密码的加密密钥                                          |
+| `COOKIE_SECURE`        | `true`                                | 生产启动失败                                                                                    |
+| `APP_URL` / `AUTH_URL` | 两个真实 https 地址（同注册域）       | 回环地址启动失败；跨注册域 Cookie 失效                                                          |
+| `CONSOLE_KEY`          | `openssl rand -base64 32`，或留空禁用 | 留空则 `/console` 不可用（推荐先禁用，需要时再开）                                              |
+| `MAIL_PROVIDER`        | 显式设 `smtp`                         | **只填 `SMTP_*` 参数不会切换发件方式**；默认 `console` 只把邮件写进日志，玩家永远收不到验证邮件 |
+
+**3. 责任说明：你要托管玩家的邮箱和密码**
+
+部署这套系统后，玩家的邮箱、密码哈希、皮肤数据都存在**你的服务器**上。密码以
+better-auth 的哈希形式存储（明文不可见），但数据库文件、上传目录、备份文件的
+物理安全与访问控制完全由你负责——服务器被入侵、备份泄露、面板权限失控，
+后果由运营者承担。上线前至少做到：强口令 + 定期 `pnpm db:backup` 并妥善保管备份、
+上传目录与数据库不进公开目录、发现安全漏洞按 [`SECURITY.md`](SECURITY.md) 处理。
+对玩家，建议在论坛公告或服务条款里如实说明数据的存放位置与泄露风险。
+
 ## 快速开始
 
 要求：Node.js 22（`.nvmrc` 已固定）、corepack 可用的 pnpm。
