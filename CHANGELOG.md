@@ -5,10 +5,10 @@ Commits，括号内为提交短哈希，可直接在 GitHub 上跳转。
 
 - [v1.0.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.0.0)（2026-10-31，
   `b07c854`）：1.x 功能齐备基线（M0–M4.5），注册协议、论坛、成长体系、三库支持均已就绪。
-- 下列条目覆盖 **v1.0.0 之后** 的全部变更（65 个提交）。部分早期提交的信息不规范
-  （直接是暂存区文件列表），内容已按实际 diff 归类，并单独标注。
-
-<!-- 发布日期与 GitHub Release 链接：打 v1.1.0 tag 后补到本行下方 -->
+- [v1.1.0](https://github.com/Logist1024/MCSerAuth/releases/tag/v1.1.0)（2026-11-14，
+  `e5fed72`）：OAuth 客户端与作用域 SSO、论坛排序/搜索、外观系统与表单体验改进。
+- `Unreleased` 收录 v1.1.0 之后的变更，`v1.1.0` 小节收录 v1.0.0 → v1.1.0 的变更。
+  部分早期提交的信息不规范（直接是暂存区文件列表），内容已按实际 diff 归类，并单独标注。
 
 ## Unreleased
 
@@ -110,5 +110,5 @@ Commits，括号内为提交短哈希，可直接在 GitHub 上跳转。
   `next-env.d.ts`（`dc503db`）。
 
 > 说明：`docs/` 内还有一条不改变任何代码的整备期记录
-> [`docs/docker-evaluation.md`](docs/docker-evaluation.md)，记录了暂不提供
-> Dockerfile / Compose 的理由与再评审触发条件。
+> [`docs/docker-evaluation.md`](docs/docker-evaluation.md)，记录了可选 Docker 部署的
+> 定位、边界与再评审触发条件。

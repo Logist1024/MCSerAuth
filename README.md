@@ -371,6 +371,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 | -------------------------------------------------------- | --------------------------------------------------------------------------- |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                           |
 | [`docs/features.md`](docs/features.md)                   | 完整功能清单：认证/会话/纹理/论坛/成长体系，含实现位置与 API 路径           |
+| [CHANGELOG.md](CHANGELOG.md)                             | 版本变更记录：按 v1.1.0 / v1.0.0 与 Unreleased 分节                         |
 | [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                        |
 | [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                     |
 | [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练  |

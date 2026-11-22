@@ -40,3 +40,4 @@ playwright-report/
 .zcode/
 .claude/
 .codeartsdoer/
+.qoderignore

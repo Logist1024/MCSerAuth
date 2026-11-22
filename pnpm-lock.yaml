@@ -125,9 +125,6 @@ importers:
       pino-http:
         specifier: ^11.0.0
         version: 11.0.0
-      pino-pretty:
-        specifier: ^13.2.0
-        version: 13.2.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -171,6 +168,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      pino-pretty:
+        specifier: ^13.2.0
+        version: 13.2.0
       supertest:
         specifier: ^7.3.1
         version: 7.3.1
@@ -207,9 +207,6 @@ importers:
       skinview3d:
         specifier: ^3.4.2
         version: 3.4.2
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^7.0.1
