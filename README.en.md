@@ -398,8 +398,9 @@ to `apps/web/.env.local` to activate.
 - Non-protocol endpoints use a unified envelope: success `{ code: 0, data }`,
   failure `{ code, message }` (error codes in `packages/shared/src/errors.ts`).
 - Non-protocol write endpoints validate `Origin`/`Referer` (`APP_URL`/`AUTH_URL`
-  allow-list) and answer 403 on cross-site requests; auth and write endpoints
-  have in-process rate limiting (429).
+  allow-list) and answer 403 on cross-site requests. Every Nest route is
+  rate-limited in-process by default (120/min); `/api/auth/*` has a separate
+  express limiter (10/min on credential endpoints).
 - Thread replies paginate via `replyPage` / `replyPageSize` (defaults 1/20, cap
   50), responses include `replyTotal`.
 - Notification lists paginate (default 20), plus
@@ -454,7 +455,7 @@ to `apps/web/.env.local` to activate.
 | [`docs/deploy.md`](docs/deploy.md)                       | Production runbook: VPS checklist, `.env` reference, backup & restore drills         |
 | [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows/panel-host path: Node 22 → NSSM services → Caddy 443 → Paper `.bat` setup    |
 | [`docs/player-guide.md`](docs/player-guide.md)           | Player-facing: external login steps for HMCL / PCL2 / Prism Launcher                 |
-| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | Why no Dockerfile/Compose for now, and when to revisit                               |
+| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | Optional single-image Docker deployment: scope, boundaries, revisit triggers         |
 | [`docs/security.md`](docs/security.md)                   | Security baseline: CSP, security headers, hashing                                    |
 | [`docs/oauth-integration.md`](docs/oauth-integration.md) | OAuth SSO guide for sibling services: client registration, scopes, PKCE              |
 | [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI contract artifact (`pnpm openapi:export`)                                    |

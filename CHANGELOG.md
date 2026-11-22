@@ -17,11 +17,31 @@ Commits，括号内为提交短哈希，可直接在 GitHub 上跳转。
 - 可选的单镜像 Docker 部署：多阶段 `Dockerfile`（server 经 `pnpm deploy --prod`
   裁剪、web 走 `output: 'standalone'`）、`docker/entrypoint.sh`（迁移 + 双进程监管）、
   `docker-compose.yml` 与 `deploy/env.docker.example`，用法见 `docs/deploy.md` 第 9 节。
+- 页头聚合端点 `GET /api/user/header`：一次返回身份、头像与未读数，页头由三次串行请求降为一次。
+- 通知列表支持 `status=unread` 与 `type=` 服务端筛选；纹理审核列表支持 `page` / `pageSize` 分页。
 
 ### Changed（变更）
 
 - `dotenv` 从 apps/server 的 devDependencies 移入 dependencies：`scripts/migrate.mjs`
   与 `scripts/backup.mjs` 是生产路径脚本，生产依赖裁剪后必须可用。
+- 成长经济写入（签到 / 打赏 / 商店 / XP）改为事务内行锁 + 原子更新：并发签到返回 409，
+  打赏、购买与经验奖励不再丢更新或重复扣款。
+- 所有 Nest 路由默认注册进程内限流（120 次/分钟），健康探针豁免；验证码令牌与尝试次数改为条件更新。
+- 上传与静态文件读取改用异步 IO；写库/写盘失败时返还当日上传配额。
+- 前端区分 404 与 5xx：接口故障不再显示「帖子不存在 / 未登录」；`/textures` 首屏改由服务端取数；
+  管理后台切换标签不再触发整页 RSC 请求。
+- 公共帖子详情/版块页移除流式 `loading` 边界（论坛列表骨架收敛到 `/forum/(feed)`），
+  无效帖子/分类返回真正的 HTTP 404；Next SSR 透传 `X-Forwarded-For`，限流按真实客户端 IP 计数。
+- 新增索引：`session.expires_at`、`verification.expires_at`、
+  `notification(user_id, created_at)`、举报去重复合索引；维护任务清理过期
+  verification / token / 昵称保留记录。
+
+### Fixed（修复）
+
+- 修复并发签到 500、并发打赏 / 购买 / XP 奖励丢更新，以及 Banner 并发审核重复退款。
+- 修复验证码令牌并发重复消费与尝试次数越界。
+- 修复新主题正文 `@提及` 不生成通知、通知筛选态「全部」计数误用筛选后 total、
+  管理员表单 `pattern` 在 Chrome 正则 `v` 模式下无效，以及外观初始化脚本位置触发的 React 警告。
 
 ## v1.1.0
 

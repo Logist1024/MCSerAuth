@@ -37,8 +37,8 @@ export class SiteController {
   @ApiParam({ name: 'filename', example: '<sha256>.png' })
   @ApiResponse({ status: 200, description: '图标二进制内容' })
   @ApiResponse({ status: 404, description: '图标不存在' })
-  icon(@Param('filename') filename: string, @Res() response: Response): void {
-    const file = this.site.readIcon(filename);
+  async icon(@Param('filename') filename: string, @Res() response: Response): Promise<void> {
+    const file = await this.site.readIcon(filename);
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     response.status(HttpStatus.OK).send(file.data);

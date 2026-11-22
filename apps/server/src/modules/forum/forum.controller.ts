@@ -12,9 +12,8 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -44,7 +43,6 @@ import {
 import { ForumService } from './forum.service.js';
 /** Public forum reads plus authenticated posting, replies, votes and reports. */
 @ApiTags('Forum')
-@UseGuards(ThrottlerGuard)
 @Controller('forum')
 export class ForumController {
   constructor(

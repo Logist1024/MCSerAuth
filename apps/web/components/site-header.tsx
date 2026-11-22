@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, startTransition } from 'react';
-import { roleAtLeast } from '@mcserauth/shared';
-import { fetchUnreadCount, fetchUserSettings } from '@/lib/api-client';
-import { fetchWebsiteSession, signOut, type WebsiteSession } from '@/lib/auth-client';
+import { roleAtLeast, type UserHeaderResponse } from '@mcserauth/shared';
+import { fetchUserHeader } from '@/lib/api-client';
+import { signOut } from '@/lib/auth-client';
 import Avatar from './avatar';
 import AppearanceMenu from './appearance/appearance-menu';
 import { Icon, LogoMark } from './icons';
@@ -24,7 +24,7 @@ export default function SiteHeader({
   const pathname = usePathname();
   const router = useRouter();
   const toast = useToast();
-  const [session, setSession] = useState<WebsiteSession | null | undefined>(undefined);
+  const [session, setSession] = useState<UserHeaderResponse['user'] | null | undefined>(undefined);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
@@ -39,22 +39,12 @@ export default function SiteHeader({
     }
     inFlight.current = true;
     try {
-      const current = await fetchWebsiteSession();
-      setSession(current);
-      if (current === null) {
-        setAvatarUrl(null);
-        setUnread(0);
-        return;
-      }
-
-      const [settingsResult, unreadResult] = await Promise.allSettled([
-        fetchUserSettings(),
-        fetchUnreadCount(),
-      ]);
-      setAvatarUrl(
-        settingsResult.status === 'fulfilled' ? settingsResult.value.user.avatarUrl : null,
-      );
-      setUnread(unreadResult.status === 'fulfilled' ? unreadResult.value.unreadCount : 0);
+      // One aggregate request replaces the old session → settings → unread
+      // chain, removing a full round-trip from every page load.
+      const header = await fetchUserHeader();
+      setSession(header.user);
+      setAvatarUrl(header.user.avatarUrl);
+      setUnread(header.unreadCount);
     } catch {
       setSession(null);
       setAvatarUrl(null);
@@ -153,7 +143,7 @@ export default function SiteHeader({
     }
   }
 
-  const isModerator = roleAtLeast(session?.user.role, 'reviewer');
+  const isModerator = roleAtLeast(session?.role, 'reviewer');
   const signedIn = session !== null && session !== undefined;
   const onLoginPage = pathname.startsWith('/login');
   const forumActive = pathname === '/forum' || pathname.startsWith('/forum/');
@@ -291,12 +281,9 @@ export default function SiteHeader({
               </Link>
 
               <details className="user-menu" ref={menu}>
-                <summary
-                  className="user-menu-trigger"
-                  aria-label={`账号菜单：${session.user.name}`}
-                >
-                  <Avatar name={session.user.name} src={avatarUrl} size="sm" />
-                  <span className="user-menu-name">{session.user.name}</span>
+                <summary className="user-menu-trigger" aria-label={`账号菜单：${session.name}`}>
+                  <Avatar name={session.name} src={avatarUrl} size="sm" />
+                  <span className="user-menu-name">{session.name}</span>
                   <Icon name="chevronDown" width={14} height={14} className="user-menu-chevron" />
                 </summary>
                 <div
@@ -312,14 +299,14 @@ export default function SiteHeader({
                   }}
                 >
                   <div className="user-menu-identity">
-                    <strong>{session.user.name}</strong>
-                    <span>{session.user.email}</span>
+                    <strong>{session.name}</strong>
+                    <span>{session.email}</span>
                   </div>
-                  <Link className="user-menu-item" href={`/users/${session.user.id}`}>
+                  <Link className="user-menu-item" href={`/users/${session.id}`}>
                     <Icon name="user" width={16} height={16} />
                     个人主页
                   </Link>
-                  <Link className="user-menu-item" href={`/users/${session.user.id}#security`}>
+                  <Link className="user-menu-item" href={`/users/${session.id}#security`}>
                     <Icon name="settings" width={16} height={16} />
                     账号与安全
                   </Link>

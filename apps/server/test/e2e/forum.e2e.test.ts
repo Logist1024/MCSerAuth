@@ -74,6 +74,30 @@ test('the author publishes a post and the replier answers', async () => {
   expect(reply.body.data.postId).toBe(postId);
 });
 
+test('mentions in a new post notify the mentioned account', async () => {
+  const mentionPost = await ctx
+    .request()
+    .post('/api/forum/posts')
+    .set('Cookie', author.cookie)
+    .send({
+      categoryId,
+      title: 'E2E 提及通知',
+      contentMd: `@${replier.name} 请看一下这个主题`,
+    });
+  expect(mentionPost.status).toBe(201);
+
+  const notifications = await ctx
+    .request()
+    .get('/api/forum/notifications?type=mention')
+    .set('Cookie', replier.cookie);
+  expect(notifications.status).toBe(200);
+  expect(
+    notifications.body.data.items.some(
+      (item: { link: string | null }) => item.link === `/forum/post/${mentionPost.body.data.id}`,
+    ),
+  ).toBe(true);
+});
+
 test('voting toggles', async () => {
   const first = await ctx
     .request()
@@ -203,4 +227,45 @@ test('the reviewer hides the post; non-moderators cannot moderate', async () => 
     .send({ status: 'published' });
   expect(forbidden.status).toBe(403);
   expect(forbidden.body.code).toBe(ErrorCode.FORBIDDEN);
+});
+test('notification filters are applied in SQL, not on the current page', async () => {
+  const unread = await ctx
+    .request()
+    .get('/api/forum/notifications?status=unread')
+    .set('Cookie', author.cookie);
+  expect(unread.status).toBe(200);
+  expect(unread.body.data.total).toBeGreaterThan(0);
+  expect(unread.body.data.items.length).toBeGreaterThan(0);
+  expect(
+    unread.body.data.items.every((item: { readAt: string | null }) => item.readAt === null),
+  ).toBe(true);
+
+  const replies = await ctx
+    .request()
+    .get('/api/forum/notifications?status=unread&type=reply')
+    .set('Cookie', author.cookie);
+  expect(replies.body.data.items.every((item: { type: string }) => item.type === 'reply')).toBe(
+    true,
+  );
+
+  const all = await ctx.request().get('/api/forum/notifications').set('Cookie', author.cookie);
+  expect(all.status).toBe(200);
+  expect(all.body.data.allTotal).toBe(all.body.data.total);
+  expect(unread.body.data.allTotal).toBe(all.body.data.total);
+  expect(replies.body.data.allTotal).toBe(all.body.data.total);
+
+  const first = unread.body.data.items[0] as { id: number };
+  const marked = await ctx
+    .request()
+    .post(`/api/forum/notifications/${first.id}/read`)
+    .set('Cookie', author.cookie)
+    .send();
+  expect(marked.status).toBeLessThan(300);
+
+  const after = await ctx
+    .request()
+    .get('/api/forum/notifications?status=unread')
+    .set('Cookie', author.cookie);
+  expect(after.body.data.total).toBe(unread.body.data.total - 1);
+  expect(after.body.data.unreadCount).toBe(unread.body.data.unreadCount - 1);
 });

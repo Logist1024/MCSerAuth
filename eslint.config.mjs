@@ -17,6 +17,8 @@ export default tseslint.config(
       'apps/server/src/db/schema/generated/**',
       'apps/server/src/db/schema/index.ts',
       'docs/openapi.json',
+      // Local agent/tool state (gitignored); never lint generated backups.
+      '.codeartsdoer/**',
     ],
   },
   js.configs.recommended,

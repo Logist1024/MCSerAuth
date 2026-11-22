@@ -47,14 +47,26 @@ export default function TransactionsPanel({
     loading: true,
     error: null,
   });
-  // Seeds page 1 for a fast first paint; the effect always (re)fetches for an
-  // accurate `total`, and re-runs whenever the URL `page` or `refreshKey` changes.
+  // Seeds page 1 for a fast first paint; later pages and wallet mutations
+  // refetch, but the initial page-1 render is already complete.
   const loadedRef = useRef<string | null>(null);
+  const initialRef = useRef({ items: initialItems, total: initialTotal });
 
   useEffect(() => {
     const token = `${page}:${refreshKey}`;
     if (loadedRef.current === token) {
       setState((s) => ({ ...s, page, loading: false }));
+      return;
+    }
+    if (page === 1 && refreshKey === 0) {
+      loadedRef.current = token;
+      setState({
+        items: initialRef.current.items,
+        total: initialRef.current.total,
+        page,
+        loading: false,
+        error: null,
+      });
       return;
     }
 

@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, test, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 60_000 });
 
-import { createE2eContext, type E2eContext } from '../helpers/e2e.js';
+import { createE2eContext, registerVerifiedUser, type E2eContext } from '../helpers/e2e.js';
 
 let ctx: E2eContext;
 
@@ -28,4 +28,19 @@ test('the production-identical assembly serves health and envelope endpoints', a
   expect(categories.status).toBe(200);
   expect(categories.body.code).toBe(0);
   expect(categories.body.data.length).toBeGreaterThan(0);
+});
+test('the header aggregate returns identity and unread count in one request', async () => {
+  const anonymous = await ctx.request().get('/api/user/header');
+  expect(anonymous.status).toBe(401);
+
+  const user = await registerVerifiedUser(ctx);
+  const header = await ctx.request().get('/api/user/header').set('Cookie', user.cookie);
+  expect(header.status).toBe(200);
+  expect(header.body.code).toBe(0);
+  expect(header.body.data.user).toMatchObject({
+    id: user.userId,
+    email: user.email,
+    name: user.name,
+  });
+  expect(header.body.data.unreadCount).toBe(0);
 });

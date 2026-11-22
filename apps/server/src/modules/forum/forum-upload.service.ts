@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ForumUploadResponse } from '@mcserauth/shared';
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp, { type Metadata } from 'sharp';
 import { UploadQuotaService } from '../../common/services/upload-quota.service.js';
@@ -47,41 +47,55 @@ export class ForumUploadService {
       throw new BadRequestException('GIF 帧数过多（最多 100 帧）');
     }
     await this.quota.consume(userId, 'forum_image', MAX_FORUM_UPLOADS_PER_DAY);
-    const extension = format === 'jpeg' ? 'jpg' : format;
-    const digest = createHash('sha256').update(buffer).digest('hex');
-    const filename = `${digest}.${extension}`;
-    const relativePath = path.posix.join('forum', filename);
-    this.writeFile(relativePath, buffer);
-    const url = `${this.config.authUrl.replace(/\/+$/, '')}/api/forum/uploads/${filename}`;
-    return { url, markdown: `![image](${url})` };
+    try {
+      const extension = format === 'jpeg' ? 'jpg' : format;
+      const digest = createHash('sha256').update(buffer).digest('hex');
+      const filename = `${digest}.${extension}`;
+      const relativePath = path.posix.join('forum', filename);
+      await this.writeFile(relativePath, buffer);
+      const url = `${this.config.authUrl.replace(/\/+$/, '')}/api/forum/uploads/${filename}`;
+      return { url, markdown: `![image](${url})` };
+    } catch (error) {
+      await this.quota.release(userId, 'forum_image').catch(() => undefined);
+      throw error;
+    }
   }
-  read(filename: string): {
+  async read(filename: string): Promise<{
     data: Buffer;
     contentType: string;
-  } {
+  }> {
     if (!FILENAME_PATTERN.test(filename)) {
       throw new NotFoundException('图片不存在');
     }
     const absolutePath = path.resolve(this.config.uploadDir, 'forum', filename);
-    if (!fs.existsSync(absolutePath)) {
-      throw new NotFoundException('图片不存在');
+    let data: Buffer;
+    try {
+      data = await fs.readFile(absolutePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NotFoundException('图片不存在');
+      }
+      throw error;
     }
     const extension = filename.slice(filename.lastIndexOf('.') + 1);
     return {
-      data: fs.readFileSync(absolutePath),
+      data,
       contentType: CONTENT_TYPES[extension] ?? 'application/octet-stream',
     };
   }
-  private writeFile(relativePath: string, buffer: Buffer): void {
+  private async writeFile(relativePath: string, buffer: Buffer): Promise<void> {
     const root = path.resolve(this.config.uploadDir);
     const absolutePath = path.resolve(root, relativePath);
     if (!absolutePath.startsWith(`${root}${path.sep}`)) {
       throw new BadRequestException('上传路径不合法');
     }
-    if (fs.existsSync(absolutePath)) {
-      return;
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    try {
+      await fs.writeFile(absolutePath, buffer, { flag: 'wx' });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
     }
-    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    fs.writeFileSync(absolutePath, buffer, { flag: 'wx' });
   }
 }

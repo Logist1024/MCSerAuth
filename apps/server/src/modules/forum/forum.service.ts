@@ -260,6 +260,7 @@ export class ForumService {
       }),
     );
     await this.progress.awardPostXp(author.id);
+    await this.notifications.notifyMentions(inserted.id, input.contentMd, author.id);
     return await this.getPost(inserted.id, author);
   }
   async updatePost(

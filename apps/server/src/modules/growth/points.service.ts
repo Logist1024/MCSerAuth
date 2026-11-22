@@ -17,7 +17,7 @@ import {
 } from '../../db/schema/index.js';
 import { RulesService } from './rules.service.js';
 import { XpService } from './xp.service.js';
-import type { Tx } from './growth.util.js';
+import { lockProgressRow, type Tx } from './growth.util.js';
 
 /**
  * The points ledger. Every balance mutation appends a point_transaction row
@@ -70,39 +70,30 @@ export class PointsService {
         .from(userTable)
         .where(eq(userTable.id, fromUserId))
     )[0];
-    const senderRow = await this.xp.ensure(fromUserId);
-    if (senderRow.points < amount) {
-      throw new BadRequestException(`积分不足（当前 ${senderRow.points}）`);
-    }
-    const recipientRow = await this.xp.ensure(recipient.id);
+    await this.xp.ensure(fromUserId);
+    await this.xp.ensure(recipient.id);
     await this.db.transaction(async (tx) => {
-      const senderBalance = await this.applyPoints(
-        tx,
-        fromUserId,
-        -amount,
-        senderRow.points,
-        'tip_out',
-        {
-          memo: input.memo ?? `打赏给 ${recipient.name}`,
-          refId: recipient.id,
-        },
-      );
-      await tx
-        .update(userProgress)
-        .set({ points: senderBalance, updatedAt: new Date() })
-        .where(eq(userProgress.userId, fromUserId));
-      const recipientBalance = await this.applyPoints(
-        tx,
-        recipient.id,
-        amount,
-        recipientRow.points,
-        'tip_in',
-        { memo: input.memo ?? `来自 ${sender?.name ?? '社区成员'} 的打赏`, refId: fromUserId },
-      );
-      await tx
-        .update(userProgress)
-        .set({ points: recipientBalance, updatedAt: new Date() })
-        .where(eq(userProgress.userId, recipient.id));
+      // Lock both wallets in a stable order so A→B and B→A tips cannot deadlock.
+      const walletOrder = [fromUserId, recipient.id].sort((a, b) => a.localeCompare(b));
+      const balances = new Map<string, number>();
+      for (const id of walletOrder) {
+        balances.set(id, (await lockProgressRow(this.db, tx, id)).points);
+      }
+      const senderPoints = balances.get(fromUserId);
+      if (senderPoints === undefined) {
+        throw new NotFoundException('账号不存在');
+      }
+      if (senderPoints < amount) {
+        throw new BadRequestException(`积分不足（当前 ${senderPoints}）`);
+      }
+      await this.applyPoints(tx, fromUserId, -amount, 'tip_out', {
+        memo: input.memo ?? `打赏给 ${recipient.name}`,
+        refId: recipient.id,
+      });
+      await this.applyPoints(tx, recipient.id, amount, 'tip_in', {
+        memo: input.memo ?? `来自 ${sender?.name ?? '社区成员'} 的打赏`,
+        refId: fromUserId,
+      });
       await tx.insert(notification).values({
         userId: recipient.id,
         type: 'system',
@@ -163,19 +154,16 @@ export class PointsService {
     if (!target) {
       throw new NotFoundException('用户不存在');
     }
-    const row = await this.xp.ensure(userId);
-    if (row.points + amount < 0) {
-      throw new BadRequestException('扣减后积分不能为负数');
-    }
-    const created = await this.db.transaction(async (tx) => {
-      const balance = await this.applyPoints(tx, userId, amount, row.points, 'admin_adjust', {
+    await this.xp.ensure(userId);
+    const result = await this.db.transaction(async (tx) => {
+      const row = await lockProgressRow(this.db, tx, userId);
+      if (row.points + amount < 0) {
+        throw new BadRequestException('扣减后积分不能为负数');
+      }
+      const balance = await this.applyPoints(tx, userId, amount, 'admin_adjust', {
         memo: memo ?? '管理员调整',
         refId: actorId,
       });
-      await tx
-        .update(userProgress)
-        .set({ points: balance, updatedAt: new Date() })
-        .where(eq(userProgress.userId, userId));
       await tx.insert(notification).values({
         userId,
         type: 'system',
@@ -191,7 +179,7 @@ export class PointsService {
         targetId: userId,
         reason: `${amount > 0 ? '+' : ''}${amount}${memo ? ` ${memo}` : ''}`,
       });
-      return (
+      const created = (
         await tx
           .select()
           .from(pointTransaction)
@@ -199,16 +187,17 @@ export class PointsService {
           .orderBy(desc(pointTransaction.id))
           .limit(1)
       )[0];
+      return { created, balance };
     });
     return {
       userId,
       points: (await this.xp.ensure(userId)).points,
-      transaction: created
-        ? this.toTransaction(created)
+      transaction: result.created
+        ? this.toTransaction(result.created)
         : {
             id: 0,
             amount,
-            balanceAfter: row.points + amount,
+            balanceAfter: result.balance,
             reason: 'admin_adjust',
             memo: memo ?? null,
             createdAt: new Date().toISOString(),
@@ -220,17 +209,23 @@ export class PointsService {
     tx: Tx,
     userId: string,
     amount: number,
-    currentBalance: number,
     reason: PointTransactionSummary['reason'],
     extra: {
       memo?: string;
       refId?: string;
     } = {},
   ): Promise<number> {
-    const balanceAfter = currentBalance + amount;
+    // The caller must already be inside a transaction: the row lock taken here
+    // is what makes concurrent balance changes safe on MySQL/PostgreSQL.
+    const row = await lockProgressRow(this.db, tx, userId);
+    const balanceAfter = row.points + amount;
     if (balanceAfter < 0) {
-      throw new BadRequestException('积分不足');
+      throw new BadRequestException(`积分不足（当前 ${row.points}）`);
     }
+    await tx
+      .update(userProgress)
+      .set({ points: balanceAfter, updatedAt: new Date() })
+      .where(eq(userProgress.userId, userId));
     await tx.insert(pointTransaction).values({
       userId,
       amount,

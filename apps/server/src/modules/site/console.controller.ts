@@ -10,9 +10,8 @@ import {
   Query,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { ConsoleSessionResponse, ConsoleStaffMember, SiteSettings } from '@mcserauth/shared';
 import type { Request, Response } from 'express';
@@ -21,7 +20,6 @@ import { ConsoleLoginDto, ConsoleSiteUpdateDto, UpdateUserRoleDto } from './dto/
 import { SiteService } from './site.service.js';
 /** Key-protected root console: site configuration and all staff roles. */
 @ApiTags('Console')
-@UseGuards(ThrottlerGuard)
 @Controller('console')
 export class ConsoleController {
   constructor(

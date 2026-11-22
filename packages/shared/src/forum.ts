@@ -157,7 +157,10 @@ export interface NotificationListResponse {
   unreadCount: number;
   page: number;
   pageSize: number;
+  /** Rows matching the current status/type filter. */
   total: number;
+  /** Rows for the account regardless of filters, for the “全部” tab counter. */
+  allTotal: number;
 }
 
 export interface UpdateProfileRequest {
@@ -198,6 +201,20 @@ export interface UserSettingsResponse {
     banned: boolean;
     createdAt: string;
   } | null;
+}
+
+export interface UserHeaderResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+    role: UserRole;
+    permissions: AdminPermission[];
+    banned: boolean;
+    mutedUntil: string | null;
+  };
+  unreadCount: number;
 }
 
 export interface RenamePlayerRequest {

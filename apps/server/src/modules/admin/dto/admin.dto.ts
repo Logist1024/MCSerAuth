@@ -7,15 +7,19 @@ import {
   type SkinKind,
   type SkinStatus,
 } from '@mcserauth/shared';
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -90,6 +94,21 @@ export class ListTexturesQueryDto {
   @IsOptional()
   @IsIn(SKIN_KINDS)
   kind?: SkinKind;
+
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
 }
 
 export class ReviewTextureDto {

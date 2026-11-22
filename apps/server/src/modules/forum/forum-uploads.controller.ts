@@ -8,10 +8,9 @@ import {
   Req,
   Res,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
@@ -29,7 +28,6 @@ import { AccountAccessService } from '../auth/account-access.service.js';
 import { ForumUploadService, MAX_FORUM_UPLOAD_BYTES } from './forum-upload.service.js';
 /** Markdown image upload + public content-addressed delivery. */
 @ApiTags('Forum')
-@UseGuards(ThrottlerGuard)
 @Controller('forum/uploads')
 export class ForumUploadsController {
   constructor(
@@ -67,13 +65,13 @@ export class ForumUploadsController {
   @ApiOperation({ summary: '读取已上传的帖子图片' })
   @ApiParam({ name: 'filename', example: '<sha256>.png' })
   @ApiResponse({ status: 200, description: '图片' })
-  get(
+  async get(
     @Param('filename')
     filename: string,
     @Res()
     response: Response,
-  ): void {
-    const file = this.uploads.read(filename);
+  ): Promise<void> {
+    const file = await this.uploads.read(filename);
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     response.status(HttpStatus.OK).send(file.data);

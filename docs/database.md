@@ -256,6 +256,15 @@ DATABASE_URL=postgres://… pnpm db:backup        # pg_dump 包装
   `lower(title) LIKE '%kw%'`（`%`/`_`/`\` 已转义），前置通配符无法命中 B-tree
   索引，属全表扫描——论坛帖子量级（万级）下可接受，规模显著增长后再考虑
   全文索引（如 MySQL FULLTEXT / PostgreSQL tsvector）。
+- **成长经济并发**：余额与 XP 的变更必须在事务内先经 `lockProgressRow()`
+  （`src/modules/growth/growth.util.ts`）读取最新行——SQLite 由 `BEGIN IMMEDIATE`
+  保护，MySQL/PostgreSQL 使用 `SELECT ... FOR UPDATE`。打赏同时改两个钱包时按
+  userId 字典序加锁，避免 A→B 与 B→A 并发时交叉死锁。
+- **索引与保留策略**：`session.expires_at`、`verification.expires_at`、
+  `notification(user_id, created_at)` 与
+  `report(reporter_id, target_type, target_id, status)` 支撑过期清理、通知筛选与
+  举报去重；每小时维护任务清理过期 verification、过期 90 天的启动器令牌，以及已过期
+  的昵称保留记录。
 - **迁移顺序**：生产迁移前先备份；MySQL/PostgreSQL 的大表 DDL 建议在维护窗口执行。
 - **连接池**：多实例部署时按 `实例数 × DB_POOL_MAX` 估算数据库连接上限。
 - **SQLite 并发**：单进程内顶层事务会串行执行（单连接、单写者）；需要高并发写入时

@@ -10,9 +10,8 @@ import {
   Patch,
   Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -26,23 +25,25 @@ import type {
   DeleteTextureResponse,
   RenamePlayerResponse,
   UserAuthorizationView,
+  UserHeaderResponse,
   UserSettingsResponse,
 } from '@mcserauth/shared';
 import type { Request } from 'express';
 import { AccountAccessService } from '../auth/account-access.service.js';
 import { OAuthClientService } from '../auth/oauth-client.service.js';
+import { NotificationsService } from '../forum/notifications.service.js';
 import { RenamePlayerDto, UpdateProfileDto, ChangeEmailDto } from './dto/user.dto.js';
 import { UserService } from './user.service.js';
 /** Current account profile: avatar/signature, rename and textures. */
 @ApiTags('User')
 @ApiCookieAuth('better-auth.session_token')
-@UseGuards(ThrottlerGuard)
 @Controller('user')
 export class UserController {
   constructor(
     private readonly accounts: AccountAccessService,
     private readonly users: UserService,
     private readonly oauthClients: OAuthClientService,
+    private readonly notifications: NotificationsService,
   ) {}
   @Get('settings')
   @SkipThrottle()
@@ -53,6 +54,32 @@ export class UserController {
   ): Promise<UserSettingsResponse> {
     const user = await this.accounts.requireUser(request);
     return await this.users.getSettings(user.id);
+  }
+  /**
+   * One request for everything the global header needs: identity, avatar and
+   * the unread badge. Replaces the previous session → settings → unread chain.
+   */
+  @Get('header')
+  @ApiOperation({ summary: '页头账号信息与未读数（聚合，减少首屏请求）' })
+  async getHeader(@Req() request: Request): Promise<UserHeaderResponse> {
+    const user = await this.accounts.requireUser(request);
+    const [settings, unreadCount] = await Promise.all([
+      this.users.getSettings(user.id),
+      this.notifications.unreadCount(user.id),
+    ]);
+    return {
+      user: {
+        id: settings.user.id,
+        name: settings.user.name,
+        email: settings.user.email,
+        avatarUrl: settings.user.avatarUrl,
+        role: settings.user.role,
+        permissions: settings.user.permissions,
+        banned: settings.user.banned,
+        mutedUntil: settings.user.mutedUntil,
+      },
+      unreadCount,
+    };
   }
   @Patch('settings')
   @Throttle({ default: { limit: 20, ttl: 60000 } })

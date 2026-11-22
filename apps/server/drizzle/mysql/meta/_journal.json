@@ -15,6 +15,13 @@
       "when": 1794122260297,
       "tag": "0001_brainy_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1795276910209,
+      "tag": "0002_striped_veda",
+      "breakpoints": true
     }
   ]
 }

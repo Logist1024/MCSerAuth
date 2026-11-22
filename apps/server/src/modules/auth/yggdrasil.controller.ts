@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBody,
   ApiNoContentResponse,
@@ -54,7 +54,6 @@ export class YggdrasilMetadataController {
  */
 @ApiTags('authlib-injector')
 @ProtocolApi()
-@UseGuards(ThrottlerGuard)
 @Controller('authserver')
 export class YggdrasilAuthController {
   constructor(private readonly yggdrasil: YggdrasilService) {}

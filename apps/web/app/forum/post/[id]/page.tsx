@@ -8,6 +8,7 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import AdminPostControls, { AdminReplyControls } from '@/components/admin-post-controls';
 import Avatar from '@/components/avatar';
 import Breadcrumbs from '@/components/breadcrumbs';
@@ -25,9 +26,20 @@ import TopicFloatingActions from '@/components/topic-floating-actions';
 import VoteButton from '@/components/vote-button';
 import { formatDate, formatDateTime, formatRelativeTime } from '@/lib/format';
 import { categoryStyle, roleClass, roleLabel } from '@/lib/forum-ui';
-import { serverApiFetch } from '@/lib/server-api';
+import { serverApiFetchResult } from '@/lib/server-api';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Page 1 uses the bare URL on purpose: metadata and the page body then share
+ * one request instead of fetching the same post twice.
+ */
+const loadPost = cache(
+  async (postId: number, replyPage: number) =>
+    await serverApiFetchResult<ForumPostDetail>(
+      `/api/forum/posts/${postId}${replyPage === 1 ? '' : `?replyPage=${replyPage}`}`,
+    ),
+);
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -36,14 +48,23 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const post = await serverApiFetch<ForumPostDetail>(`/api/forum/posts/${id}`);
+  const postId = Number(id);
+  if (!Number.isInteger(postId) || postId <= 0) {
+    notFound();
+  }
+  const post = await loadPost(postId, 1);
+  if (!post.ok && post.status === 404) {
+    // Throw before streaming starts: the page keeps its loading skeleton for
+    // valid posts, while a missing post answers a real HTTP 404.
+    notFound();
+  }
   return {
-    title: post ? `${post.title} · 论坛` : '帖子',
-    description: post?.excerpt,
-    openGraph: post
+    title: post.ok ? `${post.data.title} · 论坛` : '帖子',
+    description: post.ok ? post.data.excerpt : undefined,
+    openGraph: post.ok
       ? {
-          title: post.title,
-          description: post.excerpt,
+          title: post.data.title,
+          description: post.data.excerpt,
           type: 'article',
         }
       : undefined,
@@ -164,20 +185,27 @@ export default async function PostPage({ params, searchParams }: PageProps) {
   const replyPage =
     Number.isInteger(requestedReplyPage) && requestedReplyPage > 0 ? requestedReplyPage : 1;
 
-  const [post, settings] = await Promise.all([
-    serverApiFetch<ForumPostDetail>(`/api/forum/posts/${postId}?replyPage=${replyPage}`),
-    serverApiFetch<UserSettingsResponse>('/api/user/settings'),
+  const [postResult, settingsResult] = await Promise.all([
+    loadPost(postId, replyPage),
+    serverApiFetchResult<UserSettingsResponse>('/api/user/settings'),
   ]);
-  if (post === null) {
-    notFound();
+  if (!postResult.ok) {
+    // Only a real 404 becomes "post not found"; an API outage must not lie.
+    if (postResult.status === 404) {
+      notFound();
+    }
+    throw new Error('帖子暂时无法加载，请稍后重试');
   }
+  const post = postResult.data;
 
   const lastReplyPage = Math.max(1, Math.ceil(post.replyTotal / Math.max(1, post.replyPageSize)));
   const replyPageOutOfRange = post.replyTotal > 0 && post.replies.length === 0;
   const replyPageHref = (target: number): string =>
     `/forum/post/${post.id}?replyPage=${target}#reply`;
 
-  const viewer = settings?.user ?? null;
+  const viewer = settingsResult.ok ? settingsResult.data.user : null;
+  // A 401 means anonymous; anything else means we could not read the session.
+  const viewerUnavailable = !settingsResult.ok && settingsResult.status !== 401;
   const isModerator = roleAtLeast(viewer?.role, 'reviewer');
   const isAuthor = viewer?.id === post.author.id;
   const canReply =
@@ -425,7 +453,19 @@ export default async function PostPage({ params, searchParams }: PageProps) {
               <span className="panel-meta">{post.replyCount} 条回复</span>
             </div>
 
-            {viewer === null ? (
+            {viewerUnavailable ? (
+              <div className="composer-main">
+                <div className="empty-state">
+                  <span className="empty-state-icon">
+                    <Icon name="alert" width={22} height={22} />
+                  </span>
+                  <p>暂时无法确认登录状态，请刷新页面后再试。</p>
+                  <Link className="button ghost" href={`/forum/post/${post.id}`}>
+                    刷新页面
+                  </Link>
+                </div>
+              </div>
+            ) : viewer === null ? (
               <div className="composer-main">
                 <div className="empty-state">
                   <span className="empty-state-icon">

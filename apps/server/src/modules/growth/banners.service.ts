@@ -8,7 +8,6 @@ import {
   moderationLog,
   notification,
   user as userTable,
-  userProgress,
 } from '../../db/schema/index.js';
 import { RulesService } from './rules.service.js';
 import { PointsService } from './points.service.js';
@@ -72,16 +71,17 @@ export class BannersService {
     }
     const owner = (
       await this.db.db
-        .select({ name: userTable.name, points: userProgress.points })
+        .select({ name: userTable.name })
         .from(userTable)
-        .leftJoin(userProgress, eq(userProgress.userId, userTable.id))
         .where(eq(userTable.id, row.userId))
     )[0];
     const now = new Date();
     const rules = await this.rulesService.rules();
     const endsAt = new Date(now.getTime() + rules.bannerDays * DAY_MS);
     await this.db.transaction(async (tx) => {
-      await tx
+      // Claim the pending row with a conditional update: a concurrent reviewer
+      // gets affectedRows = 0 instead of double-refunding the owner.
+      const claimed = await tx
         .update(bannerTable)
         .set({
           status: approve ? 'approved' : 'rejected',
@@ -90,20 +90,15 @@ export class BannersService {
           reviewedBy: actorId,
           reviewedAt: now,
         })
-        .where(eq(bannerTable.id, id));
+        .where(and(eq(bannerTable.id, id), eq(bannerTable.status, 'pending')));
+      if (this.db.affectedRows(claimed) === 0) {
+        throw new ConflictException('该 Banner 已处理');
+      }
       if (!approve) {
-        const balance = await this.points.applyPoints(
-          tx,
-          row.userId,
-          row.pointsSpent,
-          owner?.points ?? 0,
-          'banner_refund',
-          { memo: `Banner 未通过审核，退还积分：${row.title}`, refId: String(row.id) },
-        );
-        await tx
-          .update(userProgress)
-          .set({ points: balance, updatedAt: now })
-          .where(eq(userProgress.userId, row.userId));
+        await this.points.applyPoints(tx, row.userId, row.pointsSpent, 'banner_refund', {
+          memo: `Banner 未通过审核，退还积分：${row.title}`,
+          refId: String(row.id),
+        });
       }
       await tx.insert(notification).values({
         userId: row.userId,

@@ -131,7 +131,7 @@ export default function AdminCategories() {
             <input
               id="category-slug"
               value={form.slug}
-              pattern="[a-z0-9-]{2,40}"
+              pattern={'[a-z0-9\\-]{2,40}'}
               onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))}
               required
             />

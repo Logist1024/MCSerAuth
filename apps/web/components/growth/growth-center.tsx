@@ -58,7 +58,7 @@ export default function GrowthCenter({
             page={transactionsPage}
             refreshKey={ledgerRevision}
             initialItems={overview.latestTransactions}
-            initialTotal={overview.latestTransactions.length}
+            initialTotal={overview.transactionTotal}
           />
         </div>
       </div>

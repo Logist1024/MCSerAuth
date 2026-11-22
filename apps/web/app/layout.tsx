@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+
 import SiteHeader from '@/components/site-header';
 import { ToastProvider } from '@/components/toast';
 import {
@@ -44,9 +45,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       // 服务端默认值与客户端实际值不同是预期行为，抑制该属性级警告。
       suppressHydrationWarning
     >
-      <body>
+      <head>
         {/* 首帧前把外观偏好写到 <html> 的 data 属性，避免主题闪烁。 */}
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_INIT_SCRIPT }} />
+      </head>
+      <body>
         {/* Rendered last in the document order so it can override the built-in theme. */}
         {site.customCss !== null ? (
           <style dangerouslySetInnerHTML={{ __html: site.customCss }} />

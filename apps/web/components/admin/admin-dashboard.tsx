@@ -6,8 +6,8 @@ import {
   type AdminPermission,
   type UserRole,
 } from '@mcserauth/shared';
-import { useRouter, useSearchParams } from 'next/navigation';
-import type { KeyboardEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useState, type KeyboardEvent } from 'react';
 import AdminAnnouncements from './admin-announcements';
 import AdminCategories from './admin-categories';
 import AdminCaptcha from './admin-captcha';
@@ -92,17 +92,20 @@ export default function AdminDashboard({
   viewerId: string;
   permissions: readonly AdminPermission[];
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requested = searchParams.get('tab');
   const visibleTabs = TABS.filter((item) => isAllowed(role, permissions, item));
-  const tab =
+  const initialTab: TabKey =
     isTabKey(requested) && visibleTabs.some((item) => item.key === requested)
       ? requested
       : (visibleTabs[0]?.key ?? 'overview');
+  const [tab, setTab] = useState<TabKey>(initialTab);
 
   function selectTab(next: TabKey): void {
-    router.replace(`/admin?tab=${next}`, { scroll: false });
+    // Switching panels must not re-run the force-dynamic admin page. Keep the
+    // URL shareable by rewriting the query directly instead of navigating.
+    setTab(next);
+    window.history.replaceState(null, '', `/admin?tab=${next}`);
   }
 
   function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {

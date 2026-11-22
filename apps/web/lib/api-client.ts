@@ -55,6 +55,7 @@ import {
   type ModerateReplyResponse,
   type MuteUserRequest,
   type NotificationListResponse,
+  type NotificationType,
   type OAuthAuthenticateRequest,
   type OAuthAvailabilityResponse,
   type OAuthEntryQuery,
@@ -84,6 +85,7 @@ import {
   type UpdateSiteSettingsRequest,
   type UpdateUserRoleRequest,
   type UserAuthorizationView,
+  type UserHeaderResponse,
   type UserTitleSummary,
   type ConsoleSessionResponse,
   type ConsoleStaffMember,
@@ -360,7 +362,12 @@ export function uploadForumImage(file: File): Promise<ForumUploadResponse> {
 // --------------------------------------------------------------- notifications
 
 export function fetchNotifications(
-  query: { page?: number; pageSize?: number } = {},
+  query: {
+    page?: number;
+    pageSize?: number;
+    status?: 'all' | 'unread';
+    type?: NotificationType;
+  } = {},
 ): Promise<NotificationListResponse> {
   const params = new URLSearchParams();
   if (query.page !== undefined) {
@@ -368,6 +375,12 @@ export function fetchNotifications(
   }
   if (query.pageSize !== undefined) {
     params.set('pageSize', String(query.pageSize));
+  }
+  if (query.status !== undefined) {
+    params.set('status', query.status);
+  }
+  if (query.type !== undefined) {
+    params.set('type', query.type);
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
   return apiFetch<NotificationListResponse>(`/api/forum/notifications${suffix}`, {
@@ -396,6 +409,10 @@ export function markAllNotificationsRead(): Promise<{ updated: number }> {
 }
 
 // ---------------------------------------------------------------- user settings
+
+export function fetchUserHeader(): Promise<UserHeaderResponse> {
+  return apiFetch<UserHeaderResponse>('/api/user/header', { credentials: 'include' });
+}
 
 export function fetchUserSettings(): Promise<UserSettingsResponse> {
   return apiFetch<UserSettingsResponse>('/api/user/settings', { credentials: 'include' });
@@ -620,9 +637,23 @@ export function adminAnnounce(
   });
 }
 
-export function adminListTextures(status?: string): Promise<AdminTextureView[]> {
-  const suffix = status ? `?status=${encodeURIComponent(status)}` : '';
-  return apiFetch<AdminTextureView[]>(`/api/admin/textures${suffix}`, { credentials: 'include' });
+export function adminListTextures(
+  params: { status?: string; page?: number; pageSize?: number } = {},
+): Promise<Paginated<AdminTextureView>> {
+  const query = new URLSearchParams();
+  if (params.status !== undefined) {
+    query.set('status', params.status);
+  }
+  if (params.page !== undefined) {
+    query.set('page', String(params.page));
+  }
+  if (params.pageSize !== undefined) {
+    query.set('pageSize', String(params.pageSize));
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+  return apiFetch<Paginated<AdminTextureView>>(`/api/admin/textures${suffix}`, {
+    credentials: 'include',
+  });
 }
 
 export function adminApproveTexture(id: number, reason?: string): Promise<AdminTextureView> {

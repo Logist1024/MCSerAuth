@@ -121,6 +121,22 @@ describe('ProgressService', () => {
       const boosted = await progress.checkin('u1', new Date(Date.now() + 60 * 60 * 1000));
       expect(boosted.xpAwarded).toBe(GROWTH_RULES.checkinBaseXp * GROWTH_RULES.xpBoostMultiplier);
     });
+    it('lets exactly one of several concurrent check-ins through', async () => {
+      const results = await Promise.allSettled([
+        progress.checkin('u1'),
+        progress.checkin('u1'),
+        progress.checkin('u1'),
+      ]);
+      expect(results.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+      for (const entry of results) {
+        if (entry.status === 'rejected') {
+          // A double click must be a business conflict, never a raw 500.
+          expect(entry.reason).toBeInstanceOf(ConflictException);
+        }
+      }
+      const ledger = await progress.listTransactions('u1');
+      expect(ledger.items.filter((entry) => entry.reason === 'checkin')).toHaveLength(1);
+    });
   });
   describe('special titles opt out of the level system', () => {
     async function sponsorTitleId(): Promise<number> {
@@ -242,6 +258,40 @@ describe('ProgressService', () => {
       expect(new Date(second as string).getTime()).toBeGreaterThan(
         new Date(first as string).getTime(),
       );
+    });
+    it('adds up balances under concurrent tips', async () => {
+      await progress.adjustPoints('u2', 'u1', 1000, 'grant');
+      await Promise.all([
+        progress.tip('u1', { userId: 'u2', amount: 300 }),
+        progress.tip('u1', { userId: 'u3', amount: 300 }),
+        progress.tip('u1', { userId: 'u2', amount: 300 }),
+      ]);
+      expect((await progress.summary('u1')).points).toBe(100);
+      expect((await progress.summary('u2')).points).toBe(600);
+      expect((await progress.summary('u3')).points).toBe(300);
+    });
+    it('charges once when two cape unlocks race', async () => {
+      await progress.adjustPoints('u2', 'u1', GROWTH_RULES.capeUnlockPrice * 2, 'grant');
+      const results = await Promise.allSettled([
+        progress.purchase('u1', { item: 'cape_unlock' }),
+        progress.purchase('u1', { item: 'cape_unlock' }),
+      ]);
+      expect(results.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+      for (const entry of results) {
+        if (entry.status === 'rejected') {
+          expect(entry.reason).toBeInstanceOf(ConflictException);
+        }
+      }
+      expect((await progress.summary('u1')).points).toBe(GROWTH_RULES.capeUnlockPrice);
+      expect(await progress.capeUnlocked('u1')).toBe(true);
+    });
+    it('adds every concurrent XP award', async () => {
+      await Promise.all([
+        progress.awardXp('u1', 10),
+        progress.awardXp('u1', 25),
+        progress.awardXp('u1', 40),
+      ]);
+      expect((await progress.summary('u1')).xp).toBe(75);
     });
   });
   describe('level curve', () => {

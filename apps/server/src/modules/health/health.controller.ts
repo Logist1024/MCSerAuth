@@ -1,5 +1,6 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { HealthData } from '@mcserauth/shared';
 import { APP_VERSION } from '../../app.constants.js';
 import { apiSuccessSchema } from '../../common/swagger/api-envelope.js';
@@ -16,6 +17,8 @@ import { HealthDataDto } from './dto/health.dto.js';
  */
 @ApiTags('ops')
 @ApiExtraModels(HealthDataDto)
+// Probes must stay reachable when a process manager polls them aggressively.
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: DbService) {}

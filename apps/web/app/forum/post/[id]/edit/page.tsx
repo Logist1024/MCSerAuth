@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import Breadcrumbs from '@/components/breadcrumbs';
 import { Icon } from '@/components/icons';
 import PostEditor from '@/components/post-editor';
-import { serverApiFetch } from '@/lib/server-api';
+import { serverApiFetch, serverApiFetchResult } from '@/lib/server-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +21,30 @@ export default async function EditPostPage({ params }: PageProps) {
     notFound();
   }
 
-  const [post, categories, settings] = await Promise.all([
-    serverApiFetch<ForumPostDetail>(`/api/forum/posts/${postId}`),
+  const [postResult, categories, settingsResult] = await Promise.all([
+    serverApiFetchResult<ForumPostDetail>(`/api/forum/posts/${postId}`),
     serverApiFetch<ForumCategory[]>('/api/forum/categories'),
-    serverApiFetch<UserSettingsResponse>('/api/user/settings'),
+    serverApiFetchResult<UserSettingsResponse>('/api/user/settings'),
   ]);
 
-  if (post === null || settings === null || post.author.id !== settings.user.id) {
+  if (!postResult.ok) {
+    if (postResult.status === 404) {
+      notFound();
+    }
+    throw new Error('帖子暂时无法加载，请稍后重试');
+  }
+  if (!settingsResult.ok) {
+    if (settingsResult.status === 401) {
+      notFound();
+    }
+    throw new Error('暂时无法确认登录状态，请稍后重试');
+  }
+  if (categories === null) {
+    throw new Error('版块列表暂时无法加载，请稍后重试');
+  }
+  const post = postResult.data;
+  const settings = settingsResult.data;
+  if (post.author.id !== settings.user.id) {
     notFound();
   }
 

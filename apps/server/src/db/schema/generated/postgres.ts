@@ -33,6 +33,7 @@ export const verification = pgTable('verification', {
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: false }),
 }, (t) => [
   index('verification_identifier_idx').on(t.identifier),
+  index('verification_expires_at_idx').on(t.expiresAt),
 ]);
 
 export const serverEntry = pgTable('server_entry', {
@@ -69,6 +70,7 @@ export const session = pgTable('session', {
   userId: varchar('user_id', { length: 191 }).notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (t) => [
   index('session_user_id_idx').on(t.userId),
+  index('session_expires_at_idx').on(t.expiresAt),
 ]);
 
 export const account = pgTable('account', {
@@ -273,6 +275,7 @@ export const report = pgTable('report', {
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: false }).notNull().$defaultFn(() => new Date()),
 }, (t) => [
   index('report_status_idx').on(t.status),
+  index('report_reporter_target_status_idx').on(t.reporterId, t.targetType, t.targetId, t.status),
 ]);
 
 export const notification = pgTable('notification', {
@@ -289,6 +292,7 @@ export const notification = pgTable('notification', {
   index('notification_read_at_idx').on(t.readAt),
   index('notification_user_read_idx').on(t.userId, t.readAt),
   index('notification_user_read_created_idx').on(t.userId, t.readAt, t.createdAt),
+  index('notification_user_created_idx').on(t.userId, t.createdAt),
 ]);
 
 export const moderationLog = pgTable('moderation_log', {

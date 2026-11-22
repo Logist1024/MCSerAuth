@@ -135,6 +135,10 @@ export class ProgressService implements OnModuleInit {
     return await this.xp.capeUnlocked(userId);
   }
 
+  async capeUnlockedFor(userIds: string[]): Promise<Set<string>> {
+    return await this.xp.capeUnlockedFor(userIds);
+  }
+
   async assertCapeUnlocked(userId: string): Promise<void> {
     await this.xp.assertCapeUnlocked(userId);
   }
@@ -239,15 +243,27 @@ export class ProgressService implements OnModuleInit {
 
   // ------------------------------------------------------------------- overview
   async overview(userId: string): Promise<GrowthOverviewResponse> {
+    const [progress, shop, rules, titles, leaderboard, banners, latest, pending] =
+      await Promise.all([
+        this.summary(userId),
+        this.shopItems(),
+        this.rules(),
+        this.listTitles(),
+        this.leaderboard(10),
+        this.listOwnBanners(userId),
+        this.listTransactions(userId, 1, 8),
+        this.pendingApplication(userId),
+      ]);
     return {
-      progress: await this.summary(userId),
-      shop: await this.shopItems(),
-      rules: await this.rules(),
-      titles: await this.listTitles(),
-      leaderboard: await this.leaderboard(10),
-      banners: (await this.listOwnBanners(userId)).slice(0, 5),
-      latestTransactions: (await this.listTransactions(userId, 1, 8)).items,
-      pendingTitleApplication: await this.pendingApplication(userId),
+      progress,
+      shop,
+      rules,
+      titles,
+      leaderboard,
+      banners: banners.slice(0, 5),
+      latestTransactions: latest.items,
+      transactionTotal: latest.total,
+      pendingTitleApplication: pending,
     };
   }
 }

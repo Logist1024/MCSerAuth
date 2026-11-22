@@ -301,6 +301,8 @@ export interface GrowthOverviewResponse {
   leaderboard: LeaderboardEntry[];
   banners: BannerSummary[];
   latestTransactions: PointTransactionSummary[];
+  /** Total ledger rows, so page 1 can render without a second request. */
+  transactionTotal: number;
   pendingTitleApplication: TitleApplicationSummary | null;
 }
 

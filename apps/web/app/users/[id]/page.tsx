@@ -29,13 +29,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function UserPage({ params }: PageProps) {
   const { id } = await params;
-  const [profile, viewer] = await Promise.all([
-    serverApiFetch<PublicUserProfile>(`/api/users/${encodeURIComponent(id)}`),
+  const [profileResult, viewer] = await Promise.all([
+    serverApiFetchResult<PublicUserProfile>(`/api/users/${encodeURIComponent(id)}`),
     serverApiFetchResult<UserSettingsResponse>('/api/user/settings'),
   ]);
-  if (profile === null) {
-    notFound();
+  if (!profileResult.ok) {
+    if (profileResult.status === 404) {
+      notFound();
+    }
+    throw new Error('个人主页暂时无法加载，请稍后重试');
   }
+  const profile = profileResult.data;
 
   const viewerSettings = viewer.ok ? viewer.data : null;
   const isOwner = viewerSettings !== null && viewerSettings.user.id === profile.user.id;

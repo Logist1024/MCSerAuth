@@ -187,7 +187,10 @@ export const tables: TableModel[] = [
       text('userAgent', 'user_agent'),
       userOwner(),
     ],
-    indexes: [{ name: 'session_user_id_idx', columns: ['userId'] }],
+    indexes: [
+      { name: 'session_user_id_idx', columns: ['userId'] },
+      { name: 'session_expires_at_idx', columns: ['expiresAt'] },
+    ],
   },
   {
     name: 'account',
@@ -218,7 +221,10 @@ export const tables: TableModel[] = [
       now('createdAt', 'created_at', { defaultFn: undefined, notNull: false }),
       now('updatedAt', 'updated_at', { defaultFn: undefined, notNull: false }),
     ],
-    indexes: [{ name: 'verification_identifier_idx', columns: ['identifier'] }],
+    indexes: [
+      { name: 'verification_identifier_idx', columns: ['identifier'] },
+      { name: 'verification_expires_at_idx', columns: ['expiresAt'] },
+    ],
   },
 
   // --------------------------------------------------------------- game identity
@@ -538,7 +544,13 @@ export const tables: TableModel[] = [
       optionalUserId('handledBy', 'handled_by'),
       now('createdAt', 'created_at'),
     ],
-    indexes: [{ name: 'report_status_idx', columns: ['status'] }],
+    indexes: [
+      { name: 'report_status_idx', columns: ['status'] },
+      {
+        name: 'report_reporter_target_status_idx',
+        columns: ['reporterId', 'targetType', 'targetId', 'status'],
+      },
+    ],
   },
   {
     name: 'notification',
@@ -560,6 +572,7 @@ export const tables: TableModel[] = [
         name: 'notification_user_read_created_idx',
         columns: ['userId', 'readAt', 'createdAt'],
       },
+      { name: 'notification_user_created_idx', columns: ['userId', 'createdAt'] },
     ],
   },
   {

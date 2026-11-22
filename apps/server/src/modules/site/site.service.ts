@@ -22,7 +22,7 @@ import {
 } from '@mcserauth/shared';
 import { count, desc, eq, inArray, or } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { AppConfigService } from '../../config/app-config.service.js';
@@ -230,7 +230,7 @@ export class SiteService {
       throw new BadRequestException('仅支持 PNG / JPEG / WebP / GIF 图标');
     }
     const filename = `${createHash('sha256').update(buffer).digest('hex')}.${format === 'jpeg' ? 'jpg' : format}`;
-    this.writeIconFile(filename, buffer);
+    await this.writeIconFile(filename, buffer);
     await this.persist(new Map([['siteIcon', JSON.stringify(filename)]]), actorId);
     return await this.getDisplaySettings();
   }
@@ -239,20 +239,26 @@ export class SiteService {
     return await this.getDisplaySettings();
   }
   /** Icon bytes for the public `GET /site/icon/:filename` route. */
-  readIcon(filename: string): {
+  async readIcon(filename: string): Promise<{
     data: Buffer;
     contentType: string;
-  } {
+  }> {
     if (!ICON_FILENAME_PATTERN.test(filename)) {
       throw new NotFoundException('图标不存在');
     }
     const absolutePath = path.resolve(this.config.uploadDir, 'site', filename);
-    if (!fs.existsSync(absolutePath)) {
-      throw new NotFoundException('图标不存在');
+    let data: Buffer;
+    try {
+      data = await fs.readFile(absolutePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NotFoundException('图标不存在');
+      }
+      throw error;
     }
     const extension = filename.slice(filename.lastIndexOf('.') + 1);
     return {
-      data: fs.readFileSync(absolutePath),
+      data,
       contentType: ICON_CONTENT_TYPES[extension] ?? 'application/octet-stream',
     };
   }
@@ -278,13 +284,16 @@ export class SiteService {
       });
     });
   }
-  private writeIconFile(filename: string, buffer: Buffer): void {
+  private async writeIconFile(filename: string, buffer: Buffer): Promise<void> {
     const absolutePath = path.resolve(this.config.uploadDir, 'site', filename);
-    if (fs.existsSync(absolutePath)) {
-      return;
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    try {
+      await fs.writeFile(absolutePath, buffer, { flag: 'wx' });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
     }
-    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    fs.writeFileSync(absolutePath, buffer, { flag: 'wx' });
   }
   /** User search for the root console (promoting a regular account). */
   async searchUsers(search: string | undefined, limit = 20): Promise<ConsoleStaffMember[]> {

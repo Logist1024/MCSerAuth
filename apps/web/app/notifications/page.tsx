@@ -7,7 +7,7 @@ import type {
 } from '@mcserauth/shared';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { Suspense, useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import {
   ApiError,
   fetchNotifications,
@@ -87,7 +87,14 @@ function NotificationsContent() {
       }
       setError(null);
       try {
-        setData(await fetchNotifications({ page: targetPage, pageSize: 20 }));
+        setData(
+          await fetchNotifications({
+            page: targetPage,
+            pageSize: 20,
+            status: statusFilter,
+            type: typeFilter === 'all' ? undefined : typeFilter,
+          }),
+        );
       } catch (fetchError) {
         setData(null);
         setError({
@@ -98,27 +105,28 @@ function NotificationsContent() {
         setLoading(false);
       }
     },
-    [page],
+    [page, statusFilter, typeFilter],
   );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    if (data === null) {
-      return [];
+  function changeStatus(next: 'all' | 'unread'): void {
+    setStatusFilter(next);
+    // A filtered list has its own total; returning to page 1 avoids landing on
+    // an empty page that only existed in the previous filter.
+    if (page !== 1) {
+      router.replace('/notifications?page=1');
     }
-    return data.items.filter((notification) => {
-      if (statusFilter === 'unread' && notification.readAt !== null) {
-        return false;
-      }
-      if (typeFilter !== 'all' && notification.type !== typeFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [data, statusFilter, typeFilter]);
+  }
+
+  function changeType(next: 'all' | NotificationType): void {
+    setTypeFilter(next);
+    if (page !== 1) {
+      router.replace('/notifications?page=1');
+    }
+  }
 
   function onStatusTabKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
@@ -131,7 +139,7 @@ function NotificationsContent() {
     } else if (event.key === 'End') {
       next = 'unread';
     }
-    setStatusFilter(next);
+    changeStatus(next);
     window.requestAnimationFrame(() => {
       document.getElementById(`notif-tab-${next}`)?.focus();
     });
@@ -228,11 +236,11 @@ function NotificationsContent() {
               aria-selected={statusFilter === 'all'}
               aria-controls="notif-panel"
               tabIndex={statusFilter === 'all' ? 0 : -1}
-              onClick={() => setStatusFilter('all')}
+              onClick={() => changeStatus('all')}
               onKeyDown={onStatusTabKeyDown}
             >
               全部
-              {data !== null ? <span className="filter-tab-count">{data.items.length}</span> : null}
+              {data !== null ? <span className="filter-tab-count">{data.allTotal}</span> : null}
             </button>
             <button
               id="notif-tab-unread"
@@ -242,7 +250,7 @@ function NotificationsContent() {
               aria-selected={statusFilter === 'unread'}
               aria-controls="notif-panel"
               tabIndex={statusFilter === 'unread' ? 0 : -1}
-              onClick={() => setStatusFilter('unread')}
+              onClick={() => changeStatus('unread')}
               onKeyDown={onStatusTabKeyDown}
             >
               未读
@@ -253,7 +261,7 @@ function NotificationsContent() {
           <select
             className="filter-select"
             value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value as 'all' | NotificationType)}
+            onChange={(event) => changeType(event.target.value as 'all' | NotificationType)}
             aria-label="按通知类型筛选"
           >
             <option value="all">全部类型</option>
@@ -293,7 +301,7 @@ function NotificationsContent() {
                 )
               }
             />
-          ) : filtered.length === 0 ? (
+          ) : data === null || data.items.length === 0 ? (
             <EmptyState
               icon="inbox"
               description={statusFilter === 'unread' ? '没有未读通知。' : '暂时没有通知。'}
@@ -305,7 +313,7 @@ function NotificationsContent() {
             />
           ) : (
             <ul className="notification-list">
-              {filtered.map((notification) => (
+              {data.items.map((notification) => (
                 <li key={notification.id}>
                   <button
                     className={`notification-row${notification.readAt === null ? ' unread' : ''}`}
@@ -345,7 +353,7 @@ function NotificationsContent() {
             </ul>
           )}
 
-          {filtered.length > 0 ? (
+          {data !== null && data.items.length > 0 ? (
             <div className="notification-page-foot">
               <Link href="/forum">返回论坛</Link>
             </div>

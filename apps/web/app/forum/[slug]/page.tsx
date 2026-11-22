@@ -11,7 +11,7 @@ import Pagination from '@/components/pagination';
 import PostList from '@/components/post-list';
 import { findCategory, findCategoryPath } from '@/lib/categories';
 import { buildForumListHref, categoryStyle, parsePostSort, POST_SORT_LABELS } from '@/lib/forum-ui';
-import { publicApiFetch } from '@/lib/server-api';
+import { publicApiFetchResult } from '@/lib/server-api';
 
 export const revalidate = 30;
 
@@ -24,11 +24,19 @@ const PAGE_SIZE = 20;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const categories = await publicApiFetch<ForumCategory[]>('/api/forum/categories');
-  const category = categories ? findCategory(categories, slug) : null;
+  const categories = await publicApiFetchResult<ForumCategory[]>('/api/forum/categories');
+  if (!categories.ok) {
+    return { title: '版块' };
+  }
+  const category = findCategory(categories.data, slug);
+  if (category === null) {
+    // Throw before streaming starts so an unknown slug gets a real 404 instead
+    // of a 200 shell that later swaps to the 404 UI.
+    notFound();
+  }
   return {
-    title: category ? `${category.name} · 论坛` : '版块',
-    description: category?.description ?? undefined,
+    title: `${category.name} · 论坛`,
+    description: category.description ?? undefined,
   };
 }
 
@@ -53,20 +61,29 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
     listQuery.set('search', search);
   }
 
-  const [categories, posts] = await Promise.all([
-    publicApiFetch<ForumCategory[]>('/api/forum/categories'),
-    publicApiFetch<Paginated<ForumPostSummary>>(`/api/forum/posts?${listQuery.toString()}`),
+  const [categoriesResult, postsResult] = await Promise.all([
+    publicApiFetchResult<ForumCategory[]>('/api/forum/categories'),
+    publicApiFetchResult<Paginated<ForumPostSummary>>(`/api/forum/posts?${listQuery.toString()}`),
   ]);
 
-  if (categories === null || posts === null) {
+  if (!categoriesResult.ok) {
     return <ForumErrorState title="版块数据加载失败" />;
   }
-
+  const categories = categoriesResult.data;
   const path = findCategoryPath(categories, slug);
   const category = path.at(-1);
   if (category === undefined) {
     notFound();
   }
+  if (!postsResult.ok) {
+    // A 404 here means the category disappeared between the two requests:
+    // that is a missing page, not an API outage.
+    if (postsResult.status === 404) {
+      notFound();
+    }
+    return <ForumErrorState title="帖子列表加载失败" />;
+  }
+  const posts = postsResult.data;
 
   const totalPages = Math.max(1, Math.ceil(posts.total / Math.max(1, posts.pageSize)));
   const pageOutOfRange = posts.items.length === 0 && page > 1;

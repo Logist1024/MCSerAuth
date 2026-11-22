@@ -9,7 +9,7 @@ import {
   type CaptchaVerifyResponse,
   type UpdateCaptchaSettingsRequest,
 } from '@mcserauth/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { decryptSiteSecret, encryptSiteSecret } from '../../common/crypto/site-secret.js';
@@ -176,16 +176,32 @@ export class CaptchaService {
         throw new BadRequestException('尝试次数过多，请刷新验证码');
       }
       if (!this.matches(row.answerHash, this.hashAnswer(id, answer))) {
-        await this.db.db
+        // Conditional increment: concurrent guesses cannot push attempts past
+        // the cap, and a challenge that was just verified is not counted again.
+        const bumped = await this.db.db
           .update(captchaChallenge)
-          .set({ attempts: row.attempts + 1 })
-          .where(eq(captchaChallenge.id, id));
+          .set({ attempts: sql`${captchaChallenge.attempts} + 1` })
+          .where(
+            and(
+              eq(captchaChallenge.id, id),
+              isNull(captchaChallenge.verifiedAt),
+              lt(captchaChallenge.attempts, MAX_ATTEMPTS),
+            ),
+          );
+        if (this.db.affectedRows(bumped) === 0) {
+          throw new BadRequestException('尝试次数过多，请刷新验证码');
+        }
         throw new BadRequestException('验证码不正确');
       }
-      await this.db.db
+      // Claiming the challenge is a compare-and-swap: only one concurrent
+      // request can flip verified_at from NULL, so a token is issued once.
+      const claimed = await this.db.db
         .update(captchaChallenge)
         .set({ verifiedAt: new Date() })
-        .where(eq(captchaChallenge.id, id));
+        .where(and(eq(captchaChallenge.id, id), isNull(captchaChallenge.verifiedAt)));
+      if (this.db.affectedRows(claimed) === 0) {
+        throw new BadRequestException('验证码已使用，请刷新');
+      }
       return this.issueToken(id);
     }
     const widgetToken = input.token?.trim() ?? '';
@@ -245,10 +261,13 @@ export class CaptchaService {
     if (row.expiresAt.getTime() <= Date.now()) {
       return { ok: false, reason: '人机验证已过期，请重新验证' };
     }
-    await this.db.db
+    const consumed = await this.db.db
       .update(captchaChallenge)
       .set({ tokenUsedAt: new Date() })
-      .where(eq(captchaChallenge.id, id));
+      .where(and(eq(captchaChallenge.id, id), isNull(captchaChallenge.tokenUsedAt)));
+    if (this.db.affectedRows(consumed) === 0) {
+      return { ok: false, reason: '人机验证已使用，请重新验证' };
+    }
     return { ok: true };
   }
   // ------------------------------------------------------------------ helpers

@@ -27,3 +27,23 @@ export function apiSuccessArraySchema(dto: Type<unknown>): SchemaObject {
     },
   };
 }
+/** Same envelope, with `data` shaped as `{ items, page, pageSize, total }`. */
+export function apiSuccessPaginatedSchema(dto: Type<unknown>): SchemaObject {
+  return {
+    type: 'object',
+    required: ['code', 'data'],
+    properties: {
+      code: { type: 'integer', example: 0 },
+      data: {
+        type: 'object',
+        required: ['items', 'page', 'pageSize', 'total'],
+        properties: {
+          items: { type: 'array', items: { $ref: getSchemaPath(dto) } },
+          page: { type: 'integer', example: 1 },
+          pageSize: { type: 'integer', example: 20 },
+          total: { type: 'integer', example: 0 },
+        },
+      },
+    },
+  };
+}

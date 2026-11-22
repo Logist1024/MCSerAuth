@@ -10,9 +10,8 @@ import {
   Req,
   Res,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBody,
   ApiConsumes,
@@ -78,7 +77,6 @@ type ResolvedEntryClient =
  */
 @ApiTags('Commons-Designs / OAuth')
 @ProtocolApi()
-@UseGuards(ThrottlerGuard)
 @Controller('oauth')
 export class OAuthController {
   constructor(

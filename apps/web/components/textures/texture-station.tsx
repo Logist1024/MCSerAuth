@@ -16,7 +16,7 @@ import {
   uploadMyCape,
   uploadMySkin,
 } from '@/lib/api-client';
-import { fetchWebsiteSession, type WebsiteSession } from '@/lib/auth-client';
+
 import { describeApiError } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import ConfirmDialog from '@/components/confirm-dialog';
@@ -25,8 +25,6 @@ import LauncherGuide from '@/components/account/launcher-guide';
 import ProfileHeader from './profile-header';
 import TextureLibrary, { type PreviewSelection } from './texture-library';
 import TextureUploadForm from './texture-upload-form';
-
-const SESSION_EVENT = 'mcserauth:session-changed';
 
 type UploadKind = 'skin' | 'cape';
 
@@ -40,18 +38,21 @@ function describeUpload(result: TextureUploadResponse): string {
  */
 export default function TextureStation({
   initialSettings,
+  initialTextures,
+  initialCapeUnlocked,
 }: {
   initialSettings: UserSettingsResponse | null;
+  initialTextures: MinecraftProfileResponse | null;
+  initialCapeUnlocked: boolean | null;
 }) {
-  const [session, setSession] = useState<WebsiteSession | null | undefined>(undefined);
-  const [textures, setTextures] = useState<MinecraftProfileResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [textures, setTextures] = useState<MinecraftProfileResponse | null>(initialTextures);
+  const [loading, setLoading] = useState(initialSettings !== null && initialTextures === null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<UploadKind | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [capeUnlocked, setCapeUnlocked] = useState<boolean | null>(null);
+  const [capeUnlocked, setCapeUnlocked] = useState<boolean | null>(initialCapeUnlocked);
 
   const [variant, setVariant] = useState<SkinVariant>('classic');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -76,14 +77,6 @@ export default function TextureStation({
     setLoading(true);
     setError(null);
     try {
-      const current = await fetchWebsiteSession();
-      setSession(current);
-      if (current === null) {
-        setTextures(null);
-        setCapeUnlocked(null);
-        applyActivePreview(null);
-        return;
-      }
       const [mine, growth] = await Promise.all([
         fetchMyTextures(),
         fetchGrowthOverview().catch(() => null),
@@ -99,14 +92,16 @@ export default function TextureStation({
   }, [applyActivePreview]);
 
   useEffect(() => {
-    void refresh();
-    const onSessionChanged = (): void => {
-      setNotice(null);
+    applyActivePreview(initialTextures);
+  }, [applyActivePreview, initialTextures]);
+
+  useEffect(() => {
+    // The server already fetched the textures for the first paint; only retry
+    // in the browser when that request failed transiently.
+    if (initialSettings !== null && initialTextures === null) {
       void refresh();
-    };
-    window.addEventListener(SESSION_EVENT, onSessionChanged);
-    return () => window.removeEventListener(SESSION_EVENT, onSessionChanged);
-  }, [refresh]);
+    }
+  }, [initialSettings, initialTextures, refresh]);
 
   async function submitSkin(file: File): Promise<boolean> {
     setError(null);
@@ -192,7 +187,7 @@ export default function TextureStation({
 
   const activeSkin = textures?.skins.find((skin) => skin.state === 'ACTIVE') ?? null;
   const activeCape = textures?.capes.find((cape) => cape.state === 'ACTIVE') ?? null;
-  const signedIn = session !== null && session !== undefined;
+  const signedIn = initialSettings !== null;
 
   return (
     <>
@@ -313,7 +308,7 @@ export default function TextureStation({
             </div>
           </section>
         </>
-      ) : session === null ? (
+      ) : !signedIn ? (
         <section className="panel">
           <div className="panel-body">
             <div className="stack">

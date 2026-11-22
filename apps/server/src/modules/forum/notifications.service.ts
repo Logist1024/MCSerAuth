@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { NotificationListResponse } from '@mcserauth/shared';
+import type { NotificationListResponse, NotificationType } from '@mcserauth/shared';
 import { and, count, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import { DbService } from '../../db/db.service.js';
 import { notification, player, user } from '../../db/schema/index.js';
@@ -21,10 +21,22 @@ export class NotificationsService {
     query: {
       page?: number;
       pageSize?: number;
+      status?: 'all' | 'unread';
+      type?: NotificationType;
     } = {},
   ): Promise<NotificationListResponse> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 20));
+    // Filtering happens in SQL so the unread tab pages through the unread set
+    // instead of filtering whatever rows happened to land on the current page.
+    const filters = [eq(notification.userId, userId)];
+    if (query.status === 'unread') {
+      filters.push(isNull(notification.readAt));
+    }
+    if (query.type !== undefined) {
+      filters.push(eq(notification.type, query.type));
+    }
+    const where = and(...filters);
     const rows = await this.db.db
       .select({
         notification,
@@ -33,11 +45,12 @@ export class NotificationsService {
       })
       .from(notification)
       .leftJoin(user, eq(notification.actorId, user.id))
-      .where(eq(notification.userId, userId))
+      .where(where)
       .orderBy(desc(notification.createdAt))
       .limit(pageSize)
       .offset((page - 1) * pageSize);
-    const total = (
+    const total = (await this.db.db.select({ value: count() }).from(notification).where(where))[0];
+    const allTotal = (
       await this.db.db
         .select({ value: count() })
         .from(notification)
@@ -63,6 +76,7 @@ export class NotificationsService {
       page,
       pageSize,
       total: total?.value ?? 0,
+      allTotal: allTotal?.value ?? 0,
     };
   }
   async unreadCount(userId: string): Promise<number> {

@@ -44,7 +44,7 @@ export function ForumPageSkeleton() {
             <Line width="76%" />
           </div>
         </div>
-        <div className="forum-layout">
+        <div className="forum-layout single">
           <div className="forum-main">
             <section className="panel">
               <div className="panel-head">
@@ -54,20 +54,6 @@ export function ForumPageSkeleton() {
               <TopicListSkeleton rows={7} />
             </section>
           </div>
-          <aside className="forum-side">
-            <section className="side-card skeleton-stack">
-              <Line width="4rem" />
-              <Line width="100%" />
-              <Line width="88%" />
-              <Line width="94%" />
-              <Line width="70%" />
-            </section>
-            <section className="side-card skeleton-stack">
-              <Line width="5rem" />
-              <Line width="100%" />
-              <Line width="82%" />
-            </section>
-          </aside>
         </div>
       </div>
     </div>
@@ -185,6 +171,11 @@ export function ForumErrorState({
         </span>
         <p>{title}</p>
         <p className="muted small">{description}</p>
+        <div className="actions">
+          <a className="button ghost" href="">
+            重新加载
+          </a>
+        </div>
       </div>
     </section>
   );

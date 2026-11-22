@@ -41,6 +41,16 @@ web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等
 `Strict-Transport-Security: max-age=31536000; includeSubDomains`（与上表 helmet 实测值一致，
 两处不要写成不同的 max-age）。
 
+## 限流与真实客户端 IP
+
+- 全部 Nest 路由默认注册进程内限流（`src/app.module.ts`，120 次/分钟），健康探针
+  `@SkipThrottle()`；`/api/auth/*` 另由 express 限流保护（登录/注册等凭据端点 10 次/分钟）。
+- Express 配置 `trust proxy = 1`，只信任一跳代理。Next SSR 在 `apps/web/lib/server-api.ts`
+  中把入站 `X-Forwarded-For` 透传给 Nest；因此经 `Caddy → Next/Nest` 的请求按真实客户端
+  IP 计数，而不是把全站 SSR 流量都归到 Next 进程的 `127.0.0.1`。
+- 部署时 Nest 的 8000 端口必须只对反代/本机开放，不能直接暴露公网；否则客户端可伪造
+  `X-Forwarded-For` 绕过按 IP 的限流。
+
 ## 依赖审计（pnpm audit）
 
 2026-10-31 状态：`pnpm audit --prod` 剩 **1 moderate（豁免留痕）**，high 清零。

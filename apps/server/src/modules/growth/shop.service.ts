@@ -6,7 +6,7 @@ import { banner as bannerTable, user as userTable, userProgress } from '../../db
 import { RulesService } from './rules.service.js';
 import { XpService } from './xp.service.js';
 import { PointsService } from './points.service.js';
-import { clampText, toBannerSummary } from './growth.util.js';
+import { clampText, lockProgressRow, toBannerSummary } from './growth.util.js';
 
 /** Point-shop purchases: XP boost, permanent cape unlock and banner slots. */
 @Injectable()
@@ -28,77 +28,59 @@ export class ShopService {
     if (!item) {
       throw new BadRequestException('商品不存在');
     }
-    const row = await this.xp.ensure(userId);
-    if (row.points < item.price) {
-      throw new BadRequestException(`积分不足，需要 ${item.price} 积分（当前 ${row.points}）`);
-    }
-    if (item.key === 'xp_boost') {
-      const base =
-        row.xpBoostUntil !== null && row.xpBoostUntil.getTime() > now.getTime()
-          ? row.xpBoostUntil
-          : now;
-      const until = new Date(base.getTime() + rules.xpBoostHours * 60 * 60 * 1000);
-      await this.db.transaction(async (tx) => {
-        const balance = await this.points.applyPoints(
-          tx,
-          userId,
-          -item.price,
-          row.points,
-          'xp_boost',
-          { memo: `经验翻倍卡 ${rules.xpBoostHours} 小时` },
-        );
-        await tx
-          .update(userProgress)
-          .set({ points: balance, xpBoostUntil: until, updatedAt: now })
-          .where(eq(userProgress.userId, userId));
-      });
-      return {
-        progress: await this.xp.summary(userId, now),
-        message: `经验翻倍已生效，持续到 ${until.toLocaleString('zh-CN', { hour12: false })}`,
-        banner: null,
-      };
-    }
-    if (item.key === 'cape_unlock') {
-      if (row.capeUnlockedAt !== null) {
-        throw new ConflictException('披风功能已经解锁');
-      }
-      await this.db.transaction(async (tx) => {
-        const balance = await this.points.applyPoints(
-          tx,
-          userId,
-          -item.price,
-          row.points,
-          'cape_unlock',
-          { memo: '永久解锁披风功能' },
-        );
-        await tx
-          .update(userProgress)
-          .set({ points: balance, capeUnlockedAt: now, updatedAt: now })
-          .where(eq(userProgress.userId, userId));
-      });
-      return {
-        progress: await this.xp.summary(userId, now),
-        message: '披风功能已解锁，前往游戏账号管理上传披风吧',
-        banner: null,
-      };
-    }
     const title = input.bannerTitle?.trim() ?? '';
-    if (title.length < 2 || title.length > 40) {
-      throw new BadRequestException('Banner 标题需要 2–40 个字符');
-    }
     const href = input.bannerHref?.trim() ?? '';
-    if (href !== '' && !/^https?:\/\//i.test(href)) {
-      throw new BadRequestException('Banner 链接必须以 http:// 或 https:// 开头');
+    if (item.key === 'banner') {
+      if (title.length < 2 || title.length > 40) {
+        throw new BadRequestException('Banner 标题需要 2–40 个字符');
+      }
+      if (href !== '' && !/^https?:\/\//i.test(href)) {
+        throw new BadRequestException('Banner 链接必须以 http:// 或 https:// 开头');
+      }
     }
     const description = clampText(input.bannerDescription, 120);
-    const created = await this.db.transaction(async (tx) => {
-      const balance = await this.points.applyPoints(tx, userId, -item.price, row.points, 'banner', {
+    await this.xp.ensure(userId);
+    const outcome = await this.db.transaction(async (tx) => {
+      // Balance, unlock state and boost expiry all come from the locked row, so
+      // two concurrent purchases cannot both spend the same points.
+      const row = await lockProgressRow(this.db, tx, userId);
+      if (row.points < item.price) {
+        throw new BadRequestException(`积分不足，需要 ${item.price} 积分（当前 ${row.points}）`);
+      }
+      if (item.key === 'xp_boost') {
+        const base =
+          row.xpBoostUntil !== null && row.xpBoostUntil.getTime() > now.getTime()
+            ? row.xpBoostUntil
+            : now;
+        const until = new Date(base.getTime() + rules.xpBoostHours * 60 * 60 * 1000);
+        await this.points.applyPoints(tx, userId, -item.price, 'xp_boost', {
+          memo: `经验翻倍卡 ${rules.xpBoostHours} 小时`,
+        });
+        await tx
+          .update(userProgress)
+          .set({ xpBoostUntil: until, updatedAt: now })
+          .where(eq(userProgress.userId, userId));
+        return {
+          message: `经验翻倍已生效，持续到 ${until.toLocaleString('zh-CN', { hour12: false })}`,
+          banner: null,
+        };
+      }
+      if (item.key === 'cape_unlock') {
+        if (row.capeUnlockedAt !== null) {
+          throw new ConflictException('披风功能已经解锁');
+        }
+        await this.points.applyPoints(tx, userId, -item.price, 'cape_unlock', {
+          memo: '永久解锁披风功能',
+        });
+        await tx
+          .update(userProgress)
+          .set({ capeUnlockedAt: now, updatedAt: now })
+          .where(eq(userProgress.userId, userId));
+        return { message: '披风功能已解锁，前往游戏账号管理上传披风吧', banner: null };
+      }
+      await this.points.applyPoints(tx, userId, -item.price, 'banner', {
         memo: `Banner 申请：${title}`,
       });
-      await tx
-        .update(userProgress)
-        .set({ points: balance, updatedAt: now })
-        .where(eq(userProgress.userId, userId));
       const [inserted] = await this.db.insertReturning(
         bannerTable,
         {
@@ -114,7 +96,7 @@ export class ShopService {
       if (inserted === undefined) {
         throw new Error('Failed to create banner application.');
       }
-      return inserted;
+      return { message: 'Banner 申请已提交，审核通过后会在首页展示', banner: inserted };
     });
     const owner = (
       await this.db.db
@@ -124,8 +106,8 @@ export class ShopService {
     )[0];
     return {
       progress: await this.xp.summary(userId, now),
-      message: 'Banner 申请已提交，审核通过后会在首页展示',
-      banner: toBannerSummary(created, owner?.name ?? ''),
+      message: outcome.message,
+      banner: outcome.banner === null ? null : toBannerSummary(outcome.banner, owner?.name ?? ''),
     };
   }
 }

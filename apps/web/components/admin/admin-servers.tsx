@@ -85,7 +85,7 @@ export default function AdminServers() {
             <input
               id="server-id"
               value={serverId}
-              pattern="[A-Za-z0-9._-]{1,64}"
+              pattern={'[A-Za-z0-9._\\-]{1,64}'}
               onChange={(event) => setServerId(event.target.value)}
               required
             />

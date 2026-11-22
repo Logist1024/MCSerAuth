@@ -9,14 +9,15 @@ import {
   type DeleteTextureResponse,
   type GameProfile,
   type MinecraftProfileResponse,
+  type Paginated,
   type SkinKind,
   type SkinStatus,
   type SkinVariant,
   type TextureUploadResponse,
 } from '@mcserauth/shared';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import fs from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp, { type Metadata } from 'sharp';
 import { AppConfigService } from '../../config/app-config.service.js';
@@ -73,17 +74,50 @@ export class TextureService {
   ) {}
   /** GameProfile with the active skin/cape encoded as a `textures` property. */
   async buildGameProfile(player: PlayerRow): Promise<GameProfile> {
-    const profile: GameProfile = { id: player.uuid, name: player.nickname };
-    const active = await this.db.db
+    const active = await this.activeTexturesFor([player.uuid]);
+    const capeUnlocked = await this.progress.capeUnlocked(player.userId);
+    return this.composeGameProfile(player, active, capeUnlocked);
+  }
+  /**
+   * Batch variant: one query for every active texture plus one for cape
+   * unlocks, instead of two queries per player.
+   */
+  async buildGameProfiles(players: PlayerRow[]): Promise<GameProfile[]> {
+    if (players.length === 0) {
+      return [];
+    }
+    const active = await this.activeTexturesFor(players.map((player) => player.uuid));
+    const unlocked = await this.progress.capeUnlockedFor(players.map((player) => player.userId));
+    return players.map((player) =>
+      this.composeGameProfile(
+        player,
+        active.filter((row) => row.playerUuid === player.uuid),
+        unlocked.has(player.userId),
+      ),
+    );
+  }
+  private async activeTexturesFor(playerUuids: string[]): Promise<SkinRow[]> {
+    const unique = [...new Set(playerUuids)];
+    if (unique.length === 0) {
+      return [];
+    }
+    return await this.db.db
       .select()
       .from(skinTable)
       .where(
         and(
-          eq(skinTable.playerUuid, player.uuid),
+          inArray(skinTable.playerUuid, unique),
           eq(skinTable.status, 'approved'),
           eq(skinTable.isActive, true),
         ),
       );
+  }
+  private composeGameProfile(
+    player: PlayerRow,
+    active: SkinRow[],
+    capeUnlocked: boolean,
+  ): GameProfile {
+    const profile: GameProfile = { id: player.uuid, name: player.nickname };
     const textures: Record<string, unknown> = {};
     const skin = active.find((row) => row.kind === 'skin');
     if (skin) {
@@ -93,7 +127,7 @@ export class TextureService {
       };
     }
     const cape = active.find((row) => row.kind === 'cape');
-    if (cape && (await this.progress.capeUnlocked(player.userId))) {
+    if (cape && capeUnlocked) {
       textures.CAPE = { url: this.signTextureUrl(cape.id) };
     }
     if (Object.keys(textures).length > 0) {
@@ -158,24 +192,50 @@ export class TextureService {
     }
     await this.assertValidPng(buffer, kind);
     await this.quota.consume(player.userId, 'texture', MAX_TEXTURE_UPLOADS_PER_DAY);
-    const effectiveVariant: SkinVariant | null = kind === 'skin' ? (variant ?? 'classic') : null;
-    const digest = createHash('sha256').update(buffer).digest('hex');
-    const relativePath = path.posix.join('textures', kind, `${digest}.png`);
-    this.writeTextureFile(relativePath, buffer);
-    const existing = (
-      await this.db.db
-        .select()
-        .from(skinTable)
-        .where(
-          and(
-            eq(skinTable.playerUuid, player.uuid),
-            eq(skinTable.kind, kind),
-            eq(skinTable.sha256, digest),
-          ),
-        )
-    )[0];
-    if (existing) {
-      await this.db.transaction(async (tx) => {
+    try {
+      const effectiveVariant: SkinVariant | null = kind === 'skin' ? (variant ?? 'classic') : null;
+      const digest = createHash('sha256').update(buffer).digest('hex');
+      const relativePath = path.posix.join('textures', kind, `${digest}.png`);
+      await this.writeTextureFile(relativePath, buffer);
+      const existing = (
+        await this.db.db
+          .select()
+          .from(skinTable)
+          .where(
+            and(
+              eq(skinTable.playerUuid, player.uuid),
+              eq(skinTable.kind, kind),
+              eq(skinTable.sha256, digest),
+            ),
+          )
+      )[0];
+      if (existing) {
+        await this.db.transaction(async (tx) => {
+          await tx
+            .update(skinTable)
+            .set({ isActive: false, activeSlot: null })
+            .where(
+              and(
+                eq(skinTable.playerUuid, player.uuid),
+                eq(skinTable.kind, kind),
+                eq(skinTable.isActive, true),
+              ),
+            );
+          await tx
+            .update(skinTable)
+            .set({
+              status: 'approved',
+              variant: effectiveVariant,
+              isActive: true,
+              activeSlot: activeSlotOf(player.uuid, kind),
+              uploadedAt: new Date(),
+              reviewedBy: null,
+            })
+            .where(eq(skinTable.id, existing.id));
+        });
+        return this.toUploadResponse(await this.getSkinRow(existing.id));
+      }
+      const inserted = await this.db.transaction(async (tx) => {
         await tx
           .update(skinTable)
           .set({ isActive: false, activeSlot: null })
@@ -186,49 +246,30 @@ export class TextureService {
               eq(skinTable.isActive, true),
             ),
           );
-        await tx
-          .update(skinTable)
-          .set({
-            status: 'approved',
-            variant: effectiveVariant,
-            isActive: true,
-            activeSlot: activeSlotOf(player.uuid, kind),
-            uploadedAt: new Date(),
-            reviewedBy: null,
-          })
-          .where(eq(skinTable.id, existing.id));
-      });
-      return this.toUploadResponse(await this.getSkinRow(existing.id));
-    }
-    const inserted = await this.db.transaction(async (tx) => {
-      await tx
-        .update(skinTable)
-        .set({ isActive: false, activeSlot: null })
-        .where(
-          and(
-            eq(skinTable.playerUuid, player.uuid),
-            eq(skinTable.kind, kind),
-            eq(skinTable.isActive, true),
+        return firstOrThrow(
+          await this.db.insertReturning(
+            skinTable,
+            {
+              playerUuid: player.uuid,
+              kind,
+              variant: effectiveVariant,
+              filePath: relativePath,
+              sha256: digest,
+              status: 'approved',
+              isActive: true,
+              activeSlot: activeSlotOf(player.uuid, kind),
+            },
+            tx,
           ),
         );
-      return firstOrThrow(
-        await this.db.insertReturning(
-          skinTable,
-          {
-            playerUuid: player.uuid,
-            kind,
-            variant: effectiveVariant,
-            filePath: relativePath,
-            sha256: digest,
-            status: 'approved',
-            isActive: true,
-            activeSlot: activeSlotOf(player.uuid, kind),
-          },
-          tx,
-        ),
-      );
-    });
-    return this.toUploadResponse(inserted);
+      });
+      return this.toUploadResponse(inserted);
+    } catch (error) {
+      // Persisting failed: give the daily quota slot back instead of silently
+      // burning it on an upload the user never received.
+      await this.quota.release(player.userId, 'texture').catch(() => undefined);
+      throw error;
+    }
   }
   /** Removes one of the player's textures; an active texture falls back to default. */
   async delete(player: PlayerRow, id: number): Promise<DeleteTextureResponse> {
@@ -239,7 +280,14 @@ export class TextureService {
     await this.db.db.delete(skinTable).where(eq(skinTable.id, id));
     return { deleted: true };
   }
-  async listForReview(status?: SkinStatus, kind?: SkinKind): Promise<TextureReviewView[]> {
+  async listForReview(
+    status?: SkinStatus,
+    kind?: SkinKind,
+    page = 1,
+    pageSize = 20,
+  ): Promise<Paginated<TextureReviewView>> {
+    const safePage = Math.max(1, page);
+    const safeSize = Math.min(50, Math.max(1, pageSize));
     const conditions = [];
     if (status !== undefined) {
       conditions.push(eq(skinTable.status, status));
@@ -247,23 +295,32 @@ export class TextureService {
     if (kind !== undefined) {
       conditions.push(eq(skinTable.kind, kind));
     }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
     const rows = await this.db.db
       .select({ skin: skinTable, nickname: playerTable.nickname })
       .from(skinTable)
       .innerJoin(playerTable, eq(skinTable.playerUuid, playerTable.uuid))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(skinTable.uploadedAt));
-    return rows.map(({ skin, nickname }) => ({
-      id: skin.id,
-      playerUuid: skin.playerUuid,
-      nickname,
-      kind: skin.kind,
-      variant: skin.variant,
-      status: skin.status,
-      isActive: skin.isActive,
-      uploadedAt: skin.uploadedAt,
-      url: this.signTextureUrl(skin.id),
-    }));
+      .where(where)
+      .orderBy(desc(skinTable.uploadedAt), desc(skinTable.id))
+      .limit(safeSize)
+      .offset((safePage - 1) * safeSize);
+    const total = (await this.db.db.select({ value: count() }).from(skinTable).where(where))[0];
+    return {
+      items: rows.map(({ skin, nickname }) => ({
+        id: skin.id,
+        playerUuid: skin.playerUuid,
+        nickname,
+        kind: skin.kind,
+        variant: skin.variant,
+        status: skin.status,
+        isActive: skin.isActive,
+        uploadedAt: skin.uploadedAt,
+        url: this.signTextureUrl(skin.id),
+      })),
+      total: total?.value ?? 0,
+      page: safePage,
+      pageSize: safeSize,
+    };
   }
   /** Switches the active texture among the player's approved uploads. */
   async activate(player: PlayerRow, id: number): Promise<ActivateTextureResponse> {
@@ -380,10 +437,14 @@ export class TextureService {
       throw new NotFoundException('纹理不存在');
     }
     const absolutePath = this.absoluteTexturePath(row.filePath);
-    if (!fs.existsSync(absolutePath)) {
-      throw new NotFoundException('纹理文件不存在');
+    try {
+      return await fs.readFile(absolutePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NotFoundException('纹理文件不存在');
+      }
+      throw error;
     }
-    return fs.readFileSync(absolutePath);
   }
   private async assertValidPng(buffer: Buffer, kind: SkinKind): Promise<void> {
     let metadata: Metadata;
@@ -406,13 +467,18 @@ export class TextureService {
       );
     }
   }
-  private writeTextureFile(relativePath: string, buffer: Buffer): void {
+  private async writeTextureFile(relativePath: string, buffer: Buffer): Promise<void> {
     const absolutePath = this.absoluteTexturePath(relativePath);
-    if (fs.existsSync(absolutePath)) {
-      return;
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    try {
+      await fs.writeFile(absolutePath, buffer, { flag: 'wx' });
+    } catch (error) {
+      // Content-addressed: an existing file already holds the same bytes. This
+      // also makes two concurrent uploads of the same PNG harmless.
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
     }
-    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    fs.writeFileSync(absolutePath, buffer, { flag: 'wx' });
   }
   private absoluteTexturePath(filePath: string): string {
     const root = path.resolve(this.config.uploadDir);

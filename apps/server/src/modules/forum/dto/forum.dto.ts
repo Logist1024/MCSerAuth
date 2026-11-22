@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  NOTIFICATION_TYPES,
   POST_SORT_OPTIONS,
   REPORT_TARGET_TYPES,
   type CreatePostRequest,
   type CreateReplyRequest,
   type CreateReportRequest,
+  type NotificationType,
   type PostSortOption,
   type ReportTargetType,
   type UpdatePostRequest,
@@ -115,6 +117,16 @@ export class NotificationListQueryDto {
   @Min(1)
   @Max(50)
   pageSize?: number;
+
+  @ApiPropertyOptional({ enum: ['all', 'unread'], default: 'all' })
+  @IsOptional()
+  @IsIn(['all', 'unread'])
+  status?: 'all' | 'unread';
+
+  @ApiPropertyOptional({ enum: NOTIFICATION_TYPES })
+  @IsOptional()
+  @IsIn(NOTIFICATION_TYPES)
+  type?: NotificationType;
 }
 
 export class CreateReportDto implements CreateReportRequest {

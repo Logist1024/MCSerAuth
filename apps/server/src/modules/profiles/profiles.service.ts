@@ -32,12 +32,10 @@ export class ProfilesService {
       .from(playerTable)
       .where(inArray(playerTable.nickname, requested));
     const byName = new Map(rows.map((row) => [row.nickname, row]));
-    const profiles = await Promise.all(
-      requested.map(async (name) => {
-        const row = byName.get(name);
-        return row ? [await this.textures.buildGameProfile(row)] : [];
-      }),
-    );
-    return profiles.flat();
+    const players = requested.flatMap((name) => {
+      const row = byName.get(name);
+      return row ? [row] : [];
+    });
+    return await this.textures.buildGameProfiles(players);
   }
 }

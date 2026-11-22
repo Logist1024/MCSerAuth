@@ -6,9 +6,8 @@ import {
   Post,
   Req,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -61,7 +60,6 @@ class OAuthUserInfoResponseDto implements OAuthUserInfoResponse {
  */
 @ApiTags('Commons-Designs / OAuth')
 @ProtocolApi()
-@UseGuards(ThrottlerGuard)
 @Controller('oauth')
 export class OAuthUserinfoController {
   constructor(private readonly oauth: OAuthService) {}

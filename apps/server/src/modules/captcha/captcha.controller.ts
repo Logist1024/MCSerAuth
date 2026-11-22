@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type {
   CaptchaChallengeResponse,
   CaptchaPublicConfig,
@@ -12,7 +12,6 @@ import { CaptchaVerifyDto } from './dto/captcha.dto.js';
 /** Public human-verification endpoints used by the login/register form. */
 @ApiTags('Captcha')
 @Controller('captcha')
-@UseGuards(ThrottlerGuard)
 export class CaptchaController {
   constructor(private readonly captcha: CaptchaService) {}
   @Get('config')

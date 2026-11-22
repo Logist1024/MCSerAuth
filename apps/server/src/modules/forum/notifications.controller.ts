@@ -8,9 +8,8 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { NotificationListResponse } from '@mcserauth/shared';
 import type { Request } from 'express';
@@ -20,7 +19,6 @@ import { NotificationsService } from './notifications.service.js';
 /** Current account's in-site notifications. */
 @ApiTags('Forum')
 @ApiCookieAuth('better-auth.session_token')
-@UseGuards(ThrottlerGuard)
 @Controller('forum/notifications')
 export class NotificationsController {
   constructor(

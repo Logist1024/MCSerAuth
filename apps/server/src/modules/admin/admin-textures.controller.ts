@@ -19,8 +19,9 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Paginated } from '@mcserauth/shared';
 import type { Request } from 'express';
-import { apiSuccessArraySchema, apiSuccessSchema } from '../../common/swagger/api-envelope.js';
+import { apiSuccessPaginatedSchema, apiSuccessSchema } from '../../common/swagger/api-envelope.js';
 import { TextureService, type TextureReviewView } from '../profiles/texture.service.js';
 import { AdminAccessService } from './admin-access.service.js';
 import { AdminTextureDto, ListTexturesQueryDto, ReviewTextureDto } from './dto/admin.dto.js';
@@ -39,17 +40,21 @@ export class AdminTexturesController {
     summary: '列出纹理（reviewer 起）',
     description: '默认返回全部状态；上传即生效，保留驳回/下架用于违规处理。',
   })
-  @ApiOkResponse({ schema: apiSuccessArraySchema(AdminTextureDto) })
+  @ApiOkResponse({ schema: apiSuccessPaginatedSchema(AdminTextureDto) })
   async list(
     @Req()
     request: Request,
     @Query()
     query: ListTexturesQueryDto,
-  ): Promise<AdminTextureDto[]> {
+  ): Promise<Paginated<AdminTextureDto>> {
     await this.access.requireAtLeast(request, 'reviewer');
-    return (await this.textures.listForReview(query.status, query.kind)).map((view) =>
-      this.toDto(view),
+    const result = await this.textures.listForReview(
+      query.status,
+      query.kind,
+      query.page,
+      query.pageSize,
     );
+    return { ...result, items: result.items.map((view) => this.toDto(view)) };
   }
   @Post(':id/approve')
   @HttpCode(HttpStatus.OK)

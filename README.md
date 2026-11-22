@@ -339,7 +339,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 ## API 契约
 
 - 非协议端点统一封装：成功 `{ code: 0, data }`，失败 `{ code, message }`（错误码见 `packages/shared/src/errors.ts`）。
-- 非协议写接口校验 `Origin`/`Referer`（`APP_URL`/`AUTH_URL` 白名单），跨站请求返回 403；认证与写接口有进程内限流（429）。
+- 非协议写接口校验 `Origin`/`Referer`（`APP_URL`/`AUTH_URL` 白名单），跨站请求返回 403；所有 Nest 路由默认进程内限流（120 次/分钟），`/api/auth/*` 另由 express 限流保护（登录/注册等凭据端点 10 次/分钟）。
 - 帖子详情回复分页：`replyPage` / `replyPageSize`（默认 1/20，上限 50），响应含 `replyTotal`。
 - 通知列表分页（默认 20），另有 `GET /api/forum/notifications/unread-count` 供角标使用。
 - 公共版块/帖子列表带 15 秒 HTTP 缓存；论坛列表页 Next 侧 `revalidate = 30`。
@@ -376,7 +376,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 | [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练  |
 | [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows / 宝塔服主路径：Node 22 → NSSM 服务 → Caddy 443 → Paper `.bat` 接入 |
 | [`docs/player-guide.md`](docs/player-guide.md)           | 玩家侧：HMCL / PCL2 / Prism Launcher 三端外置登录图文步骤                   |
-| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | 为什么暂不提供 Dockerfile / Compose 的评估记录与再评审触发条件              |
+| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | 可选单镜像 Docker 部署的定位、边界与再评审条件                              |
 | [`docs/security.md`](docs/security.md)                   | 安全基线：CSP、安全响应头、审计豁免与哈希                                   |
 | [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                        |
 | [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                   |

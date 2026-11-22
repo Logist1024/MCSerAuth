@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminTextureView } from '@mcserauth/shared';
+import type { AdminTextureView, Paginated } from '@mcserauth/shared';
 import { useCallback, useEffect, useState } from 'react';
 import TextureCard from '@/components/textures/texture-card';
 import { adminApproveTexture, adminListTextures, adminRejectTexture } from '@/lib/api-client';
@@ -12,24 +12,33 @@ const STATUS_LABELS: Record<AdminTextureView['status'], string> = {
   approved: '正常',
   rejected: '已下架',
 };
+const PAGE_SIZE = 20;
 
 /** Post-moderation texture list: uploads are live, staff can take them down. */
 export default function AdminTextures() {
-  const [textures, setTextures] = useState<AdminTextureView[] | null>(null);
+  const [data, setData] = useState<Paginated<AdminTextureView> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [filter, setFilter] = useState<'all' | 'approved' | 'rejected'>('all');
+  const [page, setPage] = useState(1);
+  const textures = data?.items ?? null;
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTextures(await adminListTextures(filter === 'all' ? undefined : filter));
+      setData(
+        await adminListTextures({
+          status: filter === 'all' ? undefined : filter,
+          page,
+          pageSize: PAGE_SIZE,
+        }),
+      );
     } catch (fetchError) {
       setError(describeApiError(fetchError));
     }
-  }, [filter]);
+  }, [filter, page]);
 
   useEffect(() => {
     void load();
@@ -65,7 +74,10 @@ export default function AdminTextures() {
           <select
             value={filter}
             aria-label="按状态筛选纹理"
-            onChange={(event) => setFilter(event.target.value as typeof filter)}
+            onChange={(event) => {
+              setFilter(event.target.value as typeof filter);
+              setPage(1);
+            }}
           >
             <option value="all">全部</option>
             <option value="approved">正常</option>
@@ -146,6 +158,30 @@ export default function AdminTextures() {
               </div>
             </TextureCard>
           ))}
+        </div>
+      ) : null}
+
+      {data !== null && data.total > PAGE_SIZE ? (
+        <div className="inline-form">
+          <button
+            className="button secondary"
+            type="button"
+            disabled={page <= 1 || busy !== null}
+            onClick={() => setPage(page - 1)}
+          >
+            上一页
+          </button>
+          <span className="muted small">
+            第 {page} / {Math.max(1, Math.ceil(data.total / PAGE_SIZE))} 页 · 共 {data.total} 条
+          </span>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={page >= Math.ceil(data.total / PAGE_SIZE) || busy !== null}
+            onClick={() => setPage(page + 1)}
+          >
+            下一页
+          </button>
         </div>
       ) : null}
     </section>

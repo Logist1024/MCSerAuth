@@ -1,7 +1,7 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AppConfigModule } from './config/config.module.js';
 import { AppConfigService } from './config/app-config.service.js';
@@ -44,6 +44,9 @@ import { UserModule } from './modules/user/user.module.js';
     MaintenanceModule,
   ],
   providers: [
+    // Every Nest route is rate-limited by default; controllers tighten the
+    // ceiling with @Throttle and public/probe reads opt out with @SkipThrottle.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: OriginGuard },
     {
       provide: APP_PIPE,

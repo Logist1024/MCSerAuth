@@ -22,3 +22,5 @@ apps/web/next-env.d.ts
 
 # ZCode session-local plans (not project code).
 .zcode/
+# Local agent/tool state (gitignored).
+.codeartsdoer/

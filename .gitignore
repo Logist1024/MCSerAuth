@@ -32,6 +32,10 @@ coverage/
 .smoke/
 uploads/
 
+# playwright artifacts
+test-results/
+playwright-report/
+
 # AI agent / local tool state
 .zcode/
 .claude/

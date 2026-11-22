@@ -1,11 +1,31 @@
+import { NotFoundException } from '@nestjs/common';
 import type { BannerSummary, UserTitleSummary } from '@mcserauth/shared';
-import type { CanonicalDb } from '../../db/db.service.js';
+import { eq } from 'drizzle-orm';
+import type { CanonicalDb, DbService } from '../../db/db.service.js';
 import { banner as bannerTable, title as titleTable, userProgress } from '../../db/schema/index.js';
 
 export type ProgressRow = typeof userProgress.$inferSelect;
 export type TitleRow = typeof titleTable.$inferSelect;
 export type BannerRow = typeof bannerTable.$inferSelect;
 export type Tx = CanonicalDb;
+
+/**
+ * Loads the progress row and locks it until the surrounding transaction ends.
+ *
+ * SQLite already takes a database-wide write lock with BEGIN IMMEDIATE, so a
+ * plain read is protected there; MySQL/PostgreSQL need SELECT ... FOR UPDATE.
+ * Every balance mutation must go through this helper so two concurrent
+ * requests cannot both read the same wallet and overwrite each other.
+ */
+export async function lockProgressRow(db: DbService, tx: Tx, userId: string): Promise<ProgressRow> {
+  const query = tx.select().from(userProgress).where(eq(userProgress.userId, userId));
+  const rows = db.dialect === 'sqlite' ? await query : await query.for('update');
+  const row = rows[0];
+  if (row === undefined) {
+    throw new NotFoundException('账号不存在');
+  }
+  return row;
+}
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const GROWTH_RULES_KEY = 'growthRules';

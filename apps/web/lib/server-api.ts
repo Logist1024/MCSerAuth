@@ -1,5 +1,5 @@
 import { isApiSuccess, type ApiResponse } from '@mcserauth/shared';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { API_BASE_URL } from './api-client';
 
 export type ServerApiResult<T> = { ok: true; data: T } | { ok: false; status: number };
@@ -16,25 +16,44 @@ export async function serverApiFetch<T>(path: string): Promise<T | null> {
 
 /** Same as `serverApiFetch`, but keeps the HTTP status for 401/404/5xx branches. */
 export async function serverApiFetchResult<T>(path: string): Promise<ServerApiResult<T>> {
-  const cookieStore = await cookies();
-  return requestApi<T>(path, cookieStore.toString());
+  const [cookieStore, incoming] = await Promise.all([cookies(), headers()]);
+  // Nest rate-limits per IP and trusts one proxy hop. Without forwarding the
+  // browser's address, every SSR visitor would share the Next server's
+  // 127.0.0.1 bucket. Caddy appends the real client address on the right, so
+  // Express' single-hop trust still resolves the correct IP.
+  return requestApi<T>(
+    path,
+    cookieStore.toString(),
+    undefined,
+    incoming.get('x-forwarded-for') ?? undefined,
+  );
 }
 
 /** Public (cookie-less) fetch for sitemap/RSS and anonymous forum reads. */
 export async function publicApiFetch<T>(path: string, revalidateSeconds = 30): Promise<T | null> {
-  const result = await requestApi<T>(path, '', revalidateSeconds);
+  const result = await publicApiFetchResult<T>(path, revalidateSeconds);
   return result.ok ? result.data : null;
+}
+
+/** Public fetch that keeps the status, so a 404 is not rendered as an outage. */
+export async function publicApiFetchResult<T>(
+  path: string,
+  revalidateSeconds = 30,
+): Promise<ServerApiResult<T>> {
+  return await requestApi<T>(path, '', revalidateSeconds);
 }
 
 /** Cookie-forwarding fetch for Commons-Designs protocol endpoints (no envelope). */
 export async function serverProtocolFetch<T>(path: string): Promise<T | null> {
-  const cookieStore = await cookies();
+  const [cookieStore, incoming] = await Promise.all([cookies(), headers()]);
   try {
+    const forwardedFor = incoming.get('x-forwarded-for');
     const response = await fetch(`${API_BASE_URL}${path}`, {
       cache: 'no-store',
       headers: {
         Accept: 'application/json',
         Cookie: cookieStore.toString(),
+        ...(forwardedFor === null ? {} : { 'x-forwarded-for': forwardedFor }),
       },
     });
     if (!response.ok) {
@@ -55,6 +74,7 @@ async function requestApi<T>(
   path: string,
   cookie: string,
   revalidateSeconds?: number,
+  forwardedFor?: string,
 ): Promise<ServerApiResult<T>> {
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -64,6 +84,7 @@ async function requestApi<T>(
       headers: {
         Accept: 'application/json',
         ...(cookie === '' ? {} : { Cookie: cookie }),
+        ...(forwardedFor === undefined ? {} : { 'x-forwarded-for': forwardedFor }),
       },
     });
     if (!response.ok) {

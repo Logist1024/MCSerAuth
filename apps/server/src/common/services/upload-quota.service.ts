@@ -45,4 +45,20 @@ export class UploadQuotaService {
       );
     }
   }
+
+  /**
+   * Returns one slot when the caller could not persist the upload after
+   * consuming it, so a failed write never burns the user's daily allowance.
+   */
+  async release(userId: string, kind: UploadKind): Promise<void> {
+    const day = utcDay();
+    await this.db.db
+      .update(uploadUsage)
+      .set({
+        count: sql`CASE WHEN ${uploadUsage.count} > 0 THEN ${uploadUsage.count} - 1 ELSE 0 END`,
+      })
+      .where(
+        and(eq(uploadUsage.userId, userId), eq(uploadUsage.kind, kind), eq(uploadUsage.day, day)),
+      );
+  }
 }

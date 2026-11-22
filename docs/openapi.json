@@ -2002,6 +2002,33 @@
               "default": 20,
               "type": "number"
             }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "unread"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "reply",
+                "mention",
+                "system",
+                "moderation"
+              ]
+            }
           }
         ],
         "responses": {
@@ -2196,6 +2223,26 @@
           }
         ],
         "summary": "更新头像与签名",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/user/header": {
+      "get": {
+        "operationId": "UserController_getHeader",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          }
+        ],
+        "summary": "页头账号信息与未读数（聚合，减少首屏请求）",
         "tags": [
           "User"
         ]
@@ -2583,6 +2630,27 @@
                 "cape"
               ]
             }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -2602,9 +2670,32 @@
                       "example": 0
                     },
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/AdminTextureDto"
+                      "type": "object",
+                      "required": [
+                        "items",
+                        "page",
+                        "pageSize",
+                        "total"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AdminTextureDto"
+                          }
+                        },
+                        "page": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "example": 20
+                        },
+                        "total": {
+                          "type": "integer",
+                          "example": 0
+                        }
                       }
                     }
                   }

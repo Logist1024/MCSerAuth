@@ -8,10 +8,9 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type {
   BannerSummary,
   CheckinResponse,
@@ -37,7 +36,6 @@ import {
 @ApiTags('Growth')
 @ApiCookieAuth('better-auth.session_token')
 @Controller('growth')
-@UseGuards(ThrottlerGuard)
 export class GrowthController {
   constructor(
     private readonly access: AccountAccessService,

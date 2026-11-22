@@ -8,7 +8,7 @@ import {
   type UserProgressSummary,
   type UserTitleSummary,
 } from '@mcserauth/shared';
-import { and, count, desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull } from 'drizzle-orm';
 import { DbService } from '../../db/db.service.js';
 import {
   post as postTable,
@@ -18,7 +18,13 @@ import {
   userTitle,
 } from '../../db/schema/index.js';
 import { RulesService } from './rules.service.js';
-import { dayKey, startOfShanghaiDay, toTitleSummary, type ProgressRow } from './growth.util.js';
+import {
+  dayKey,
+  lockProgressRow,
+  startOfShanghaiDay,
+  toTitleSummary,
+  type ProgressRow,
+} from './growth.util.js';
 
 /**
  * Progress rows, the level curve, XP awards and the special-title exemption
@@ -172,16 +178,21 @@ export class XpService {
     if (await this.hasSpecialTitle(userId)) {
       return 0;
     }
-    const row = await this.ensure(userId);
-    const boosted = row.xpBoostUntil !== null && row.xpBoostUntil.getTime() > now.getTime();
-    const awarded = Math.floor(
-      baseXp * (boosted ? (await this.rulesService.rules()).xpBoostMultiplier : 1),
-    );
-    const xp = Math.min(LEVEL_MAX * XP_PER_LEVEL, row.xp + awarded);
-    await this.db.db
-      .update(userProgress)
-      .set({ xp, level: levelFromXp(xp), updatedAt: now })
-      .where(eq(userProgress.userId, userId));
+    await this.ensure(userId);
+    const rules = await this.rulesService.rules();
+    const awarded = await this.db.transaction(async (tx) => {
+      // Relative-increment under a row lock: concurrent post/reply awards for
+      // the same author must add up instead of overwriting each other.
+      const row = await lockProgressRow(this.db, tx, userId);
+      const boosted = row.xpBoostUntil !== null && row.xpBoostUntil.getTime() > now.getTime();
+      const gained = Math.floor(baseXp * (boosted ? rules.xpBoostMultiplier : 1));
+      const nextXp = Math.min(LEVEL_MAX * XP_PER_LEVEL, row.xp + gained);
+      await tx
+        .update(userProgress)
+        .set({ xp: nextXp, level: levelFromXp(nextXp), updatedAt: now })
+        .where(eq(userProgress.userId, userId));
+      return gained;
+    });
     if (memo !== null) {
       this.logger.debug(`+${awarded} XP (${memo}) -> ${userId}`);
     }
@@ -234,6 +245,19 @@ export class XpService {
         .where(eq(userProgress.userId, userId))
     )[0];
     return row?.capeUnlockedAt != null;
+  }
+
+  /** Batch lookup used when composing several game profiles at once. */
+  async capeUnlockedFor(userIds: string[]): Promise<Set<string>> {
+    const unique = [...new Set(userIds)];
+    if (unique.length === 0) {
+      return new Set();
+    }
+    const rows = await this.db.db
+      .select({ userId: userProgress.userId })
+      .from(userProgress)
+      .where(and(inArray(userProgress.userId, unique), isNotNull(userProgress.capeUnlockedAt)));
+    return new Set(rows.map((row) => row.userId));
   }
 
   async assertCapeUnlocked(userId: string): Promise<void> {
