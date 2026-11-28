@@ -1,7 +1,8 @@
 # GitHub About 文案与 topics 候选
 
-> 仓库 Settings → General → Description / Topics 候选文本（本次整备不联网提交，
-> 由作者粘贴启用）。topics 规则：小写字母 / 数字 / 连字符，单个 ≤ 50 字符。
+> 仓库 Settings → General → Description / Topics 候选文本。topics 规则：
+> 小写字母 / 数字 / 连字符，单个 ≤ 50 字符。
+> （已于 2026-11-28 随 v1.0.0 正式发布应用至仓库 Settings。）
 
 ## About（Description，英文）
 

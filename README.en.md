@@ -450,7 +450,7 @@ to `apps/web/.env.local` to activate.
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                       | How to contribute: setup, commit & PR conventions, DoD, contract discipline          |
 | [`docs/features.md`](docs/features.md)                   | Full feature list: auth/session/textures/forum/growth, with implementation locations |
-| [CHANGELOG.md](CHANGELOG.md)                             | Release history: v1.1.0 / v1.0.0 and Unreleased sections                             |
+| [CHANGELOG.md](CHANGELOG.md)                             | Release history: v1.0.0 (first public release) and Unreleased sections               |
 | [SECURITY.md](SECURITY.md)                               | Security policy: private vulnerability reporting channel and response targets        |
 | [`docs/database.md`](docs/database.md)                   | Three-dialect config, schema workflow, migration / copy / backup                     |
 | [`docs/deploy.md`](docs/deploy.md)                       | Production runbook: VPS checklist, `.env` reference, backup & restore drills         |
