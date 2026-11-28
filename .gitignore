@@ -45,3 +45,4 @@ playwright-report/
 # internal notes kept locally only (removed from the public repo)
 /docs/ARCHITECTURE-FOR-AUTHOR.md
 /docs/superpowers/
+/docs/github-repo-metadata.md
