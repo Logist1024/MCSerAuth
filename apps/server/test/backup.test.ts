@@ -16,6 +16,14 @@ import {
 const SCRIPT = path.resolve(process.cwd(), 'scripts/backup.mjs');
 
 /**
+ * The stub "binaries" below are POSIX `#!/bin/sh` scripts. Windows cannot exec them
+ * without shell indirection, which the spawn-path assertions intentionally forbid
+ * (argument arrays must reach the vendor tool verbatim). CI runs the full spawn path
+ * on Linux; these cases are skipped on win32 rather than weakened.
+ */
+const itExecutesStubBinaries = it.skipIf(process.platform === 'win32');
+
+/**
  * `mysqldump` / `pg_dump` are not installed in this environment (and CI only has them
  * inside the service containers), so the spawn path is proven against stub binaries that
  * record how they were called. The stubs make the assertion runnable anywhere: what is
@@ -185,30 +193,33 @@ describe('backup run against stub dump binaries', () => {
     return { result, output };
   }
 
-  it('invokes mysqldump with an argument array, the password only via env', () => {
-    const { record } = writeStub('mysqldump', 0);
-    const { result, output } = runBackup('mysql://app:sup3rsecret@db.example.com:3306/mcserauth');
+  itExecutesStubBinaries(
+    'invokes mysqldump with an argument array, the password only via env',
+    () => {
+      const { record } = writeStub('mysqldump', 0);
+      const { result, output } = runBackup('mysql://app:sup3rsecret@db.example.com:3306/mcserauth');
 
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(0);
-    expect(fs.readFileSync(output, 'utf8')).toContain('fake dump payload');
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(fs.readFileSync(output, 'utf8')).toContain('fake dump payload');
 
-    const recorded = fs.readFileSync(record, 'utf8');
-    // The stub records its argv first, then the env vars it was given.
-    const argv = recorded
-      .split('\n')
-      .filter((line) => !/^[A-Z_]+=/.test(line))
-      .join('\n');
-    expect(argv).toContain('--single-transaction');
-    expect(argv).toContain('mcserauth');
-    expect(argv).not.toContain('sup3rsecret');
-    expect(recorded).toContain('MYSQL_PWD=sup3rsecret');
-    // The console output must not quote the connection string either.
-    expect(result.stdout).toContain('Backup written to');
-    expect(result.stdout).not.toContain('sup3rsecret');
-  });
+      const recorded = fs.readFileSync(record, 'utf8');
+      // The stub records its argv first, then the env vars it was given.
+      const argv = recorded
+        .split('\n')
+        .filter((line) => !/^[A-Z_]+=/.test(line))
+        .join('\n');
+      expect(argv).toContain('--single-transaction');
+      expect(argv).toContain('mcserauth');
+      expect(argv).not.toContain('sup3rsecret');
+      expect(recorded).toContain('MYSQL_PWD=sup3rsecret');
+      // The console output must not quote the connection string either.
+      expect(result.stdout).toContain('Backup written to');
+      expect(result.stdout).not.toContain('sup3rsecret');
+    },
+  );
 
-  it('invokes pg_dump and forwards the TLS level', () => {
+  itExecutesStubBinaries('invokes pg_dump and forwards the TLS level', () => {
     const { record } = writeStub('pg_dump', 0);
     const { result, output } = runBackup('postgres://app:pgsecret@db.example.com/mcserauth', {
       DB_SSL: 'true',
@@ -222,14 +233,17 @@ describe('backup run against stub dump binaries', () => {
     expect(recorded).toContain('--format=plain');
   });
 
-  it('removes the partial dump and fails when the binary exits non-zero', () => {
-    writeStub('mysqldump', 3);
-    const { result, output } = runBackup('mysql://app:pw@h/mcserauth');
+  itExecutesStubBinaries(
+    'removes the partial dump and fails when the binary exits non-zero',
+    () => {
+      writeStub('mysqldump', 3);
+      const { result, output } = runBackup('mysql://app:pw@h/mcserauth');
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('exit code 3');
-    expect(fs.existsSync(output)).toBe(false);
-  });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('exit code 3');
+      expect(fs.existsSync(output)).toBe(false);
+    },
+  );
 
   it('names the missing client package instead of a raw ENOENT', () => {
     // Its own empty directory as PATH: `dir` holds stub binaries from the cases above.
