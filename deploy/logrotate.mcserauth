@@ -1,4 +1,4 @@
-# MCSerAuth log rotation (2.0 F5/F4).
+# MCSerAuth log rotation.
 #
 # Install to /etc/logrotate.d/mcserauth.
 #

@@ -11,7 +11,29 @@
 
 ## 0. 接入前：注册客户端
 
-接入需要管理员在后台注册一个"OAuth 客户端"（能力位 `oauth.clients`）：
+接入需要管理员注册一个"OAuth 客户端"（需 `superadmin` 或被下放 `oauth.clients`
+能力，角色授予见 [`deploy.md`](deploy.md) §2.2 第 9 步）。当前没有注册客户端的
+网页界面，用管理员 Cookie 会话调 API；**生产环境带 Cookie 的写请求必须显式携带
+受信任的 `Origin` 头**（CSRF 防护，见 [`faq.md`](faq.md)）：
+
+```bash
+# 1. 用 superadmin 账号换取会话 Cookie（一次性）
+curl -c jar.txt -X POST https://auth.example.com/api/auth/sign-in/email \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://example.com' \
+  -d '{"email":"you@example.com","password":"<你的密码>"}'
+
+# 2. 注册客户端
+curl -b jar.txt -X POST https://auth.example.com/api/admin/oauth-clients \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://example.com' \
+  -d '{
+    "clientId": "my-service",
+    "name": "我的服务",
+    "redirectUris": ["https://my.example.com/auth/callback"],
+    "allowedScopes": ["basic", "player"]
+  }'
+```
 
 ```http
 POST /api/admin/oauth-clients        # 管理员 Cookie 会话

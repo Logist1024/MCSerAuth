@@ -1,5 +1,5 @@
 /**
- * pm2 process topology for MCSerAuth (2.0 F4).
+ * pm2 process topology for MCSerAuth.
  *
  *   pm2 start deploy/ecosystem.config.cjs
  *   pm2 save && pm2 startup            # survive reboots
@@ -22,7 +22,7 @@ module.exports = {
       script: 'dist/main.js',
       // One process is a correctness requirement, not a capacity choice:
       // the throttlers, captcha challenges and the in-memory session cache all
-      // live in-process (2.0 ledger T10). Cluster mode or instances > 1 divides
+      // live in-process. Cluster mode or instances > 1 divides
       // every limit by the process count and splits captcha single-use tokens.
       exec_mode: 'fork',
       instances: 1,

@@ -114,7 +114,3 @@ Commits，括号内为提交短哈希，可直接在 GitHub 上跳转。
   `5d38aae`、`906ca48`、`8ff1755`、`13f8d1b`、`1c53f57`、`29e036d`）、玩家体验
   改进计划（`a9dfe34`）、内部会话计划文件（`9321628`）与 `next-env.d.ts`
   （`dc503db`）。
-
-> 说明：`docs/` 内还有一条不改变任何代码的整备期记录
-> [`docs/docker-evaluation.md`](docs/docker-evaluation.md)，记录了可选 Docker 部署的
-> 定位、边界与再评审触发条件。

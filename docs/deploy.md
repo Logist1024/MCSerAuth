@@ -3,10 +3,6 @@
 > 目标形态：**单台 VPS + Caddy 反代 + pm2 两个进程**，数据库按规模选 SQLite / MySQL 8.0+ /
 > PostgreSQL 16+。不引入 Redis、对象存储（保持单体部署的简单性）。除下述手动 runbook 外，
 > 另提供**可选的单镜像 Docker 部署**（见第 9 节），两种方式共享同一套环境变量约定。
->
-> **决策记录**：部署采用**手动 runbook + 仓库内的配置实例**（`deploy/`），
-> 不做 GitHub Actions 部署 workflow。理由：单人维护、单实例、无多环境发布需求，
-> workflow 只会增加凭据面与调试成本；等出现第二套环境（预发布/多机房）再评审。
 
 配置实例都在 [`deploy/`](../deploy)：
 [`ecosystem.config.cjs`](../deploy/ecosystem.config.cjs)（pm2）、
@@ -52,11 +48,11 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
   corepack enable                      # 提供 pnpm（版本由 package.json 的 packageManager 锁定）
   ```
 
-  备份 cron 用的是独立账号（下文 `deployer`），它也得能跑 pnpm。`corepack enable` 默认往
-  Node 安装目录写符号链接，普通账号没权限，所以给它一个自己的 bin 目录：
+  备份 cron 用的是独立低权限账号（下文 `deployer`），它也得能跑 pnpm。
+  先创建账号（若尚未创建），再给它一个自己的 corepack bin 目录：
 
   ```bash
-  sudo mkdir -p /var/log/mcserauth && sudo chown deployer /var/log/mcserauth
+  sudo useradd -m -s /bin/bash deployer      # 备份 cron 专用；已存在则跳过
   sudo -u deployer mkdir -p ~/.local/bin
   sudo -u deployer env HOME=/home/deployer sh -c 'corepack enable --install-directory /home/deployer/.local/bin'
   ```
@@ -97,7 +93,9 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
 - [ ] **5. 日志目录与 pm2 启动**
 
   ```bash
-  sudo mkdir -p /var/log/mcserauth && sudo chown $USER /var/log/mcserauth
+  sudo mkdir -p /var/log/mcserauth
+  # pm2 以当前用户写日志，备份 cron 以 deployer 追加日志：当前用户属主 + deployer 组写
+  sudo chown $USER:deployer /var/log/mcserauth && sudo chmod 775 /var/log/mcserauth
   pm2 start deploy/ecosystem.config.cjs
   pm2 save && pm2 startup                    # 开机自启
   pm2 status                                 # 两个进程都应是 online
@@ -152,6 +150,10 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
 
   迁移前先跑一次 `pnpm db:backup`（SQLite 是硬要求，见 §4）。
 
+  首次启动时，若 `category` 表为空会自动写入 4 个默认版块（服务器动态 / 攻略交流 /
+  建议反馈 / 水区）。`pnpm db:seed` 是开发/演练用的占位数据（种子管理员与站点名），
+  **生产无需执行**。
+
 - [ ] **9. 首个超级管理员**
 
   浏览器注册普通账号（若 `captchaEnabled` 为真需通过人机验证），然后：
@@ -163,13 +165,29 @@ Lax 只按「站点」而非「源」判定。`example.com` 与 `auth.example.co
   只有 `superadmin` 能登记服务器白名单与调整角色；`/console` 超级后台需另设
   `CONSOLE_KEY`（≥16 字符，留空即禁用）。
 
-- [ ] **10. 登记游戏服务器白名单**（进服验证的前提，仅原生 `/api/session/*` 需要）
-
-  用 superadmin 的网站会话调用：
+  注册若要求邮箱验证而 `MAIL_PROVIDER=console`，验证邮件只写进服务端日志，
+  链接可直接复制打开：
 
   ```bash
+  grep -A1 'mail:console' /var/log/mcserauth/server-out.log | tail -5
+  ```
+
+- [ ] **10. 登记游戏服务器白名单**（进服验证的前提，仅原生 `/api/session/*` 需要）
+
+  用 superadmin 的网站会话调用。**生产环境带 Cookie 的写请求必须显式携带
+  受信任的 `Origin` 头**（CSRF 防护会拒绝无来源的 Cookie 写操作，见
+  [`faq.md`](faq.md)）——先用登录接口换取会话，再登记：
+
+  ```bash
+  curl -c jar.txt -X POST https://auth.example.com/api/auth/sign-in/email \
+    -H 'Content-Type: application/json' \
+    -H 'Origin: https://example.com' \
+    -d '{"email":"you@example.com","password":"<你的密码>"}'
+
   curl -b jar.txt -X POST https://auth.example.com/api/admin/servers \
-    -H 'Content-Type: application/json' -d '{"serverId":"survival-1","name":"生存服一区"}'
+    -H 'Content-Type: application/json' \
+    -H 'Origin: https://example.com' \
+    -d '{"serverId":"survival-1","name":"生存服一区"}'
   ```
 
   响应里的 `secret` 只返回一次（库中只存哈希，当前协议不要求携带）。
@@ -291,8 +309,10 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
 ```
 
 `db:migrate` 这里的作用是**确认版本一致而不是执行变更**：迁移记录表 `__drizzle_migrations`
-本身在 dump 里，所以恢复后应报「无待应用迁移」。若它反而开始应用迁移，说明恢复的库来自
-更早的 12 版 SQLite 历史基线就属于这种，改用 `pnpm db:copy-data` 搬迁。
+本身在 dump 里，所以恢复后应报「无待应用迁移」。若它反而开始应用迁移，说明这份备份的
+迁移历史与当前仓库不一致（例如来自发布前的内部构建或更旧的库）——不要继续覆盖，
+改走「新建空库 → `pnpm db:migrate` → `pnpm db:copy-data -- --truncate` 搬迁」，
+见 [`database.md`](database.md)。
 
 恢复后冒烟：登录（Cookie 会话应仍有效，因为 `better-auth` 的 session 表在库里）、
 `/textures` 皮肤仍能显示（同时验证 `UPLOAD_DIR` 未丢）、发一帖。
@@ -317,26 +337,27 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
 
 - 维护任务（`maintenance` 模块：清理过期授权码/游戏会话/过期会话/90 天前配额行）每小时执行，
   结果留日志；排查异常同样从 `server-out.log` 入手。
-- 不引入 metrics 系统与错误上报 SaaS（D5 红线）；规模化时作为 3.0 议题。
+- 默认不接入 metrics 系统与错误上报 SaaS；需要规模化监控时再评审引入。
 
 ---
 
 ## 7. 已知约束（部署时要知道，不用改代码）
 
-| 约束                                        | 影响                                                                                                      | 出处                                                        |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 限流、验证码、进程内缓存都是内存态          | **只能跑单进程**；pm2 cluster 或 `instances>1` 会把每个限流阈值除以进程数、并让一次性验证码令牌跨进程失效 | [ecosystem 注释](../deploy/ecosystem.config.cjs)            |
-| SQLite 单连接单写者、写事务全局串行         | 高并发写吞吐有限；需要时切 MySQL/PG（`DATABASE_URL` 一行 + `db:migrate` + `db:copy-data`）                | [`docs/database.md`](database.md)                           |
-| 无 `HOST` 环境变量，进程绑全网卡            | 必须靠防火墙关闭 3000/8000（§2.1 第 2 步）                                                                | main.ts                                                     |
-| `BETTER_AUTH_SECRET` 兼作 SMTP 密码加密密钥 | 轮换它会让后台已存的发件密码解不开；换密钥前先重置发件配置                                                | mail 模块                                                   |
-| 进服验证需要服主侧 authlib-injector         | 「可进服」不属于纯本站部署能自证的一环，需客户端与 Paper 两侧都注入                                       | [启动器直登](../README.md#启动器直登authlib-injector--hmcl) |
+| 约束                                        | 影响                                                                                                      | 出处                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 限流、验证码、进程内缓存都是内存态          | **只能跑单进程**；pm2 cluster 或 `instances>1` 会把每个限流阈值除以进程数、并让一次性验证码令牌跨进程失效 | [ecosystem 注释](../deploy/ecosystem.config.cjs) |
+| SQLite 单连接单写者、写事务全局串行         | 高并发写吞吐有限；需要时切 MySQL/PG（`DATABASE_URL` 一行 + `db:migrate` + `db:copy-data`）                | [`docs/database.md`](database.md)                |
+| 无 `HOST` 环境变量，进程绑全网卡            | 必须靠防火墙关闭 3000/8000（§2.1 第 2 步）                                                                | main.ts                                          |
+| `BETTER_AUTH_SECRET` 兼作 SMTP 密码加密密钥 | 轮换它会让后台已存的发件密码解不开；换密钥前先重置发件配置                                                | mail 模块                                        |
+| 进服验证需要服主侧 authlib-injector         | 「可进服」不属于纯本站部署能自证的一环，需客户端与 Paper 两侧都注入                                       | [`features.md` §4](features.md)                  |
 
 ---
 
 ## 8. 首次部署踩坑提示
 
-- **Caddy**：`apt install caddy` 会自动拉起默认配置，替换 `Caddyfile` 后需
-  `systemctl restart caddy` 才会加载新配置。
+- **Caddy**：`apt install caddy` 会自动拉起默认配置；替换 `Caddyfile` 后先
+  `caddy validate`，再 `systemctl reload caddy` 加载新配置（优雅重载即可，与
+  §2.1 第 6 步一致）。
 - **better-sqlite3**：原生模块需要编译环境，干净 VPS 上先补
   `apt install -y build-essential python3` 再 `pnpm install`。
 - 进服半环（客户端与 Paper 两侧 authlib-injector 握手）不属于纯本站部署能自证的
@@ -350,6 +371,13 @@ curl -s https://auth.example.com/health/ready   # checks.database = "up"
 `entrypoint` 先执行数据库迁移再拉起两个进程，任一进程退出即整体退出（交 Docker 重启）。
 与 pm2 方案共享同一套 env 约束（§1、§3 全部适用，含「单进程」内存态限流约束——
 **不要给该服务扩多副本**）。
+
+> **定位：Docker 是并存的第二条路径，不是默认路径的替代品。** 默认部署路径仍是上面的
+> 裸机 runbook——对目标读者（国内中小服主），装 Docker 引擎与理解镜像/卷/端口映射
+> 并不比照着 runbook 复制粘贴 `pnpm` 命令更容易；镜像首次构建要装 workspace 依赖，
+> `better-sqlite3`/`sharp` 等原生模块是额外的失败点；且限流/验证码/缓存都在内存态，
+> 只能单实例运行，编排带来的横向扩展收益在本项目用不上。若出现 NAS 一键部署需求、
+> 第二套部署环境或缓存外置（如 Redis）后单进程约束解除，可再评审 Docker 的定位。
 
 ### 9.1 构建与启动
 
@@ -369,13 +397,13 @@ docker compose logs -f                 # 观察迁移与启动日志
 
 ### 9.2 与裸机方案的差异（运维速查）
 
-| 操作       | pm2 方案                            | Docker 方案                                                                                                               |
-| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 数据库迁移 | `pnpm db:migrate`                   | 容器启动时自动执行（也可 `docker compose run --rm mcserauth node scripts/migrate.mjs` 手动跑）                            |
-| 备份       | `backup.cron` + `pnpm db:backup`    | `docker compose exec mcserauth node /app/server/scripts/backup.mjs`（产物在卷内 `data/backups/`，记得同步纳入宿主机备份） |
-| 授予管理员 | `pnpm admin:grant`                  | 镜像内无 tsx，改用根控制台：设 `CONSOLE_KEY` 后在 `/console` 操作                                                         |
-| 查看日志   | pm2 logs                            | `docker compose logs -f`                                                                                                  |
-| 升级       | `git pull && pnpm install && build` | `git pull && docker compose up -d --build`（数据在卷中不受影响）                                                          |
+| 操作       | pm2 方案                         | Docker 方案                                                                                                               |
+| ---------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 数据库迁移 | `pnpm db:migrate`                | 容器启动时自动执行（也可 `docker compose run --rm mcserauth node scripts/migrate.mjs` 手动跑）                            |
+| 备份       | `backup.cron` + `pnpm db:backup` | `docker compose exec mcserauth node /app/server/scripts/backup.mjs`（产物在卷内 `data/backups/`，记得同步纳入宿主机备份） |
+| 授予管理员 | `pnpm admin:grant`               | 镜像内无 tsx，改用根控制台：设 `CONSOLE_KEY` 后在 `/console` 操作                                                         |
+| 查看日志   | pm2 logs                         | `docker compose logs -f`                                                                                                  |
+| 升级       | 见 §10                           | `git pull && docker compose up -d --build`（迁移由 entrypoint 自动执行，数据在卷中不受影响）                              |
 
 ### 9.3 镜像相关的实现备注
 
@@ -389,3 +417,30 @@ docker compose logs -f                 # 观察迁移与启动日志
   见 `next.config.ts` 注释）。
 - `apps/server/scripts/` 中 `seed.ts`、`grant-role.ts`、`copy-data.ts` 依赖 tsx（开发
   依赖），镜像内不可用；如需跑这些脚本，在开发机检出仓库执行并指向同一数据库。
+
+---
+
+## 10. 版本升级
+
+升级前先看 [`CHANGELOG.md`](../CHANGELOG.md) 对应小节是否提到迁移或行为变更；
+迁移前先 `pnpm db:backup`（数据库变更不可自动回滚）。
+
+**pm2 方案：**
+
+```bash
+cd /opt/mcserauth
+git pull && pnpm install --frozen-lockfile
+pnpm build && pnpm db:migrate
+pm2 restart mcserauth-server mcserauth-web
+curl -s https://auth.example.com/health/ready   # 冒烟：checks.database = "up"
+```
+
+**Docker 方案：**
+
+```bash
+cd /opt/mcserauth && git pull && docker compose up -d --build
+docker compose logs -f                          # 观察 entrypoint 的迁移与启动日志
+```
+
+升级后按 §2.3 抽查冒烟即可。回滚：`git checkout <旧 tag>` 后重复上述步骤；
+数据库不回滚，用升级前的备份恢复（§5）。

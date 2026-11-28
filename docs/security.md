@@ -1,21 +1,49 @@
 # 安全基线
 
-安全基线记录。改动遵循「逐项收紧、不破坏既有页面」原则。
+> 本文回答「**要把这套系统安全地跑起来，需要配置与注意什么**」，面向运营者。
+> 漏洞报告走 [`SECURITY.md`](../SECURITY.md)（私密渠道）；改动遵循
+> 「逐项收紧、不破坏既有页面」原则，历史决策见 git 提交记录。
 
-## 生产环境变量强校验
+## 1. 上线前必配（缺一即启动失败）
 
-`src/config/env.ts` 在启动时（`NODE_ENV=production`）除 `BETTER_AUTH_SECRET` /
-`COOKIE_SECURE` 外，还拒绝回环地址的 `APP_URL` / `AUTH_URL`
-（localhost / 127.0.0.1 / ::1 / 0.0.0.0）：未覆盖这两项的实例此前会静默生成
-`http://localhost:8000/...` 验证链接。`MAIL_PROVIDER=console` 在生产启动时输出
-`warn`（邮件只写日志不投递），保留可运行以不阻断首次部署。
+全部由 `apps/server/src/config/env.ts` 在启动时（`NODE_ENV=production`）zod 强校验：
 
-## 内容安全策略（CSP）
+- `COOKIE_SECURE=true`（Cookie 走 Secure/HttpOnly/SameSite=Lax）；
+- `BETTER_AUTH_SECRET` 不能用开发默认值（≥32 字符）——它同时是后台已存
+  SMTP 密码的加密密钥，轮换前先重置发件配置；
+- `APP_URL` / `AUTH_URL` 拒绝回环地址（localhost / 127.0.0.1 / ::1 / 0.0.0.0）：
+  否则验证邮件会生成 `http://localhost:8000/...` 这种打不开的链接；
+- `MAIL_PROVIDER=console` 只把邮件写进日志、不投递（生产启动时输出 `warn`），
+  保留可运行以不阻断首次部署，正式运营必须切 `smtp`。
 
-服务端（`apps/server`）已开启 CSP（此前因 entry 授权页内联样式/脚本显式关闭）：
+逐项清单见 [`deploy.md`](deploy.md) §3。
 
-- **策略生成**：`src/common/csp.ts`。中间件按请求生成 nonce（16 字节随机），为
-  `/api/oauth/entry` 一族 HTML 设置严格策略，为 swagger `/docs*` 设置宽松策略。
+## 2. 传输与端口暴露
+
+- 生产**必须 HTTPS**：域名 + 反代 TLS（`deploy/Caddyfile` 自动签发 Let's Encrypt）；
+- Node 进程监听全网卡且无 `HOST` 变量，**8000/3000 必须在防火墙边界关闭**，
+  否则绕过 Caddy 的 TLS 与安全头直接暴露；
+- Express 配置 `trust proxy = 1`，只信任一跳代理；Next SSR 在
+  `apps/web/lib/server-api.ts` 中把入站 `X-Forwarded-For` 透传给 Nest，因此
+  经 `Caddy → Next/Nest` 的请求按真实客户端 IP 计数。8000 若直接暴露公网，
+  客户端可伪造 `X-Forwarded-For` 绕过按 IP 的限流。
+
+## 3. 会话与 CSRF
+
+- 会话 Cookie：`HttpOnly / SameSite=Lax`，`Secure` 由 `COOKIE_SECURE` 开启；
+  `APP_URL` 与 `AUTH_URL` 必须同注册域，否则 Lax Cookie 跨站不带
+  （症状与修复见 [`faq.md`](faq.md)）；
+- 非协议写接口校验 `Origin`/`Referer`（`APP_URL`/`AUTH_URL` 白名单）：
+  浏览器正常使用不受影响；生产环境带 Cookie 的 curl/脚本自动化必须显式带
+  受信任的 `Origin` 头，无来源的 Cookie 写操作直接 403；
+- 限流：全部 Nest 路由默认 120 次/分钟（健康探针豁免），`/api/auth/*` 另有
+  express 限流（登录/注册等凭据端点 10 次/分钟）。限流计数在**内存态**——
+  这是服务只能单进程运行的原因之一（[`deploy.md`](deploy.md) §7）。
+
+## 4. 内容安全策略（CSP）
+
+服务端（`apps/server`）由中间件按请求生成 nonce（`src/common/csp.ts`）：
+
 - **严格策略**（entry 登录/确认页）：`script-src` / `style-src` 均要求
   `'nonce-…'`，**不含 `unsafe-inline`**；页面模板把同一 nonce 注入内联
   `<style>` 与 `<script>`（`entry-page.ts`）。第三方人机验证（Turnstile /
@@ -25,7 +53,7 @@
   的 bootstrap 内联脚本无法携带 nonce；该页面仅运维/开发使用。
 - 后续可评估在 swagger 改造后移除 `unsafe-inline`（例如独立文档站点）。
 
-helmet 继续负责其余安全响应头（CSP 由上述中间件接管）：
+helmet 负责其余安全响应头（CSP 由上述中间件接管）：
 
 | 头                           | 值                                                   |
 | ---------------------------- | ---------------------------------------------------- |
@@ -60,29 +88,7 @@ web 不含 HSTS，所以生产由 [`deploy/Caddyfile`](../deploy/Caddyfile) 在�
 `Strict-Transport-Security: max-age=31536000; includeSubDomains`（与上表 helmet 实测值一致，
 两处不要写成不同的 max-age）。
 
-## 限流与真实客户端 IP
-
-- 全部 Nest 路由默认注册进程内限流（`src/app.module.ts`，120 次/分钟），健康探针
-  `@SkipThrottle()`；`/api/auth/*` 另由 express 限流保护（登录/注册等凭据端点 10 次/分钟）。
-- Express 配置 `trust proxy = 1`，只信任一跳代理。Next SSR 在 `apps/web/lib/server-api.ts`
-  中把入站 `X-Forwarded-For` 透传给 Nest；因此经 `Caddy → Next/Nest` 的请求按真实客户端
-  IP 计数，而不是把全站 SSR 流量都归到 Next 进程的 `127.0.0.1`。
-- 部署时 Nest 的 8000 端口必须只对反代/本机开放，不能直接暴露公网；否则客户端可伪造
-  `X-Forwarded-For` 绕过按 IP 的限流。
-
-## 依赖审计（pnpm audit）
-
-2026-10-31 状态：`pnpm audit --prod` 剩 **1 moderate（豁免留痕）**，high 清零。
-
-| 发现                                                         | 严重度   | 处置                                                                                                                                                                                                  |
-| ------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| body-parser < 2.4.0（DoS，GHSA-27r3-jxmh-p828）              | high     | 根 `package.json` `pnpm.overrides` 强制 `^2.4.0`                                                                                                                                                      |
-| multer < 2.5.0（DoS，GHSA 异步 fileFilter）                  | high     | 同上，强制 `^2.5.0`                                                                                                                                                                                   |
-| esbuild ≤ 0.24.2（dev server 请求伪造，GHSA-67mh-4wv8-2f99） | moderate | **豁免**：仅经 better-auth 的 peer `drizzle-kit` → `@esbuild-kit` 进入依赖树，是 drizzle-kit 自身的开发工具链；生产构建走 `@nestjs/cli`（tsc），运行时不执行 esbuild dev server。上游修复后删除豁免。 |
-
-复核命令：`pnpm audit --prod`（在 `apps/server` 下）。
-
-## 密码哈希
+## 5. 密码与令牌存储
 
 - 网站账号密码：better-auth 自定义 hasher，**argon2id**
   （`src/modules/auth/auth.instance.ts`）。当前库默认参数
@@ -94,21 +100,30 @@ web 不含 HSTS，所以生产由 [`deploy/Caddyfile`](../deploy/Caddyfile) 在�
 - OAuth 授权码/记住授权：授权码只存哈希、单次使用；注册客户端的 `redirect_uri`
   精确白名单匹配（叠加 HTTPS/loopback 基础规则防开放重定向）；用户在个人主页
   「已授权服务」撤销后，该客户端全部令牌立即吊销。
-- 注册客户端令牌交换加固（2026-11-08）：
-  - **公开客户端（未配置 `client_secret`）强制 PKCE**：签发授权码时必须携带
-    `code_challenge`，否则 entry 直接拒绝（页面上提示），不留无凭据可换的授权码。
-  - **交换授权码必须回传 `redirect_uri`** 且与授权请求逐字一致（RFC 6749 §4.1.3）；
-    legacy 启动器流程保持宽松以兼容旧客户端。
-  - **refresh 认证**：机密客户端刷新必须携带 `client_secret`，`client_id` 与令牌
-    记录不一致 → 401；客户端被停用 → 403。
+- 公开客户端（未配置 `client_secret`）**强制 PKCE**：签发授权码时必须携带
+  `code_challenge`，否则 entry 直接拒绝，不留无凭据可换的授权码。
+- 交换授权码必须回传 `redirect_uri` 且与授权请求逐字一致（RFC 6749 §4.1.3）；
+  legacy 启动器流程保持宽松以兼容旧客户端。
+- 机密客户端刷新必须携带 `client_secret`，`client_id` 与令牌记录不一致 → 401；
+  客户端被停用 → 403。
 - 封禁即时生效：管理端封禁（账号级/游戏级）除写入 `banned` 外，同步吊销该用户
   全部启动器/OAuth 令牌；刷新已被封禁检查拦截，访问令牌不再等待 30 天 TTL 自然过期。
 
-## 权限矩阵
+## 6. 依赖审计（pnpm audit）
 
-四级角色（user/reviewer/admin/superadmin）+ 9 项 `user_permission` 下放能力
-（含 `oauth.clients`）的越权用例已双层覆盖：service 层 `admin-access.service.test.ts`
-覆盖判定逻辑，
-HTTP 层 `apps/server/test/e2e/permissions.e2e.test.ts`
-覆盖 user 403、reviewer 无能力 403、superadmin 授 `users.ban` 后可 ban、
-封禁账号在论坛与管理端点双双被拒，全部断言 envelope `10003`。
+在 `apps/server` 下运行 `pnpm audit --prod` 复核；当前生产依赖 high 清零，
+剩 **1 moderate（豁免留痕）**：
+
+| 发现                                                         | 严重度   | 处置                                                                                                                                                                                                  |
+| ------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| body-parser < 2.4.0（DoS，GHSA-27r3-jxmh-p828）              | high     | 根 `package.json` `pnpm.overrides` 强制 `^2.4.0`                                                                                                                                                      |
+| multer < 2.5.0（DoS，GHSA 异步 fileFilter）                  | high     | 同上，强制 `^2.5.0`                                                                                                                                                                                   |
+| esbuild ≤ 0.24.2（dev server 请求伪造，GHSA-67mh-4wv8-2f99） | moderate | **豁免**：仅经 better-auth 的 peer `drizzle-kit` → `@esbuild-kit` 进入依赖树，是 drizzle-kit 自身的开发工具链；生产构建走 `@nestjs/cli`（tsc），运行时不执行 esbuild dev server。上游修复后删除豁免。 |
+
+## 7. 权限模型的回归覆盖
+
+四级角色（user/reviewer/admin/superadmin）+ 9 项 `user_permission` 下放能力的
+越权用例已双层覆盖：service 层 `admin-access.service.test.ts` 覆盖判定逻辑，
+HTTP 层 `apps/server/test/e2e/permissions.e2e.test.ts` 覆盖 user 403、
+reviewer 无能力 403、superadmin 授 `users.ban` 后可 ban、封禁账号在论坛与
+管理端点双双被拒，全部断言 envelope `10003`。

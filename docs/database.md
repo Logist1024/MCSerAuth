@@ -77,8 +77,9 @@ apps/server/drizzle/
 `oauth_client`/`oauth_consent` 表并为 `token` 表加 `client_id`/`scope`
 可空列，合计 31 表；后续版本成对追加）：改 `model.ts` 后
 `pnpm db:generate` 会在三个目录**同时**追加一个同语义版本；任何一侧单独出现
-新版本都说明生成流程被跳过。1.x 的 SQLite 12 版历史已移除（git 历史可考），
-存量库升级见下文「迁移基线对齐升级」。
+新版本都说明生成流程被跳过。（发布前的内部构建曾使用另一套 12 版 SQLite 迁移
+历史，已在基线对齐中移除——只影响跑过那些内部构建的存量库，全新部署不用关心；
+这类库的升级见下文「1.x SQLite 迁移历史的处理」。）
 
 生成文件带 `/* eslint-disable */`，diff 中应只出现由 `model.ts` 推导出的变化。
 提交前至少运行一次 `pnpm --filter @mcserauth/server typecheck` 与三库测试。
@@ -109,11 +110,12 @@ CREATE DATABASE mcserauth CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 迁移只建表，不会修改已存在数据库的字符集；字符集不一致会导致昵称、帖子中的
 emoji 写入失败。
 
-### 1.x SQLite 迁移历史的处理
+### 1.x SQLite 迁移历史的处理（仅限跑过发布前内部构建的存量库）
 
-1.x 的 SQLite 迁移历史（含两次重建表的 `0010`/`0011`）已在基线对齐中移除，
-其中的数据修复逻辑（`mod` → `reviewer`、pending 纹理转 approved、`active_slot`
-回填）保留在 `scripts/migrate.mjs` 的幂等后处理里，对所有方言的全新库同样安全。
+发布前的内部构建使用过另一套 SQLite 迁移历史（含两次重建表的 `0010`/`0011`），
+已在基线对齐中移除。其中的数据修复逻辑（`mod` → `reviewer`、pending 纹理转
+approved、`active_slot` 回填）保留在 `scripts/migrate.mjs` 的幂等后处理里，
+对所有方言的全新库同样安全。全新部署不用读本节。
 注意 `PRAGMA foreign_keys=OFF` 在 Drizzle 事务内不生效，重建表必须
 按「子表先删、父表先建」的顺序操作。
 
@@ -129,6 +131,11 @@ pnpm db:seed
 - `db:copy-data` 验证与 CI 证据的非空数据源；
 - 本地冒烟 / 开发时先有一点点数据可看。
 
+> **与「首次启动自动种子」是两条独立机制**：服务启动时若 `category` 表为空，
+> 会自动写入 4 个默认版块（服务器动态 / 攻略交流 / 建议反馈 / 水区，
+> 见 `forum-category.service.ts`）。先跑了 `db:seed` 写入占位版块后，自动种子
+> 即跳过。**生产部署只需后者**（什么也不用做），不要在生产执行 `db:seed`。
+
 **seed 出的账号不能登录**（没有凭据行）。首个真实 superadmin 仍按部署文档走
 注册 → `pnpm admin:grant <email> superadmin`。
 
@@ -136,7 +143,8 @@ pnpm db:seed
 
 一次性脚本。两个典型场景：
 
-1. **存量 1.x SQLite 库升级到当前基线**（SQLite → SQLite）：
+1. **发布前内部构建的存量 SQLite 库升级到当前基线**（SQLite → SQLite；
+   全新部署没有这一步）：
 
    ```bash
    # 1. 新基线空库

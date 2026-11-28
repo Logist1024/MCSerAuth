@@ -1,4 +1,4 @@
-# MCSerAuth database backup schedule (2.0 F4).
+# MCSerAuth database backup schedule.
 #
 # Install as /etc/cron.d/mcserauth-backup (root owns the file, mode 644).
 # `pnpm db:backup` picks the engine from DATABASE_URL in apps/server/.env and
@@ -6,9 +6,12 @@
 #
 # Prerequisites:
 #   - a dedicated unprivileged account (here: `deployer`) that can run pnpm
+#     (created in docs/deploy.md §2.1 step 1: `useradd -m -s /bin/bash deployer`)
 #   - corepack/pnpm on PATH for that account (`corepack enable` as deployer)
 #   - mysqldump / pg_dump installed when the target engine is MySQL/PostgreSQL
-#   - `mkdir -p /var/log/mcserauth && chown deployer /var/log/mcserauth`
+#   - shared log directory, writable by both the pm2 user and deployer:
+#     `mkdir -p /var/log/mcserauth && chown <pm2-user>:deployer /var/log/mcserauth
+#      && chmod 775 /var/log/mcserauth` (docs/deploy.md §2.1 step 5)
 #   - server credentials for the dump tool and for the rehearsal commands: MySQL via
 #     ~/.my.cnf ([client] user/password/socket), PostgreSQL via ~/.pgpass
 #     (host:port:db:user:password). Both files must be mode 600. `pnpm db:backup`

@@ -1,22 +1,24 @@
-# Windows / 宝塔服主部署指南
+# Windows 服主部署指南
 
 > 读者画像：Windows 常驻主机（家机房 / Windows Server 面板机），一台已备案域名，
 > 会用 PowerShell 复制粘贴命令。目标是让 server(:8000) + web(:3000) 在本机跑起来，
 > 并由 Caddy 反代到 443，最后给出 Paper 侧的接入参数。
 >
 > **诚实声明（先读）**：本仓库的部署 runbook（[`docs/deploy.md`](deploy.md)）以 Linux 为准。
-> 下面所有 `pnpm` 层命令（`install` / `build` / `db:migrate` / `db:seed` / `admin:grant` /
+> 下面所有 `pnpm` 层命令（`install` / `build` / `db:migrate` / `admin:grant` /
 > `db:backup`）与 Linux 完全一致，已在 Node 22 环境逐条实测通过；**Windows 特有步骤
 > （MSI 安装、NSSM 服务注册、Caddy 服务化、.bat 启动脚本）受验证环境所限未在实机
 > Windows 上跑过**，命令均来自 Node.js / NSSM / Caddy 官方文档，遇到问题请提 issue。
 > 宝塔面板以 Linux 版为主，其 Windows 版更新长期停滞（官方安装包已下架）；如果你
-> 装了宝塔 Windows 面板并习惯用它的「网站反向代理」，可以替代 §5 的 Caddy 完成
+> 装了宝塔 Windows 面板并习惯用它的「网站反向代理」，可以替代 §4 的 Caddy 完成
 > 反代，但本文以 Caddy 为准（与仓库 [`deploy/Caddyfile`](../deploy/Caddyfile) 同源）。
 
 ## 0. 前置检查
 
-- [ ] 一个已备案域名，两条 A 记录（如 `mcserauth.example.com` 与 `auth.example.com`，
-      或单域名方案见下文）都指向这台 Windows 机器的公网 IP；
+- [ ] 一个已备案域名，两条 A 记录（如 `mcserauth.example.com` 与 `auth.example.com`；
+      单域名路径分派方案见 [`deploy.md`](deploy.md) §1 的布局表与
+      [`deploy/Caddyfile`](../deploy/Caddyfile) 末尾注释段）都指向这台 Windows
+      机器的公网 IP；
 - [ ] 443 与 80 端口在路由器/防火墙上已放行（生产强校验要求 HTTPS，见
       [`deploy.md`](deploy.md) §1）；**8000/3000 绝不能直接对公网开放**——
       反代是唯一入口；
@@ -49,40 +51,22 @@ pnpm install --frozen-lockfile
 > 若 `pnpm install` 在 better-sqlite3 一步报错，先按第 1 步装好 Build Tools 再
 > 重试；报错原文通常写明缺少 `node-gyp` 编译环境。
 
-写环境变量（先写再构建，`NEXT_PUBLIC_*` 是构建期内联的，构建后改无效）：
+写环境变量（先写再构建，`NEXT_PUBLIC_*` 是构建期内联的，构建后改无效；
+逐项说明见 §3）：
 
 ```powershell
 copy .env.example apps\server\.env
 copy apps\web\.env.example apps\web\.env.local
-notepad apps\server\.env          # 按 §4 编辑
+notepad apps\server\.env          # 按 §3 编辑
 notepad apps\web\.env.local
 pnpm build                        # shared → server → web 全量构建
+pnpm db:migrate                   # 按 DATABASE_URL 自动选方言；SQLite 库建在 apps\server\data\
 ```
 
-建库、迁移、种子数据（按 `DATABASE_URL` 自动选方言）：
+服务首次启动时，若论坛版块表为空会自动写入 4 个默认版块；`pnpm db:seed` 是
+开发/演练用的占位数据（种子管理员与站点名），生产无需执行。
 
-```powershell
-pnpm db:migrate                   # 默认在 apps\server\data\ 下创建 SQLite 库
-pnpm db:seed                      # 可选：写入占位版块/站点设置
-```
-
-## 3. 注册第一个超级管理员
-
-先临时前台跑起来（PowerShell 窗口 A）：
-
-```powershell
-pnpm dev                          # 本机联调用；生产常驻见 §6
-```
-
-浏览器打开 <http://localhost:3000> 注册账号（生产配置下需通过人机验证与邮箱验证——
-`MAIL_PROVIDER=console` 时验证邮件只写进服务端日志，见 §4 第 5 条），然后新开
-PowerShell 窗口 B：
-
-```powershell
-pnpm admin:grant you@example.com superadmin
-```
-
-## 4. 生产 `.env`（Windows 本机示例）
+## 3. 生产 `.env`（Windows 本机示例）
 
 `apps/server/.env` 至少改成下面这样（逐项理由见 [`deploy.md`](deploy.md) §3）：
 
@@ -126,7 +110,7 @@ Windows 注意事项：
 改完 `.env` 后如果之前已经 `pnpm build` 过，需要重新 `pnpm build`（web 侧变量是
 构建期内联的）。
 
-## 5. Caddy 反代到 443
+## 4. Caddy 反代到 443
 
 1. 从 [Caddy 下载页](https://caddyserver.com/download) 取 Windows amd64 版
    `caddy.exe`，放到 `C:\caddy\`。
@@ -151,7 +135,7 @@ Windows 注意事项：
 
    （注意 `binPath=`、`start=` 的等号后面必须有空格，这是 `sc.exe` 的语法。）
 
-## 6. 让 server / web 常驻（NSSM 注册两个服务）
+## 5. 让 server / web 常驻（NSSM 注册两个服务）
 
 仓库自带的 `deploy/ecosystem.config.cjs` 是 pm2 的 Linux 配置（日志路径写死
 `/var/log/mcserauth`），**不要在 Windows 上直接用**。这里用
@@ -163,13 +147,15 @@ Windows 注意事项：
 cd C:\mcserauth\app
 
 # 服务 1：NestJS API（生产启动命令 = apps/server 的 pnpm start）
-C:\nssm\nssm.exe install mcserauth-server "C:\Program Files\nodejs\node.exe" "dist\main.js"
+C:\nssm\nssm.exe install mcserauth-server "C:\Program Files\nodejs\node.exe"
 C:\nssm\nssm.exe set mcserauth-server AppDirectory C:\mcserauth\app\apps\server
+C:\nssm\nssm.exe set mcserauth-server AppParameters "dist\main.js"
 C:\nssm\nssm.exe set mcserauth-server AppEnvironmentExtra NODE_ENV=production
 
 # 服务 2：Next.js web（生产启动命令 = apps/web 的 pnpm start，绑定回环）
-C:\nssm\nssm.exe install mcserauth-web "C:\Program Files\nodejs\node.exe" "node_modules\next\dist\bin\next start -H 127.0.0.1 -p 3000"
+C:\nssm\nssm.exe install mcserauth-web "C:\Program Files\nodejs\node.exe"
 C:\nssm\nssm.exe set mcserauth-web AppDirectory C:\mcserauth\app\apps\web
+C:\nssm\nssm.exe set mcserauth-web AppParameters "node_modules\next\dist\bin\next start -H 127.0.0.1 -p 3000"
 C:\nssm\nssm.exe set mcserauth-web AppEnvironmentExtra NODE_ENV=production
 
 C:\nssm\nssm.exe start mcserauth-server
@@ -186,6 +172,23 @@ C:\nssm\nssm.exe start mcserauth-web
   `C:\nssm\nssm.exe set mcserauth-server AppStdout C:\mcserauth\logs\server-out.log`
   （`AppStderr` 同理），或先用 `C:\nssm\nssm.exe restart mcserauth-server` 排查。
 
+## 6. 注册第一个超级管理员
+
+两个服务与 Caddy 都起来之后，浏览器打开 <https://mcserauth.example.com> 注册账号
+（生产默认开启人机验证与邮箱验证）。若 `MAIL_PROVIDER=console`，验证邮件只写进
+服务端日志，链接可直接复制打开：
+
+```powershell
+Select-String -Path C:\mcserauth\logs\server-out.log -Pattern 'mail:console' -Context 0,1 | Select-Object -Last 5
+```
+
+然后在新 PowerShell 窗口（仓库根目录）授予角色：
+
+```powershell
+cd C:\mcserauth\app
+pnpm admin:grant you@example.com superadmin
+```
+
 ## 7. 冒烟
 
 ```powershell
@@ -194,7 +197,7 @@ curl.exe -sI https://mcserauth.example.com          # 应看到 200 与 HSTS 头
 ```
 
 浏览器：注册 → 登录 → 发帖 → `/textures` 上传皮肤（64×32 / 64×64 PNG，
-披风需积分解锁）。
+披风需积分解锁）。更多症状速查见 [`faq.md`](faq.md)。
 
 ## 8. Paper 侧接入（进服）
 
@@ -228,7 +231,7 @@ authlib-injector 从
 
 3. 玩家客户端：HMCL → 设置 → 账户 → 添加账户 → 「外置登录」，认证服务器填
    `https://auth.example.com/api`，用户名填**网站邮箱**；PCL2 在
-   设置 → 启动器 → 游戏账户。图文步骤见 [`player-guide.md`](player-guide.md)。
+   设置 → 启动器 → 游戏账户。三端完整步骤见 [`player-guide.md`](player-guide.md)。
 
 ## 9. 备份（Windows 侧）
 
@@ -244,7 +247,7 @@ pnpm db:backup                  # 产物在 apps\server\data\backups\
 上传目录要单独备份：
 
 ```powershell
-tar czf C:\mcserauth\backups\uploads-%DATE%.tar.gz -C apps\server data\uploads
+tar czf "C:\mcserauth\backups\uploads-$(Get-Date -Format yyyyMMdd).tar.gz" -C apps\server data\uploads
 ```
 
 再用 Windows 任务计划程序（`taskschd.msc`）把上述命令挂成每日任务即可，

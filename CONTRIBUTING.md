@@ -31,7 +31,9 @@
 - **建表只改 `apps/server/src/db/schema/model.ts`**，然后 `pnpm db:generate` 生成三方言 schema 与
   迁移；生成物禁止手改，CI 的 `db:check` 会拒绝不一致。三库迁移必须成对生成，
   背景见 [`docs/database.md`](docs/database.md)。
-- 协议端点（Commons-Designs）不套统一 envelope，返回协议原生形状；协议字段暂定值
+- 协议端点（Commons-Designs，社区通行的外置登录服务端规范——启动器按它填一个认证
+  地址即可登录，实现见 `apps/server/src/modules/auth/` 与 `modules/session/`）
+  不套统一 envelope，返回协议原生形状；协议字段暂定值
   集中在 `packages/shared/src/protocol/`，改动前先读。
 
 ## 提交 PR

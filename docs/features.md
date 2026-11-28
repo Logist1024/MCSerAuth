@@ -51,11 +51,14 @@ HTTPS/localhost 回跳、全部作用域）。接入步骤见
 
 1. 首个超级管理员：注册账号后执行 `pnpm admin:grant you@example.com superadmin`（在根目录或
    `apps/server` 下运行均可），再用该账号调用管理端 API。
-2. 登记游戏服务器（网站 Cookie 会话 + `superadmin` 角色）：
+2. 登记游戏服务器（网站 Cookie 会话 + `superadmin` 角色）。**生产环境带 Cookie 的
+   写请求必须显式携带受信任的 `Origin` 头**（CSRF 防护会拒绝无来源的 Cookie 写操作，
+   会话获取与完整示例见 [`deploy.md`](deploy.md) §2.2 第 10 步）：
 
    ```bash
    curl -b jar.txt -X POST http://localhost:8000/api/admin/servers \
      -H 'Content-Type: application/json' \
+     -H 'Origin: http://localhost:3000' \
      -d '{"serverId":"survival-1","name":"生存服一区"}'
    ```
 
@@ -87,10 +90,13 @@ HTTPS/localhost 回跳、全部作用域）。接入步骤见
 
 ## 4. 启动器直登（authlib-injector / HMCL）
 
-只认 Yggdrasil 的启动器（HMCL、PCL2、XMCL）可以直接用网站账号登录，无需走浏览器 OAuth：
+只认 Yggdrasil 的启动器可以直接用网站账号登录，无需走浏览器 OAuth
+（HMCL、PCL2、Prism Launcher 有玩家侧图文路径；XMCL 等其他 Yggdrasil 启动器同样适用）：
 
-1. **认证服务器地址填 `http://localhost:8000/api`**（API 根，不是 `/api/oauth/entry`）。
-2. 用户名填**网站邮箱**（如 `admin@mcserauth.dev`），密码填网站密码；首次登录自动创建 1:1 player。
+1. **认证服务器地址填 MCSerAuth 的 API 根**——本地开发 `http://localhost:8000/api`，
+   生产 `https://auth.example.com/api`（以站点「游戏账号管理」页显示并可复制的为准；
+   不是 `/api/oauth/entry`）。
+2. 用户名填**网站邮箱**，密码填网站密码；首次登录自动创建 1:1 player。
 3. HMCL：设置 → 账户 → 添加账户 → 「外置登录」；PCL2：设置 → 启动器 → 游戏账户。
 
 已实现：`GET /api` 元数据、`/api/authserver/{authenticate,refresh,validate,invalidate}`、
@@ -105,9 +111,10 @@ HTTPS/localhost 回跳、全部作用域）。接入步骤见
 `apps/server/src/modules/session/yggdrasil-session.controller.ts`（sessionserver 兼容层）。
 
 > 进服需要客户端 **和** Paper 侧都注入 authlib-injector（服务端 `online-mode=false` +
-> `-javaagent:authlib-injector.jar=http://localhost:8000/api`）。本仓库不含 Paper 插件。
+> `-javaagent:authlib-injector.jar=<MCSerAuth 的 API 根>`，生产即
+> `https://auth.example.com/api`）。本仓库不含 Paper 插件。
 
-玩家侧三端（HMCL / PCL2 / Prism Launcher）图文步骤见
+玩家侧三端（HMCL / PCL2 / Prism Launcher）步骤见
 [`docs/player-guide.md`](player-guide.md)。
 
 ## 5. 论坛与运营能力
