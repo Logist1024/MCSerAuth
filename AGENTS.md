@@ -51,6 +51,6 @@ docker compose up -d --build   # 可选：单镜像 Docker 构建并启动（用
 | 安全基线      | `docs/security.md`          |
 | OAuth 集成    | `docs/oauth-integration.md` |
 
-快速理清核心链路（登录→进服、模块与表顺序、秘密存储位置）可读 `docs/ARCHITECTURE-FOR-AUTHOR.md`（每句话标注了源码位置）。Windows 部署见 `docs/deploy-windows.md`，玩家视角功能说明见 `docs/player-guide.md`。
+Windows 部署见 `docs/deploy-windows.md`，玩家视角功能说明见 `docs/player-guide.md`。
 
 协作入口与完整规则见 `CONTRIBUTING.md`。

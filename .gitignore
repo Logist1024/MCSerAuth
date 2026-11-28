@@ -41,3 +41,7 @@ playwright-report/
 .claude/
 .codeartsdoer/
 .qoderignore
+
+# internal notes kept locally only (removed from the public repo)
+/docs/ARCHITECTURE-FOR-AUTHOR.md
+/docs/superpowers/
