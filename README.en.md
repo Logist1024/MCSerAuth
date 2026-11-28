@@ -17,6 +17,15 @@ side provides a forum and player profiles. Both share the same account system,
 deployed as a single unit; SQLite by default, with MySQL 8.0+ / PostgreSQL 16+
 supported in production.
 
+> **"External login" in 30 seconds**: Minecraft: Java Edition signs players in with a
+> Mojang account by default. External login lets players sign in with an account on
+> **your own server** instead: inject
+> [authlib-injector](https://github.com/yushijinhun/authlib-injector) on both the
+> client and the Paper side, and the launcher only needs one auth-server URL that
+> speaks the **Commons-Designs protocol** (the community's standard external-login
+> server spec, commonly known as the Yggdrasil protocol). This project implements the
+> server side of that protocol and unifies game accounts with forum accounts.
+
 [![CI](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml/badge.svg)](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Logist1024/MCSerAuth)](https://github.com/Logist1024/MCSerAuth/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -38,7 +47,7 @@ _Screenshots taken from a local `pnpm dev` instance (seed data + demo account)._
 
 - You run a small-to-medium MC server and want the full loop "sign up → post on
   the forum → upload a skin → external login from the launcher → join the server";
-- You have your own host (a Linux VPS or a Windows panel box) and a domain, and
+- You have your own host (a Linux VPS or a Windows box) and a domain, and
   are willing to follow the deployment docs copy-paste-command by command;
 - You want forum accounts and game external login to share one account system,
   so players handle password changes / resets / skins in exactly one place.
@@ -57,17 +66,51 @@ _Screenshots taken from a local `pnpm dev` instance (seed data + demo account)._
   rate limiting, captcha and in-process caches are all in-memory and the system
   **must run as a single process** (see [`docs/deploy.md`](docs/deploy.md) §7).
 
-## Why not an existing solution
+## Quick start
 
-- **Compared with other Commons-Designs implementations**: most open-source
-  implementations are pure auth APIs / skin stations with no player community.
-  MCSerAuth puts auth, player profiles and the forum into one account system —
-  one deployment delivers both, and players only ever register once.
-- **Compared with pointing your launcher at a public auth server**: that means
-  your players' emails, passwords and skins live on someone else's machine, and
-  you never own a community. Self-hosting MCSerAuth keeps account data, texture
-  files and forum operation on your own server, and the launcher side needs no
-  extra plugin (standard authlib-injector protocol).
+Requires Node.js 22 (pinned in `.nvmrc`) and pnpm via corepack.
+
+```bash
+git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
+corepack enable                 # or use corepack pnpm <cmd>
+pnpm install
+cp .env.example apps/server/.env   # optional: dev defaults work without it
+pnpm dev                           # the server migrates the database automatically on
+                                   # start (empty DB is fine); web comes up on :3000
+```
+
+Once running:
+
+| URL                                                   | What it is                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| <http://localhost:3000>                               | Server home page (forum / game accounts entry)              |
+| <http://localhost:3000/forum>                         | Forum (categories, threads, sort/search, post, reply, like) |
+| <http://localhost:3000/textures>                      | Game account management (profile / skins / capes / guide)   |
+| <http://localhost:3000/admin>                         | Admin console (reviewer / admin / superadmin)               |
+| <http://localhost:8000/docs>                          | Swagger UI (full endpoint contract)                         |
+| <http://localhost:8000/health>                        | Health check (unified `{code:0,data}` envelope)             |
+| <http://localhost:8000/health/live> · `/health/ready` | liveness (process) · readiness (503 when DB is down)        |
+| <http://localhost:8000/docs/json>                     | OpenAPI JSON                                                |
+
+**Entering the admin console**: the first account registered in the browser is a
+plain user; grant it a role:
+
+```bash
+pnpm admin:grant you@example.com superadmin   # superadmin / admin / reviewer
+```
+
+Smoke test (sign-up → session):
+
+```bash
+curl -c jar.txt -X POST http://localhost:8000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"a@example.com","password":"S3cure!Passw0rd","name":"Tester"}'
+curl -b jar.txt http://localhost:8000/api/auth/get-session
+```
+
+Once deployed for real players, hand them
+[`docs/player-guide.md`](docs/player-guide.md) (external-login steps and FAQ for
+HMCL / PCL2 / Prism Launcher).
 
 ## Topology
 
@@ -100,6 +143,77 @@ Paper server ──HTTPS(Caddy)──▶ server :8000 /api    hasJoined check (o
 > `-javaagent:authlib-injector.jar=https://auth.example.com/api`). This
 > repository ships no Paper plugin.
 
+## Which document should I read?
+
+| You are…                        | Start here                                                          |
+| ------------------------------- | ------------------------------------------------------------------- |
+| Linux VPS owner                 | [`docs/deploy.md`](docs/deploy.md) — §2 is a checkable go-live list |
+| Windows owner (panel boxes too) | [`docs/deploy-windows.md`](docs/deploy-windows.md)                  |
+| Docker                          | [`docs/deploy.md`](docs/deploy.md) §9                               |
+| Player (join / upload skins)    | [`docs/player-guide.md`](docs/player-guide.md)                      |
+| Developer of a sibling service  | [`docs/oauth-integration.md`](docs/oauth-integration.md)            |
+| Deployment / runtime problems   | [`docs/faq.md`](docs/faq.md) (check here before filing an issue)    |
+| Contributor                     | [CONTRIBUTING.md](CONTRIBUTING.md)                                  |
+
+## Before you deploy
+
+> Skip this section for local experiments (dev defaults are fine);
+> **go through every item before serving real players.**
+
+**1. A domain and HTTPS are hard prerequisites, not nice-to-haves**
+
+- Web session cookies are `HttpOnly / SameSite=Lax`, with `Secure` enabled by
+  `COOKIE_SECURE` (`apps/server/src/modules/auth/auth.instance.ts`); in
+  `NODE_ENV=production`, `COOKIE_SECURE=true` is a startup-enforced check — a
+  misconfigured process refuses to start (`apps/server/src/config/env.ts`).
+  Production therefore **requires HTTPS**: a domain + TLS-terminating reverse
+  proxy (`deploy/Caddyfile` is a ready example and issues Let's Encrypt
+  certificates automatically).
+- `APP_URL` (site) and `AUTH_URL` (auth) must belong to the **same registrable
+  domain** (e.g. `example.com` + `auth.example.com`), otherwise better-auth's
+  Lax cookies are not sent cross-site — the symptom is "login succeeds but every
+  API call returns 401" (see [`docs/faq.md`](docs/faq.md)). Production also
+  **rejects loopback addresses** (localhost/127.0.0.1) at startup, because
+  verification emails would generate unopenable links.
+- Serving the public internet from mainland China requires an ICP-filed domain.
+  That is a property of the deployment environment, not this codebase — but it
+  decides whether ports 80/443 can be opened at all.
+
+**2. Minimum production changes (full checklist in [`docs/deploy.md`](docs/deploy.md) §3)**
+
+| Variable             | Value                                            | If you skip it                                                                                                                                          |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 48`                        | production refuses to start on the dev default; it also encrypts stored SMTP passwords                                                                  |
+| `COOKIE_SECURE`      | `true`                                           | production startup fails                                                                                                                                |
+| `APP_URL`/`AUTH_URL` | two real https origins (same registrable domain) | loopback origins fail startup; cross-domain cookies break                                                                                               |
+| `CONSOLE_KEY`        | `openssl rand -base64 32`, or leave empty        | empty disables `/console` (recommended until needed)                                                                                                    |
+| `MAIL_PROVIDER`      | explicitly set `smtp`                            | **filling in `SMTP_*` does not switch the mail transport**; the default `console` provider only logs emails, so players never receive verification mail |
+
+**3. You are hosting your players' emails and passwords**
+
+Once deployed, players' emails, password hashes and skin files all live on
+**your server**. Passwords are stored hashed by better-auth (plaintext is never
+visible), but the physical security and access control of the database file,
+the upload directory and your backups are entirely the operator's
+responsibility — a compromised server, leaked backup or misconfigured panel is
+on you. Before going live, at minimum: strong credentials, regular
+`pnpm db:backup` with backups stored safely, database/upload directories never
+exposed publicly, and vulnerabilities handled per [`SECURITY.md`](SECURITY.md).
+For players, state plainly in a forum announcement or terms of service where
+their data lives and what a breach would mean.
+
+## Why not an existing solution
+
+- **Compared with other Commons-Designs implementations**: most open-source
+  implementations are pure auth APIs / skin stations with no player community.
+  MCSerAuth puts auth, player profiles and the forum into one account system —
+  one deployment delivers both, and players only ever register once.
+- **Compared with pointing your launcher at a public auth server**: that means
+  your players' emails, passwords and skins live on someone else's machine, and
+  you never own a community. Self-hosting MCSerAuth keeps account data, texture
+  files and forum operation on your own server, and the launcher side needs no
+  extra plugin (standard authlib-injector protocol).
+
 ## Tech stack
 
 | Layer    | Choice                                                                                                    |
@@ -131,89 +245,6 @@ MCSerAuth/
 └── .github/workflows/ci.yml
 ```
 
-## Before you deploy
-
-> Skip this section for local experiments (dev defaults are fine);
-> **go through every item before serving real players.**
-
-**1. A domain and HTTPS are hard prerequisites, not nice-to-haves**
-
-- Web session cookies are `HttpOnly / SameSite=Lax`, with `Secure` enabled by
-  `COOKIE_SECURE` (`apps/server/src/modules/auth/auth.instance.ts`); in
-  `NODE_ENV=production`, `COOKIE_SECURE=true` is a startup-enforced check — a
-  misconfigured process refuses to start (`apps/server/src/config/env.ts`).
-  Production therefore **requires HTTPS**: a domain + TLS-terminating reverse
-  proxy (`deploy/Caddyfile` is a ready example and issues Let's Encrypt
-  certificates automatically).
-- `APP_URL` (site) and `AUTH_URL` (auth) must belong to the **same registrable
-  domain** (e.g. `example.com` + `auth.example.com`), otherwise better-auth's
-  Lax cookies are not sent cross-site — the symptom is "login succeeds but every
-  API call returns 401". Production also **rejects loopback addresses**
-  (localhost/127.0.0.1) at startup, because verification emails would generate
-  unopenable links.
-- Serving the public internet from mainland China requires an ICP-filed domain.
-  That is a property of the deployment environment, not this codebase — but it
-  decides whether ports 80/443 can be opened at all.
-
-**2. Minimum production changes (full checklist in [`docs/deploy.md`](docs/deploy.md) §3)**
-
-| Variable             | Value                                            | If you skip it                                                                                                                                          |
-| -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET` | `openssl rand -base64 48`                        | production refuses to start on the dev default; it also encrypts stored SMTP passwords                                                                  |
-| `COOKIE_SECURE`      | `true`                                           | production startup fails                                                                                                                                |
-| `APP_URL`/`AUTH_URL` | two real https origins (same registrable domain) | loopback origins fail startup; cross-domain cookies break                                                                                               |
-| `CONSOLE_KEY`        | `openssl rand -base64 32`, or leave empty        | empty disables `/console` (recommended until needed)                                                                                                    |
-| `MAIL_PROVIDER`      | explicitly set `smtp`                            | **filling in `SMTP_*` does not switch the mail transport**; the default `console` provider only logs emails, so players never receive verification mail |
-
-**3. You are hosting your players' emails and passwords**
-
-Once deployed, players' emails, password hashes and skin files all live on
-**your server**. Passwords are stored hashed by better-auth (plaintext is never
-visible), but the physical security and access control of the database file,
-the upload directory and your backups are entirely the operator's
-responsibility — a compromised server, leaked backup or misconfigured panel is
-on you. Before going live, at minimum: strong credentials, regular
-`pnpm db:backup` with backups stored safely, database/upload directories never
-exposed publicly, and vulnerabilities handled per [`SECURITY.md`](SECURITY.md).
-For players, state plainly in a forum announcement or terms of service where
-their data lives and what a breach would mean.
-
-## Quick start
-
-Requires Node.js 22 (pinned in `.nvmrc`) and pnpm via corepack.
-
-```bash
-git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
-corepack enable                 # or use corepack pnpm <cmd>
-pnpm install
-cp .env.example apps/server/.env   # optional: dev defaults work without it
-pnpm db:migrate                    # create DB + apply all migrations (dialect picked from DATABASE_URL)
-pnpm dev                           # server on :8000, web on :3000
-```
-
-Once running:
-
-| URL                                                    | What it is                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------------- |
-| <http://localhost:3000>                                | Server home page (forum / game accounts entry)              |
-| <http://localhost:3000/forum>                          | Forum (categories, threads, sort/search, post, reply, like) |
-| <http://localhost:3000/textures>                       | Game account management (profile / skins / capes / guide)   |
-| <http://localhost:3000/admin>                          | Admin console (reviewer / admin / superadmin)               |
-| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO & RSS                                                   |
-| <http://localhost:8000/health>                         | Health check (unified `{code:0,data}` envelope)             |
-| <http://localhost:8000/health/live> · `/health/ready`  | liveness (process) · readiness (503 when DB is down)        |
-| <http://localhost:8000/docs>                           | Swagger UI (full endpoint contract)                         |
-| <http://localhost:8000/docs/json>                      | OpenAPI JSON                                                |
-
-Smoke test (sign-up → session):
-
-```bash
-curl -c jar.txt -X POST http://localhost:8000/api/auth/sign-up/email \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"a@example.com","password":"S3cure!Passw0rd","name":"Tester"}'
-curl -b jar.txt http://localhost:8000/api/auth/get-session
-```
-
 ## Feature map
 
 The full feature list (with implementation locations and API paths) lives in
@@ -224,7 +255,7 @@ The full feature list (with implementation locations and API paths) lives in
 | Accounts & auth flow  | better-auth web sessions + OAuth authorization code/PKCE (basic/player/email scopes) + password reset | [features.md §1](docs/features.md) |
 | Session service       | `joinServer` / `hasJoined`, server allow-list registration, profile lookup                            | [features.md §2](docs/features.md) |
 | Skins & capes         | vanilla-size PNG uploads effective immediately, 3D preview, short-lived signed URLs, post-moderation  | [features.md §3](docs/features.md) |
-| Launcher direct login | HMCL / PCL2 / XMCL log in with the API root URL + site email (Yggdrasil protocol)                     | [features.md §4](docs/features.md) |
+| Launcher direct login | HMCL / PCL2 / Prism Launcher log in with the API root URL + site email (Yggdrasil protocol)           | [features.md §4](docs/features.md) |
 | Forum                 | categories / threads / replies / likes / notifications / reports / images / guest browsing            | [features.md §5](docs/features.md) |
 | Management & roles    | four roles + 9 delegable capabilities + `/console` key-protected super console + site appearance      | [features.md §5](docs/features.md) |
 | Community growth      | levels / titles / check-ins / points / shop / tipping / home banners                                  | [features.md §6](docs/features.md) |
@@ -279,24 +310,24 @@ are verifiable in source.
 
 Run from the repo root (`package.json` → `scripts`):
 
-| Command                             | What it does                                                 |
-| ----------------------------------- | ------------------------------------------------------------ |
-| `pnpm dev`                          | Start server + web in parallel (builds shared first)         |
-| `pnpm build`                        | Full build: shared → server → web                            |
-| `pnpm lint` / `pnpm lint:fix`       | Repo-wide ESLint                                             |
-| `pnpm format` / `pnpm format:check` | Prettier                                                     |
-| `pnpm typecheck`                    | Repo-wide `tsc --noEmit`                                     |
-| `pnpm test` / `pnpm test:coverage`  | Vitest (server + web)                                        |
-| `pnpm db:generate`                  | Generate 3 schemas + SQLite/MySQL/PG migrations              |
-| `pnpm db:generate:sqlite`           | Generate SQLite migration only                               |
-| `pnpm db:check`                     | Verify generated schemas match `model.ts` (CI)               |
-| `pnpm db:migrate`                   | Apply migrations for the dialect chosen by `DATABASE_URL`    |
-| `pnpm db:seed`                      | Idempotently seed placeholder user/categories/site settings  |
-| `pnpm db:copy-data`                 | One-shot cross-dialect data copy (SQLite targets included)   |
-| `pnpm db:backup`                    | Back up the current DB (all dialects; `--dry-run` prints it) |
-| `pnpm db:studio`                    | Browse data in Drizzle Studio                                |
-| `pnpm admin:grant <email> [role]`   | Grant user/reviewer/admin/superadmin                         |
-| `pnpm openapi:export`               | Build and refresh `docs/openapi.json`                        |
+| Command                             | What it does                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `pnpm dev`                          | Start server + web in parallel (builds shared first; server auto-migrates) |
+| `pnpm build`                        | Full build: shared → server → web                                          |
+| `pnpm lint` / `pnpm lint:fix`       | Repo-wide ESLint                                                           |
+| `pnpm format` / `pnpm format:check` | Prettier                                                                   |
+| `pnpm typecheck`                    | Repo-wide `tsc --noEmit`                                                   |
+| `pnpm test` / `pnpm test:coverage`  | Vitest (server + web)                                                      |
+| `pnpm db:generate`                  | Generate 3 schemas + SQLite/MySQL/PG migrations                            |
+| `pnpm db:generate:sqlite`           | Generate SQLite migration only                                             |
+| `pnpm db:check`                     | Verify generated schemas match `model.ts` (CI)                             |
+| `pnpm db:migrate`                   | Apply migrations for the dialect chosen by `DATABASE_URL`                  |
+| `pnpm db:seed`                      | Idempotent placeholder user/categories/site settings (dev/rehearsal only)  |
+| `pnpm db:copy-data`                 | One-shot cross-dialect data copy (SQLite targets included)                 |
+| `pnpm db:backup`                    | Back up the current DB (all dialects; `--dry-run` prints it)               |
+| `pnpm db:studio`                    | Browse data in Drizzle Studio                                              |
+| `pnpm admin:grant <email> [role]`   | Grant user/reviewer/admin/superadmin                                       |
+| `pnpm openapi:export`               | Build and refresh `docs/openapi.json`                                      |
 
 ## Environment variables
 
@@ -334,7 +365,7 @@ the server) — see [`docs/database.md`](docs/database.md).
 
 Web-side variables: `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000`),
 `NEXT_PUBLIC_SITE_URL` (default `http://localhost:3000`, used by sitemap/robots)
-and `CONSOLE_PATH` (optional rewrite of a special path to `/console`, read at
+and `CONSOLE_PATH` (optional rewrite of a custom path to `/console`, read at
 build/start). Template: [`apps/web/.env.example`](apps/web/.env.example), copy
 to `apps/web/.env.local` to activate.
 
@@ -452,12 +483,12 @@ to `apps/web/.env.local` to activate.
 | [`docs/features.md`](docs/features.md)                   | Full feature list: auth/session/textures/forum/growth, with implementation locations |
 | [CHANGELOG.md](CHANGELOG.md)                             | Release history: v1.0.0 (first public release) and Unreleased sections               |
 | [SECURITY.md](SECURITY.md)                               | Security policy: private vulnerability reporting channel and response targets        |
+| [`docs/faq.md`](docs/faq.md)                             | Troubleshooting: common deployment & runtime problems                                |
 | [`docs/database.md`](docs/database.md)                   | Three-dialect config, schema workflow, migration / copy / backup                     |
 | [`docs/deploy.md`](docs/deploy.md)                       | Production runbook: VPS checklist, `.env` reference, backup & restore drills         |
-| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows/panel-host path: Node 22 → NSSM services → Caddy 443 → Paper `.bat` setup    |
-| [`docs/player-guide.md`](docs/player-guide.md)           | Player-facing: external login steps for HMCL / PCL2 / Prism Launcher                 |
-| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | Optional single-image Docker deployment: scope, boundaries, revisit triggers         |
-| [`docs/security.md`](docs/security.md)                   | Security baseline: CSP, security headers, hashing                                    |
+| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows path: Node 22 → NSSM services → Caddy 443 → Paper `.bat` setup               |
+| [`docs/player-guide.md`](docs/player-guide.md)           | Player-facing: external-login steps and FAQ for HMCL / PCL2 / Prism Launcher         |
+| [`docs/security.md`](docs/security.md)                   | Security baseline: must-set items, CSP, rate limiting, password & token storage      |
 | [`docs/oauth-integration.md`](docs/oauth-integration.md) | OAuth SSO guide for sibling services: client registration, scopes, PKCE              |
 | [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI contract artifact (`pnpm openapi:export`)                                    |
 

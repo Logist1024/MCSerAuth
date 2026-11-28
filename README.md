@@ -14,6 +14,12 @@
 HMCL / PCL2 / Prism Launcher 填一个认证地址即可外置登录；社区侧提供论坛与玩家档案。
 两块业务共用同一账号体系，单体部署；默认 SQLite，生产可切换 MySQL 8.0+ / PostgreSQL 16+。
 
+> **「外置登录」30 秒科普**：Minecraft Java 版默认用 Mojang 账号登录。「外置登录」让玩家
+> 改用**你自己服务器上的账号**进游戏——客户端与 Paper 服务端两侧注入
+> [authlib-injector](https://github.com/yushijinhun/authlib-injector) 后，启动器按
+> **Commons-Designs 协议**（社区通行的外置登录服务端规范，俗称 Yggdrasil 协议）填一个
+> 认证服务器地址即可登录。本项目实现该协议的服务端，并把游戏账号与论坛账号合二为一。
+
 [![CI](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml/badge.svg)](https://github.com/Logist1024/MCSerAuth/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Logist1024/MCSerAuth)](https://github.com/Logist1024/MCSerAuth/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -34,7 +40,7 @@ _截图来自本地 `pnpm dev`（种子数据 + 演示账号）。_
 **适合谁：**
 
 - 想给玩家一个「注册账号 → 发帖交流 → 传皮肤 → 启动器外置登录 → 进服」完整闭环的中小型 MC 服务器；
-- 有一台自己的主机（Linux VPS 或 Windows 面板机）和一个域名，愿意照部署文档复制粘贴命令完成上线；
+- 有一台自己的主机（Linux VPS 或 Windows 主机）和一个域名，愿意照部署文档复制粘贴命令完成上线；
 - 想让论坛账号与游戏外置登录共用同一套账号，玩家改密/找回/换肤只去一个地方。
 
 **不适合谁：**
@@ -47,13 +53,48 @@ _截图来自本地 `pnpm dev`（种子数据 + 演示账号）。_
 - 需要多实例 / 集群部署的大规模社区——限流、验证码、进程内缓存都是内存态，**只能单进程运行**
   （见 [`docs/deploy.md`](docs/deploy.md) §7）。
 
-## 为什么不用现成方案
+## 快速开始
 
-- **与 Commons-Designs 的其他实现相比**：多数开源实现是「纯认证 API / 皮肤站」，不包含玩家社区。
-  MCSerAuth 把认证、玩家档案、论坛放在同一个账号体系里，一次部署同时拿到两块，玩家只需要注册一次。
-- **与「直接把启动器指到公共认证服务器」相比**：那意味着玩家的邮箱、密码、皮肤数据都存在别人那里，
-  也没有属于自己的社区阵地。自建 MCSerAuth 后，账号数据、纹理文件、论坛运营全部在你自己的服务器上，
-  且启动器侧不需要装任何额外插件（标准 authlib-injector 协议）。
+要求：Node.js 22（`.nvmrc` 已固定）、corepack 可用的 pnpm。
+
+```bash
+git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
+corepack enable                 # 或使用 corepack pnpm <cmd>
+pnpm install
+cp .env.example apps/server/.env   # 可选：不复制也能跑（有开发默认值）
+pnpm dev                           # server 启动前自动迁移数据库（空库可直接跑），并拉起 web(:3000)
+```
+
+启动后：
+
+| 地址                                                  | 说明                                                |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| <http://localhost:3000>                               | 服务器展示页（论坛 / 游戏账号入口）                 |
+| <http://localhost:3000/forum>                         | 论坛（版块、主题列表、排序/搜索、发帖、回帖、点赞） |
+| <http://localhost:3000/textures>                      | 游戏账号管理（角色 / 皮肤 / 披风 / 登录指南）       |
+| <http://localhost:3000/admin>                         | 管理后台（审核员 / 管理员 / 超级管理员）            |
+| <http://localhost:8000/docs>                          | Swagger UI（全部端点契约）                          |
+| <http://localhost:8000/health>                        | 服务探活（统一封装 `{code:0,data}`）                |
+| <http://localhost:8000/health/live> · `/health/ready` | liveness（进程）· readiness（数据库不可用返 503）   |
+| <http://localhost:8000/docs/json>                     | OpenAPI JSON                                        |
+
+**进入管理后台**：浏览器注册的第一个账号只是普通用户，需要授权角色：
+
+```bash
+pnpm admin:grant you@example.com superadmin   # superadmin / admin / reviewer 三档
+```
+
+冒烟（注册 → 登录 → 会话）：
+
+```bash
+curl -c jar.txt -X POST http://localhost:8000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"a@example.com","password":"S3cure!Passw0rd","name":"Tester"}'
+curl -b jar.txt http://localhost:8000/api/auth/get-session
+```
+
+部署给玩家使用后，把 [`docs/player-guide.md`](docs/player-guide.md) 发给玩家即可
+（HMCL / PCL2 / Prism Launcher 三端外置登录步骤与常见问题）。
 
 ## 接入拓扑
 
@@ -83,6 +124,63 @@ Paper 服  ──HTTPS(Caddy)──▶ server :8000 /api   hasJoined 校验（on
 
 > 进服需要**客户端和 Paper 两侧都注入** authlib-injector（Paper 侧 `online-mode=false` +
 > `-javaagent:authlib-injector.jar=https://auth.example.com/api`）。本仓库不含 Paper 插件。
+
+## 我该读哪份文档
+
+| 你是……                       | 从这里开始                                                         |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Linux VPS 服主               | [`docs/deploy.md`](docs/deploy.md) §2 是逐条可勾选的上线 checklist |
+| Windows 服主（含宝塔面板机） | [`docs/deploy-windows.md`](docs/deploy-windows.md)                 |
+| 想用 Docker 部署             | [`docs/deploy.md`](docs/deploy.md) §9                              |
+| 玩家（只想进服 / 传皮肤）    | [`docs/player-guide.md`](docs/player-guide.md)                     |
+| 旗下其他服务的开发者（SSO）  | [`docs/oauth-integration.md`](docs/oauth-integration.md)           |
+| 部署 / 运行时遇到问题        | [`docs/faq.md`](docs/faq.md)（先查这里再提 issue）                 |
+| 想参与开发                   | [CONTRIBUTING.md](CONTRIBUTING.md)                                 |
+
+## 部署前必读
+
+> 本地试跑可以跳过这一节（开发默认值够用）；**打算给真实玩家用之前，请逐条确认。**
+
+**1. 域名与 HTTPS 是硬前提，不是加分项**
+
+- 网站会话 Cookie 为 `HttpOnly / SameSite=Lax`，`Secure` 属性由 `COOKIE_SECURE` 开启
+  （`apps/server/src/modules/auth/auth.instance.ts`），且 `NODE_ENV=production` 时
+  `COOKIE_SECURE=true` 是启动强校验——配错进程直接拒绝启动
+  （`apps/server/src/config/env.ts`）。这意味着生产部署**必须走 HTTPS**，
+  即需要一个域名 + 反代 TLS（`deploy/Caddyfile` 是现成实例，自动签发 Let's Encrypt）。
+- `APP_URL`（网站）与 `AUTH_URL`（认证服务）必须属于**同一个注册域**
+  （如 `example.com` + `auth.example.com`），否则 better-auth 的 Lax Cookie 跨站不带，
+  症状是「登录成功但所有接口 401」（详见 [`docs/faq.md`](docs/faq.md)）。生产环境还
+  **禁止回环地址**（localhost/127.0.0.1），否则验证邮件会生成打不开的链接——这也是启动即报错的强校验。
+- 在中国大陆提供公网服务，域名需完成 ICP 备案；这是部署环境的要求，与本仓库代码无关，
+  但决定了你能不能把 80/443 正常开出来。
+
+**2. 生产环境至少要改这些（详见 [`docs/deploy.md`](docs/deploy.md) §3 的逐项清单）**
+
+| 变量                   | 怎么给                                | 不改会怎样                                                                                      |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `openssl rand -base64 48`             | 生产拒绝用开发默认值启动；它还兼作 SMTP 密码的加密密钥                                          |
+| `COOKIE_SECURE`        | `true`                                | 生产启动失败                                                                                    |
+| `APP_URL` / `AUTH_URL` | 两个真实 https 地址（同注册域）       | 回环地址启动失败；跨注册域 Cookie 失效                                                          |
+| `CONSOLE_KEY`          | `openssl rand -base64 32`，或留空禁用 | 留空则 `/console` 不可用（推荐先禁用，需要时再开）                                              |
+| `MAIL_PROVIDER`        | 显式设 `smtp`                         | **只填 `SMTP_*` 参数不会切换发件方式**；默认 `console` 只把邮件写进日志，玩家永远收不到验证邮件 |
+
+**3. 责任说明：你要托管玩家的邮箱和密码**
+
+部署这套系统后，玩家的邮箱、密码哈希、皮肤数据都存在**你的服务器**上。密码以
+better-auth 的哈希形式存储（明文不可见），但数据库文件、上传目录、备份文件的
+物理安全与访问控制完全由你负责——服务器被入侵、备份泄露、面板权限失控，
+后果由运营者承担。上线前至少做到：强口令 + 定期 `pnpm db:backup` 并妥善保管备份、
+上传目录与数据库不进公开目录、发现安全漏洞按 [`SECURITY.md`](SECURITY.md) 处理。
+对玩家，建议在论坛公告或服务条款里如实说明数据的存放位置与泄露风险。
+
+## 为什么不用现成方案
+
+- **与 Commons-Designs 的其他实现相比**：多数开源实现是「纯认证 API / 皮肤站」，不包含玩家社区。
+  MCSerAuth 把认证、玩家档案、论坛放在同一个账号体系里，一次部署同时拿到两块，玩家只需要注册一次。
+- **与「直接把启动器指到公共认证服务器」相比**：那意味着玩家的邮箱、密码、皮肤数据都存在别人那里，
+  也没有属于自己的社区阵地。自建 MCSerAuth 后，账号数据、纹理文件、论坛运营全部在你自己的服务器上，
+  且启动器侧不需要装任何额外插件（标准 authlib-injector 协议）。
 
 ## 技术栈
 
@@ -115,78 +213,6 @@ MCSerAuth/
 └── .github/workflows/ci.yml
 ```
 
-## 部署前必读
-
-> 本地试跑可以跳过这一节（开发默认值够用）；**打算给真实玩家用之前，请逐条确认。**
-
-**1. 域名与 HTTPS 是硬前提，不是加分项**
-
-- 网站会话 Cookie 为 `HttpOnly / SameSite=Lax`，`Secure` 属性由 `COOKIE_SECURE` 开启
-  （`apps/server/src/modules/auth/auth.instance.ts`），且 `NODE_ENV=production` 时
-  `COOKIE_SECURE=true` 是启动强校验——配错进程直接拒绝启动
-  （`apps/server/src/config/env.ts`）。这意味着生产部署**必须走 HTTPS**，
-  即需要一个域名 + 反代 TLS（`deploy/Caddyfile` 是现成实例，自动签发 Let's Encrypt）。
-- `APP_URL`（网站）与 `AUTH_URL`（认证服务）必须属于**同一个注册域**
-  （如 `example.com` + `auth.example.com`），否则 better-auth 的 Lax Cookie 跨站不带，
-  症状是「登录成功但所有接口 401」。生产环境还**禁止回环地址**（localhost/127.0.0.1），
-  否则验证邮件会生成打不开的链接——这也是启动即报错的强校验。
-- 在中国大陆提供公网服务，域名需完成 ICP 备案；这是部署环境的要求，与本仓库代码无关，
-  但决定了你能不能把 80/443 正常开出来。
-
-**2. 生产环境至少要改这些（详见 [`docs/deploy.md`](docs/deploy.md) §3 的逐项清单）**
-
-| 变量                   | 怎么给                                | 不改会怎样                                                                                      |
-| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `openssl rand -base64 48`             | 生产拒绝用开发默认值启动；它还兼作 SMTP 密码的加密密钥                                          |
-| `COOKIE_SECURE`        | `true`                                | 生产启动失败                                                                                    |
-| `APP_URL` / `AUTH_URL` | 两个真实 https 地址（同注册域）       | 回环地址启动失败；跨注册域 Cookie 失效                                                          |
-| `CONSOLE_KEY`          | `openssl rand -base64 32`，或留空禁用 | 留空则 `/console` 不可用（推荐先禁用，需要时再开）                                              |
-| `MAIL_PROVIDER`        | 显式设 `smtp`                         | **只填 `SMTP_*` 参数不会切换发件方式**；默认 `console` 只把邮件写进日志，玩家永远收不到验证邮件 |
-
-**3. 责任说明：你要托管玩家的邮箱和密码**
-
-部署这套系统后，玩家的邮箱、密码哈希、皮肤数据都存在**你的服务器**上。密码以
-better-auth 的哈希形式存储（明文不可见），但数据库文件、上传目录、备份文件的
-物理安全与访问控制完全由你负责——服务器被入侵、备份泄露、面板权限失控，
-后果由运营者承担。上线前至少做到：强口令 + 定期 `pnpm db:backup` 并妥善保管备份、
-上传目录与数据库不进公开目录、发现安全漏洞按 [`SECURITY.md`](SECURITY.md) 处理。
-对玩家，建议在论坛公告或服务条款里如实说明数据的存放位置与泄露风险。
-
-## 快速开始
-
-要求：Node.js 22（`.nvmrc` 已固定）、corepack 可用的 pnpm。
-
-```bash
-git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
-corepack enable                 # 或使用 corepack pnpm <cmd>
-pnpm install
-cp .env.example apps/server/.env   # 可选：不复制也能跑（有开发默认值）
-pnpm dev                           # server 启动前自动迁移数据库（空库可直接跑），并拉起 web(:3000)
-```
-
-启动后：
-
-| 地址                                                   | 说明                                                |
-| ------------------------------------------------------ | --------------------------------------------------- |
-| <http://localhost:3000>                                | 服务器展示页（论坛 / 游戏账号入口）                 |
-| <http://localhost:3000/forum>                          | 论坛（版块、主题列表、排序/搜索、发帖、回帖、点赞） |
-| <http://localhost:3000/textures>                       | 游戏账号管理（角色 / 皮肤 / 披风 / 登录指南）       |
-| <http://localhost:3000/admin>                          | 管理后台（审核员 / 管理员 / 超级管理员）            |
-| <http://localhost:3000/sitemap.xml> / `/forum/rss.xml` | SEO 与 RSS                                          |
-| <http://localhost:8000/health>                         | 服务探活（统一封装 `{code:0,data}`）                |
-| <http://localhost:8000/health/live> · `/health/ready`  | liveness（进程）· readiness（数据库不可用返 503）   |
-| <http://localhost:8000/docs>                           | Swagger UI（全部端点契约）                          |
-| <http://localhost:8000/docs/json>                      | OpenAPI JSON                                        |
-
-冒烟（注册 → 登录 → 会话）：
-
-```bash
-curl -c jar.txt -X POST http://localhost:8000/api/auth/sign-up/email \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"a@example.com","password":"S3cure!Passw0rd","name":"Tester"}'
-curl -b jar.txt http://localhost:8000/api/auth/get-session
-```
-
 ## 功能一览
 
 完整功能清单（含实现位置与 API 路径）见 **[`docs/features.md`](docs/features.md)**：
@@ -196,7 +222,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | 账号与认证链路 | better-auth 网站会话 + OAuth 授权码/PKCE（basic/player/email 作用域）+ 找回密码 | [features.md §1](docs/features.md) |
 | 会话服务       | `joinServer` / `hasJoined`、服务器白名单登记、档案查询                          | [features.md §2](docs/features.md) |
 | 皮肤与披风     | 原版尺寸 PNG 上传即生效、3D 预览、短时签名 URL 下发、事后审核                   | [features.md §3](docs/features.md) |
-| 启动器直登     | HMCL / PCL2 / XMCL 填 API 根地址 + 网站邮箱即可登录（Yggdrasil 协议）           | [features.md §4](docs/features.md) |
+| 启动器直登     | HMCL / PCL2 / Prism Launcher 填 API 根地址 + 网站邮箱即可登录（Yggdrasil 协议） | [features.md §4](docs/features.md) |
 | 论坛           | 版块 / 帖子 / 回复 / 点赞 / 通知 / 举报 / 图片上传 / 游客浏览                   | [features.md §5](docs/features.md) |
 | 管理与权限     | 四级角色 + 9 项能力下放 + `/console` 密钥超级后台 + 站点外观                    | [features.md §5](docs/features.md) |
 | 社区成长       | 等级 / 称号 / 签到 / 积分 / 商店 / 打赏 / 首页 Banner                           | [features.md §6](docs/features.md) |
@@ -253,7 +279,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 | `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                                                  |
 | `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）                                  |
 | `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移                                  |
-| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置                                      |
+| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置（开发/演练用，生产无需执行）         |
 | `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）                                  |
 | `pnpm db:backup`                    | 备份当前库（三库；`--dry-run` 打印计划）                            |
 | `pnpm db:studio`                    | Drizzle Studio 浏览数据                                             |
@@ -295,7 +321,7 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 
 web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）、
 `NEXT_PUBLIC_SITE_URL`（默认 `http://localhost:3000`，用于 sitemap/robots）与
-`CONSOLE_PATH`（可选，把特殊路径重写到 `/console`，构建/启动时读取），
+`CONSOLE_PATH`（可选，把自定义路径重写到 `/console`，构建/启动时读取），
 模板见 [`apps/web/.env.example`](apps/web/.env.example)，复制为 `apps/web/.env.local` 生效。
 
 ## 数据层
@@ -315,7 +341,7 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
   游戏会话、服务器白名单、皮肤披风、论坛版块/帖子/回复/投票/举报/通知/审计日志、
   站点配置，以及成长体系的 `user_progress`/`daily_checkin`/`point_transaction`/
   `title`/`user_title`/`title_application`/`banner`、`captcha_challenge`、
-  权限下放的 `user_permission`）；better-auth 的 `session/account/verification`
+  权限下放的 `user_permission`；better-auth 的 `session/account/verification`
   纳入 Drizzle 声明并由其维护。
 - 论坛支持嵌套版块、置顶/精华/锁定/软删除、实时回复数与点赞数；通知含系统/审核正文列。
 - 纹理文件存于 `UPLOAD_DIR`，按 `textures/{kind}/{sha256}.png` 内容寻址；
@@ -366,20 +392,20 @@ web 侧变量：`NEXT_PUBLIC_API_BASE_URL`（默认 `http://localhost:8000`）�
 
 ## 文档导航
 
-| 文档                                                     | 内容                                                                        |
-| -------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                           |
-| [`docs/features.md`](docs/features.md)                   | 完整功能清单：认证/会话/纹理/论坛/成长体系，含实现位置与 API 路径           |
-| [CHANGELOG.md](CHANGELOG.md)                             | 版本变更记录：v1.0.0 正式发布与 Unreleased 分节                             |
-| [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                        |
-| [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                     |
-| [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练  |
-| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows / 宝塔服主路径：Node 22 → NSSM 服务 → Caddy 443 → Paper `.bat` 接入 |
-| [`docs/player-guide.md`](docs/player-guide.md)           | 玩家侧：HMCL / PCL2 / Prism Launcher 三端外置登录图文步骤                   |
-| [`docs/docker-evaluation.md`](docs/docker-evaluation.md) | 可选单镜像 Docker 部署的定位、边界与再评审条件                              |
-| [`docs/security.md`](docs/security.md)                   | 安全基线：CSP、安全响应头、审计豁免与哈希                                   |
-| [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                        |
-| [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                   |
+| 文档                                                     | 内容                                                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                       | 参与开发入口：环境、提交与 PR 约定、DoD、契约纪律                          |
+| [`docs/features.md`](docs/features.md)                   | 完整功能清单：认证/会话/纹理/论坛/成长体系，含实现位置与 API 路径          |
+| [CHANGELOG.md](CHANGELOG.md)                             | 版本变更记录：v1.0.0 正式发布与 Unreleased 分节                            |
+| [SECURITY.md](SECURITY.md)                               | 安全政策：漏洞私密报告渠道与响应预期                                       |
+| [`docs/faq.md`](docs/faq.md)                             | 故障排查：部署与运行时高频问题速查                                         |
+| [`docs/database.md`](docs/database.md)                   | 三库配置、schema 工作流、迁移/复制/备份                                    |
+| [`docs/deploy.md`](docs/deploy.md)                       | 生产部署 runbook：VPS 上线 checklist、生产 `.env` 逐项清单、备份与恢复演练 |
+| [`docs/deploy-windows.md`](docs/deploy-windows.md)       | Windows 服主路径：Node 22 → NSSM 服务 → Caddy 443 → Paper `.bat` 接入      |
+| [`docs/player-guide.md`](docs/player-guide.md)           | 玩家侧：HMCL / PCL2 / Prism Launcher 三端外置登录步骤与常见问题            |
+| [`docs/security.md`](docs/security.md)                   | 安全基线：上线必配项、CSP、限流、密码与令牌存储                            |
+| [`docs/oauth-integration.md`](docs/oauth-integration.md) | 姊妹服务 OAuth SSO 接入指南：客户端注册、scope、PKCE                       |
+| [`docs/openapi.json`](docs/openapi.json)                 | OpenAPI 契约产物（`pnpm openapi:export`）                                  |
 
 ## License
 
