@@ -95,6 +95,10 @@ pnpm db:migrate
   （`mod` → `reviewer`、pending 纹理转 approved、`active_slot` 回填）。
 - MySQL / PostgreSQL：直接执行 `drizzle/<dialect>` 下的迁移。
 
+dev 启动（`pnpm dev` 或 `pnpm --filter @mcserauth/server dev`）会在 `nest start`
+之前自动执行本脚本，因此空库直接 `pnpm dev` 即可；Docker 镜像的 entrypoint 也
+在拉起进程前执行同一脚本。`pnpm db:migrate` 仍可单独使用（幂等）。
+
 MySQL 建库时显式指定 `utf8mb4`。MySQL 8 默认就是该字符集，但自建实例或旧配置
 可能不是：
 

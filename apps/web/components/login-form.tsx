@@ -183,6 +183,9 @@ export default function LoginForm() {
           <Link className="button primary" href={next}>
             继续前往
           </Link>
+          <Link className="button ghost" href="/textures">
+            游戏账号管理
+          </Link>
           <button
             className="button ghost"
             type="button"
@@ -273,6 +276,10 @@ export default function LoginForm() {
               placeholder="社区里显示的名字"
               required
             />
+            <span className="field-hint">
+              游戏 ID 会取昵称中的字母、数字与下划线自动生成（3–16
+              位）；纯中文昵称将得到自动分配的名字，注册后可在「游戏账号管理」页改名。
+            </span>
           </div>
         ) : null}
 

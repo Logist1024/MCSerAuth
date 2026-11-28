@@ -2,7 +2,6 @@ import { roleAtLeast, type UserSettingsResponse } from '@mcserauth/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
 import AdminDashboard from '@/components/admin/admin-dashboard';
 import { roleLabel } from '@/lib/forum-ui';
 import { serverApiFetchResult } from '@/lib/server-api';
@@ -53,21 +52,15 @@ export default async function AdminPage() {
     );
   }
 
+  // No inner Suspense: the page is force-dynamic, so AdminDashboard's
+  // useSearchParams cannot trigger a CSR bailout, and an extra boundary only
+  // adds another fallback frame between loading.tsx and the real content.
   return (
-    <Suspense
-      fallback={
-        <section className="card">
-          <h1>管理后台</h1>
-          <p className="muted">加载中…</p>
-        </section>
-      }
-    >
-      <AdminDashboard
-        role={role}
-        userName={result.data.user.name}
-        viewerId={result.data.user.id}
-        permissions={result.data.user.permissions}
-      />
-    </Suspense>
+    <AdminDashboard
+      role={role}
+      userName={result.data.user.name}
+      viewerId={result.data.user.id}
+      permissions={result.data.user.permissions}
+    />
   );
 }

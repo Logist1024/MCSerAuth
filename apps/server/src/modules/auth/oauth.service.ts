@@ -459,7 +459,7 @@ export class OAuthService {
     if (existing) {
       return existing;
     }
-    const base = sanitizeNickname(displayName);
+    const base = sanitizeNickname(displayName, userId);
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const nickname = nicknameCandidate(base, attempt);
       const taken = (

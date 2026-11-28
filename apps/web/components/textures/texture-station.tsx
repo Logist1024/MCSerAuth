@@ -70,6 +70,11 @@ export default function TextureStation({
         : { url: activeSkin.url, variant: activeSkin.variant === 'SLIM' ? 'slim' : 'classic' },
     );
     setPreviewCape(activeCape?.url ?? null);
+    // Keep the upload form's model selector in step with the currently active
+    // texture so a re-upload defaults to the same arm model.
+    if (activeSkin !== null) {
+      setVariant(activeSkin.variant === 'SLIM' ? 'slim' : 'classic');
+    }
     setSelectedId(null);
   }, []);
 

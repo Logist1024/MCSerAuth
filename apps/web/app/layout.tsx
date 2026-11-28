@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 
 import SiteHeader from '@/components/site-header';
 import { ToastProvider } from '@/components/toast';
@@ -12,6 +13,13 @@ import {
 } from '@/lib/appearance';
 import { loadSiteDisplay } from '@/lib/site-settings';
 import './globals.css';
+
+/**
+ * Nonce CSP (proxy.ts) requires every page to render dynamically: a statically
+ * prerendered shell would ship framework inline scripts without the
+ * per-request nonce, which browsers must then block.
+ */
+export const dynamic = 'force-dynamic';
 
 export const viewport: Viewport = {
   themeColor: [
@@ -33,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const site = await loadSiteDisplay();
+  const [site, headerList] = await Promise.all([loadSiteDisplay(), headers()]);
   return (
     <html
       lang="zh-CN"
@@ -46,8 +54,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       suppressHydrationWarning
     >
       <head>
-        {/* 首帧前把外观偏好写到 <html> 的 data 属性，避免主题闪烁。 */}
-        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_INIT_SCRIPT }} />
+        {/* 首帧前把外观偏好写到 <html> 的 data 属性，避免主题闪烁。
+            手写内联脚本不会获得框架自动 nonce，必须显式携带（见 proxy.ts）。 */}
+        <script
+          nonce={headerList.get('x-nonce') ?? undefined}
+          dangerouslySetInnerHTML={{ __html: APPEARANCE_INIT_SCRIPT }}
+        />
       </head>
       <body>
         {/* Rendered last in the document order so it can override the built-in theme. */}

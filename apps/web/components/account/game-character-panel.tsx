@@ -110,7 +110,8 @@ export default function GameCharacterPanel({
                   required
                 />
                 <span className="field-hint">
-                  每 30 天可改名一次；旧名字会保留 30 天，期间他人无法占用，到期后可被释放。
+                  名称仅允许字母、数字与下划线（3–16 位）；每 30 天可改名一次，旧名字会保留 30
+                  天，期间他人无法占用，到期后可被释放。
                 </span>
               </div>
               <div className="actions">

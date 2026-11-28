@@ -80,7 +80,9 @@ import {
   type UnbanUserRequest,
   type UnmuteUserRequest,
   type UpdateCaptchaSettingsRequest,
+  type UpdatePostRequest,
   type UpdateProfileRequest,
+  type UpdateReplyRequest,
   type UpdateServerRequest,
   type UpdateSiteSettingsRequest,
   type UpdateUserRoleRequest,
@@ -286,10 +288,7 @@ export function createForumPost(body: CreatePostRequest): Promise<ForumPostDetai
   });
 }
 
-export function updateForumPost(
-  id: number,
-  body: { title?: string; contentMd?: string },
-): Promise<ForumPostDetail> {
+export function updateForumPost(id: number, body: UpdatePostRequest): Promise<ForumPostDetail> {
   return apiFetch<ForumPostDetail>(`/api/forum/posts/${id}`, {
     method: 'PATCH',
     body,
@@ -312,10 +311,10 @@ export function createForumReply(postId: number, contentMd: string): Promise<For
   });
 }
 
-export function updateForumReply(id: number, contentMd: string): Promise<unknown> {
-  return apiFetch(`/api/forum/replies/${id}`, {
+export function updateForumReply(id: number, body: UpdateReplyRequest): Promise<ForumReply> {
+  return apiFetch<ForumReply>(`/api/forum/replies/${id}`, {
     method: 'PATCH',
-    body: { contentMd } satisfies CreateReplyRequest,
+    body,
     credentials: 'include',
   });
 }

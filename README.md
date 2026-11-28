@@ -161,8 +161,7 @@ git clone https://github.com/Logist1024/MCSerAuth.git && cd MCSerAuth
 corepack enable                 # 或使用 corepack pnpm <cmd>
 pnpm install
 cp .env.example apps/server/.env   # 可选：不复制也能跑（有开发默认值）
-pnpm db:migrate                    # 建库 + 全部迁移（按 DATABASE_URL 选择方言）
-pnpm dev                           # 同时拉起 server(:8000) 与 web(:3000)
+pnpm dev                           # server 启动前自动迁移数据库（空库可直接跑），并拉起 web(:3000)
 ```
 
 启动后：
@@ -242,24 +241,24 @@ curl -b jar.txt http://localhost:8000/api/auth/get-session
 
 根目录执行（`package.json` → `scripts`）：
 
-| 命令                                | 作用                                     |
-| ----------------------------------- | ---------------------------------------- |
-| `pnpm dev`                          | 并行启动 server + web（先构建 shared）   |
-| `pnpm build`                        | shared → server → web 全量构建           |
-| `pnpm lint` / `pnpm lint:fix`       | 全仓 ESLint                              |
-| `pnpm format` / `pnpm format:check` | Prettier                                 |
-| `pnpm typecheck`                    | 全仓 `tsc --noEmit`                      |
-| `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                   |
-| `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移   |
-| `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                       |
-| `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）       |
-| `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移       |
-| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置           |
-| `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）       |
-| `pnpm db:backup`                    | 备份当前库（三库；`--dry-run` 打印计划） |
-| `pnpm db:studio`                    | Drizzle Studio 浏览数据                  |
-| `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin      |
-| `pnpm openapi:export`               | 构建并刷新 `docs/openapi.json`           |
+| 命令                                | 作用                                                                |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `pnpm dev`                          | 并行启动 server + web（先构建 shared；server 启动前自动迁移数据库） |
+| `pnpm build`                        | shared → server → web 全量构建                                      |
+| `pnpm lint` / `pnpm lint:fix`       | 全仓 ESLint                                                         |
+| `pnpm format` / `pnpm format:check` | Prettier                                                            |
+| `pnpm typecheck`                    | 全仓 `tsc --noEmit`                                                 |
+| `pnpm test` / `pnpm test:coverage`  | Vitest（server + web）                                              |
+| `pnpm db:generate`                  | 生成三套 schema + SQLite/MySQL/PG 迁移                              |
+| `pnpm db:generate:sqlite`           | 只生成 SQLite 迁移                                                  |
+| `pnpm db:check`                     | 校验生成物与 `model.ts` 同步（CI）                                  |
+| `pnpm db:migrate`                   | 按 `DATABASE_URL` 应用对应方言迁移                                  |
+| `pnpm db:seed`                      | 幂等写入占位用户/版块/站点设置                                      |
+| `pnpm db:copy-data`                 | 跨方言一次性复制（含 SQLite 目标）                                  |
+| `pnpm db:backup`                    | 备份当前库（三库；`--dry-run` 打印计划）                            |
+| `pnpm db:studio`                    | Drizzle Studio 浏览数据                                             |
+| `pnpm admin:grant <email> [role]`   | 授予 user/reviewer/admin/superadmin                                 |
+| `pnpm openapi:export`               | 构建并刷新 `docs/openapi.json`                                      |
 
 ## 环境变量
 

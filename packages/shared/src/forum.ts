@@ -124,6 +124,10 @@ export interface CreateReplyRequest {
   contentMd: string;
 }
 
+export interface UpdateReplyRequest {
+  contentMd: string;
+}
+
 export interface VoteResponse {
   targetType: 'post' | 'reply';
   targetId: number;

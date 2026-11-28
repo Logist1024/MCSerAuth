@@ -13,6 +13,7 @@ import AdminPostControls, { AdminReplyControls } from '@/components/admin-post-c
 import Avatar from '@/components/avatar';
 import Breadcrumbs from '@/components/breadcrumbs';
 import CopyLinkButton from '@/components/copy-link-button';
+import { EditReplyBody, EditReplyButton } from '@/components/edit-reply';
 import { UserBadges } from '@/components/growth/user-badges';
 import { Icon } from '@/components/icons';
 import Markdown from '@/components/markdown';
@@ -145,7 +146,10 @@ function ReplyRow({
               title={`复制第 ${reply.floor} 楼链接`}
             />
             {isAuthor ? (
-              <OwnerActions kind="reply" id={reply.id} showDelete={!isModerator} />
+              <>
+                <EditReplyButton replyId={reply.id} />
+                <OwnerActions kind="reply" id={reply.id} showDelete={!isModerator} />
+              </>
             ) : null}
             {isModerator ? <AdminReplyControls replyId={reply.id} status={reply.status} /> : null}
             {viewer !== null ? (
@@ -155,7 +159,13 @@ function ReplyRow({
         </div>
 
         <div className="post-body">
-          <Markdown content={reply.contentMd} />
+          {isAuthor ? (
+            <EditReplyBody replyId={reply.id} initialContent={reply.contentMd}>
+              <Markdown content={reply.contentMd} />
+            </EditReplyBody>
+          ) : (
+            <Markdown content={reply.contentMd} />
+          )}
         </div>
 
         <div className="post-foot">
@@ -165,6 +175,7 @@ function ReplyRow({
             initialVoted={reply.viewerVoted}
             initialCount={reply.voteCount}
             signedIn={viewer !== null}
+            selfOwned={isAuthor}
             loginHref={`/login?next=${encodeURIComponent(`/forum/post/${reply.postId}#reply-${reply.id}`)}`}
           />
         </div>
@@ -399,6 +410,7 @@ export default async function PostPage({ params, searchParams }: PageProps) {
                     initialVoted={post.viewerVoted}
                     initialCount={post.voteCount}
                     signedIn={viewer !== null}
+                    selfOwned={viewer?.id === post.author.id}
                     loginHref={loginHref}
                   />
                   {canReply ? (

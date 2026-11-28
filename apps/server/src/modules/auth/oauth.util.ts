@@ -82,15 +82,23 @@ export function isAllowedRedirectUri(value: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 }
 
-/** Minecraft Java usernames: 3–16 characters of [A-Za-z0-9_]. */
-export function sanitizeNickname(displayName: string): string {
+/**
+ * Minecraft Java usernames: 3–16 characters of [A-Za-z0-9_]. When the display
+ * name carries no usable characters at all (e.g. a purely CJK nickname), a
+ * stable fallback is derived from `fallbackSeed` (the account id) so the same
+ * account always lands on the same provisional name instead of a random one.
+ */
+export function sanitizeNickname(displayName: string, fallbackSeed?: string): string {
   const cleaned = displayName
     .normalize('NFKC')
     .replace(/[^A-Za-z0-9_]/g, '')
     .slice(0, 16);
 
   if (cleaned.length === 0) {
-    return 'Player';
+    if (fallbackSeed === undefined || fallbackSeed === '') {
+      return 'Player';
+    }
+    return `Player_${sha256(fallbackSeed).slice(0, 8)}`;
   }
   return cleaned.padEnd(3, '_');
 }

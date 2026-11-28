@@ -53,6 +53,10 @@ export default function SkinPreview({
         instance.autoRotate = !reduceMotion;
         instance.autoRotateSpeed = 0.55;
         instance.animation = new IdleAnimation();
+        // FXAA's shader asks for a sample bias of -100, which Windows ANGLE
+        // (D3D) clamps with a per-program X4713 warning. The pass adds little
+        // at this canvas size, so skip it entirely to keep the console clean.
+        instance.fxaaPass.enabled = false;
         viewer.current = instance;
         if (reduceMotion) {
           setRotating(false);

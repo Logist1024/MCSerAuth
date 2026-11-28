@@ -36,8 +36,27 @@ helmet 继续负责其余安全响应头（CSP 由上述中间件接管）：
 | Cross-Origin-Opener-Policy   | `same-origin`                                        |
 | Cross-Origin-Resource-Policy | `cross-origin`（纹理分发需要）                       |
 
-web 侧（`apps/web/next.config.ts`）继续保留 nosniff / X-Frame-Options 等既有配置；
-它**不含** HSTS，所以生产由 [`deploy/Caddyfile`](../deploy/Caddyfile) 在两个 vhost 上补
+web 侧（`apps/web`）通过 `proxy.ts`（Next 16 的 proxy 文件约定）为全部 HTML 页面
+注入**按请求 nonce 的 CSP**，与 API 层策略对齐（纵深防御，所有用户可见 HTML 的出口
+都受保护）：
+
+- `script-src 'self' 'nonce-…'` + 第三方人机验证 origin（Turnstile / hCaptcha 脚本
+  由页面 bundle 在运行时动态注入，按 host 放行），dev 另加 `'unsafe-eval'`（React
+  调试需要）。
+- `style-src 'self' 'unsafe-inline'`：React 的内联 `style` 属性无法携带 nonce。
+- `img-src 'self' data: blob: http: https:`：论坛 Markdown 允许作者任意外链图片，
+  签名纹理 / 头像 URL 也指向 API 源。
+- `connect-src 'self'` + `NEXT_PUBLIC_API_BASE_URL` 的 origin（dev 直连 :8000 时需要）；
+  `frame-src` 放行人机验证 origin；其余 `default-src` / `base-uri` / `form-action` /
+  `frame-ancestors` 与服务端严格策略一致。
+- matcher 排除 `/api`（rewrites 到 Nest，响应自带 CSP）、`_next/static`、
+  `_next/image` 与预取请求。
+
+已知代价：nonce 要求每个页面动态渲染——首页失去 30s 静态缓存窗口，改为每请求
+SSR（API 侧自身仍有 ~15s 缓存兜底）。
+
+`next.config.ts` 继续保留 nosniff / X-Frame-Options 等既有配置；
+web 不含 HSTS，所以生产由 [`deploy/Caddyfile`](../deploy/Caddyfile) 在两个 vhost 上补
 `Strict-Transport-Security: max-age=31536000; includeSubDomains`（与上表 helmet 实测值一致，
 两处不要写成不同的 max-age）。
 

@@ -36,6 +36,13 @@ describe('oauth.util', () => {
     expect(normalizeOrigin('not a url')).toBeNull();
     expect(sanitizeNickname('玩家 One!')).toBe('One');
     expect(sanitizeNickname('')).toBe('Player');
+    const derived = sanitizeNickname('测试玩家', 'user-123');
+    expect(derived).toBe(
+      `Player_${createHash('sha256').update('user-123').digest('hex').slice(0, 8)}`,
+    );
+    expect(derived).toMatch(/^Player_[0-9a-f]{8}$/);
+    expect(sanitizeNickname('测试玩家', 'user-456')).not.toBe(derived);
+    expect(sanitizeNickname('测试玩家')).toBe('Player');
     expect(nicknameCandidate('Player', 0)).toBe('Player');
     expect(nicknameCandidate('Player', 1)).toMatch(/^Player_[0-9a-f]{4}$/);
   });

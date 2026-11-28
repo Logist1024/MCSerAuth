@@ -14,6 +14,7 @@ export default function VoteButton({
   initialVoted,
   initialCount,
   signedIn,
+  selfOwned = false,
   loginHref = '/login',
 }: {
   targetType: 'post' | 'reply';
@@ -21,6 +22,8 @@ export default function VoteButton({
   initialVoted: boolean;
   initialCount: number;
   signedIn: boolean;
+  /** The viewer authored this post/reply; the API rejects self votes. */
+  selfOwned?: boolean;
   loginHref?: string;
 }) {
   const toast = useToast();
@@ -40,6 +43,25 @@ export default function VoteButton({
         <Icon name="thumbsUp" width={15} height={15} />
         <span>{count}</span>
       </Link>
+    );
+  }
+
+  const selfVoteHint = `不能给自己的${targetType === 'post' ? '帖子' : '回复'}点赞`;
+
+  if (selfOwned) {
+    return (
+      <div className="vote-box">
+        <button
+          className="vote-button"
+          type="button"
+          disabled
+          title={selfVoteHint}
+          aria-label={`${selfVoteHint}，当前 ${count} 个赞`}
+        >
+          <Icon name="thumbsUp" width={15} height={15} />
+          <span>{count}</span>
+        </button>
+      </div>
     );
   }
 
@@ -63,7 +85,7 @@ export default function VoteButton({
     } catch (error) {
       setVoted(previousVoted);
       setCount(previousCount);
-      setAnnouncement('点赞失败，请稍后重试');
+      setAnnouncement(describeApiError(error));
       toast.error(describeApiError(error));
     } finally {
       setBusy(false);
